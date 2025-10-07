@@ -31,6 +31,7 @@ import scipy
 
 from matplotlib import pyplot as plt
 from matplotlib import colors
+from astropy.visualization import ZScaleInterval
 
 import time
 import ipdb
@@ -43,6 +44,8 @@ sim.link_irdb("../../../")
 
 # simulate observations with METIS (comment this out if packages already exist)
 #sim.download_packages(["METIS", "ELT", "Armazones"])
+
+ipdb.set_trace()
 
 # set up instrument for LM imaging
 cmd = sim.UserCommands(use_instrument='METIS', set_modes=['wcu_img_lm'])
@@ -58,82 +61,27 @@ metis.effects.pprint_all()
 wcu = metis['wcu_source']
 print('Prior wcu.fpmask:', wcu.fpmask)
 
-#wcu.set_fpmask('grid_lm')  # change to LM pinhole mask
-#print('New wcu.fpmask:', wcu.fpmask)
-
-# ## 2. Set the WCU Flux Controlling Mask to "CLOSED".
-#print('Closing wcu.bb_aperture...')
-#wcu.set_bb_aperture(value = 0.)
-#print('wcu.bb_aperture:', wcu.bb_aperture)
-
-# ## 3. Set the WCU BB source to 1000 K.
-#print('Setting wcu.bb_temp to 1000 K...')
-#wcu.set_temperature(bb_temp=1000*u.K)
-#print('wcu.bb_temp:', wcu.bb_temp)
-
-# ## 4. Wait for BB source to reach temperature.
-#print('Waiting for BB source to reach temperature (placeholder in lieu of a thermal model)...')
+# set the WCU BB source to 1000 K.
+print('Setting wcu.bb_temp to 1000 K...')
+wcu.set_temperature(bb_temp=1000*u.K)
+print('wcu.bb_temp:', wcu.bb_temp)
+# wait for BB source to reach temperature.
+print('Waiting for BB source to reach temperature (placeholder in lieu of a thermal model)...')
 # placeholder in lieu of a thermal model
-#time.sleep(0.5)
+time.sleep(0.5)
+DIT, NDIT = 30, 120
 
-# ## 5. While BB reaches temperature, take background exposure
-# see current observing params
-#print("\Current observing parameters:")
-#for key, value in cmd['OBS'].items():
-#    print(f"  {key}: {value}")
-
-# compile the observation
-#print('Compiling the observation...')
-#metis.observe()
-
-# do readout with observation params
-#print('Taking readout...')
-# Oliver Cz. recommends just using ndit and dit (not exptime)
-#outhdul = metis.readout(ndit = 10, dit = 1.)[0]
-#outhdul.info()
-
-# plot
-#plt.imshow(outhdul[1].data, origin='lower')
-#plt.show()
-
-#plt.hist(outhdul[1].data.ravel(), bins=200)
-#plt.show()
-
-# ## 6. Set the WCU Flux Controlling Mask to "OPEN".
-
-#wcu.set_bb_aperture(value = 1.)
-
-# ## 7. Take science exposure with same params as background
-
-# recompile
-#metis.observe()
-# get the readout
-#outhdul = metis.readout(ndit = 10, dit = 1.)[0]
-
-#plt.hist(outhdul[1].data.ravel(), bins=200)
-#plt.show()
-
-# save to FITS file
-#file_name = 'IMG_OPT_04_wcu_focal_plane_LM_open.fits'
-#outhdul.writeto(file_name, overwrite=True)
-#print('Saved readout without aberrations to ' + file_name)
-
-# do a hackneyed aberration: blurring made to look like defocus 
-#file_name = 'IMG_OPT_04_wcu_focal_plane_LM_open_blur.fits'
-#outhdul[1].data = scipy.ndimage.gaussian_filter(outhdul[1].data, sigma=3)
-#outhdul.writeto(file_name, overwrite=True)
-#print('Saved readout with aberrations to ' + file_name)
-
-# ## 8. Repeat for other WCU Focal Plane Masks.
-# fpmasks:  ["open", "pinhole_lm", "pinhole_n", "grid_lm"]
 fpmasks_list = ["open", "pinhole_lm", "pinhole_n", "grid_lm"]
+wcu = metis['wcu_source']
+
 for mask in fpmasks_list:
 
     print('--------------------------------')
-    wcu = metis['wcu_source']
+    
     print('Prior wcu.fpmask:', wcu.fpmask)
 
     # ## 2. Set the WCU Flux Controlling Mask to "CLOSED" to take a background
+    '''
     print('Closing wcu.bb_aperture...')
     wcu.set_bb_aperture(value = 0.)
     print('wcu.bb_aperture:', wcu.bb_aperture)
@@ -141,17 +89,6 @@ for mask in fpmasks_list:
     print('Generating ' + str(mask)) 
     wcu.set_fpmask(mask)
 
-    # ## 3. Set the WCU BB source to 1000 K.
-    print('Setting wcu.bb_temp to 1000 K...')
-    wcu.set_temperature(bb_temp=1000*u.K)
-    print('wcu.bb_temp:', wcu.bb_temp)
-
-    # ## 4. Wait for BB source to reach temperature.
-    print('Waiting for BB source to reach temperature (placeholder in lieu of a thermal model)...')
-    # placeholder in lieu of a thermal model
-    time.sleep(0.5)
-
-    # ## 5. While BB reaches temperature, take background exposure
     # see current observing params
     print("\Current observing parameters:")
     for key, value in cmd['OBS'].items():
@@ -159,32 +96,70 @@ for mask in fpmasks_list:
 
     # compile the observation
     print('Compiling the observation...')
+    #src = sim.source.source_templates.star()
+    #metis.observe(src)
     metis.observe()
 
+    # take background readout
     # do readout with observation params
     print('Taking readout...')
     # Oliver Cz. recommends just using ndit and dit (not exptime)
-    outhdul = metis.readout(ndit = 10, dit = 1.)[0]
+
+    outhdul = metis.readout(ndit = NDIT, dit = DIT)[0]
     outhdul.info()
 
-    # plot
-    plt.imshow(outhdul[1].data, origin='lower')
-    plt.show()
-
-    plt.hist(outhdul[1].data.ravel(), bins=200)
-    plt.show()
+    bckgrnd = outhdul[1].data
+    '''
 
     # ## 6. Set the WCU Flux Controlling Mask to "OPEN".
     print('Setting the wcu bb aperture to OPEN')
-    wcu.set_bb_aperture(value = 1.)
+    #wcu.set_bb_aperture(value = 1.)
 
     print('Taking readout with FP mask ' + str(mask) + '...')
     metis.observe()
     # get the readout
-    outhdul = metis.readout(ndit = 10, dit = 1.)[0]
+    outhdul = metis.readout(ndit = NDIT, dit = DIT)[0]
 
+    sci = outhdul[1].data
+
+    #metis_n = sim.OpticalTrain(cmd)
+    print('Current WCU FP mask:', wcu.fpmask)
+    print('Current WCU PP mask:', metis['pupil_masks'].current_mask)
+
+    '''
+    # plot
+    plt.clf()
+    plt.title('Bckgd-subtracted readout; WCU FP mask: ' + str(mask))
+    plt.imshow(outhdul[1].data, origin='lower')
+    plt.show()
+
+    plt.clf()
+    plt.title('Bckgd-subtracted histogram; WCU FP mask: ' + str(mask))
     plt.hist(outhdul[1].data.ravel(), bins=200)
     plt.show()
+    '''
+    
+
+    ipdb.set_trace()
+
+    plt.clf()
+
+    # bckgrnd_subtracted = sci - bckgrnd
+    
+    zscale = ZScaleInterval()
+    vmin, vmax = zscale.get_limits(outhdul[1].data)
+    plt.title('Bckgd-subtracted readout; WCU FP mask: ' + str(mask))
+    #plt.imshow(outhdul[1].data, origin='lower'
+    plt.imshow(sci, origin='lower', vmin=vmin, vmax=vmax)
+    plt.show()
+
+    plt.clf()
+    
+    plt.hist(sci.ravel(), bins=200)
+    plt.title('Bckgd-subtracted histogram; WCU FP mask: ' + str(mask))
+    plt.show()
+
+    ipdb.set_trace()
 
     # save to FITS file
     file_name = 'IMG_OPT_04_wcu_focal_plane_' + str(mask) + '.fits'
@@ -197,10 +172,12 @@ for mask in fpmasks_list:
     outhdul.writeto(file_name, overwrite=True)
     print('Saved readout with aberrations to ' + file_name)
 
+'''
 CONTINUE HERE: 
 - how to treat N-band correctly, too? (note this will require chopping; see Overleaf)
 - how to dither?
 - label all plots and write them out when they are seen to be well-behaved
+'''
 
 '''
 # do the same for N band
