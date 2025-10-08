@@ -46,7 +46,7 @@ sim.link_irdb("../../../")
 #sim.download_packages(["METIS", "ELT", "Armazones"])
 
 # set up instrument for LM imaging
-cmd = sim.UserCommands(use_instrument='METIS', set_modes=['wcu_img_lm'])
+cmd = sim.UserCommands(use_instrument='METIS', set_modes=['wcu_img_lm'], properties={"!OBS.filter_name": "Lp"})
 
 # alternative: Mp imaging and different filter
 
@@ -64,15 +64,24 @@ bb_temp = 1000 * u.K
 DIT, NDIT = 30, 120
 
 fpmasks_list = ["open", "pinhole_lm", "pinhole_n", "grid_lm"]
+lm_filters_list = ["Lp", "H2Oice", "shortL", "IB4.05", "PAH3.3", "PAH3.3ref", "Br-alpha", "Br-alpharef", "M'", "CO(1-0)/ice", 
+                    "COref", "HCIL-short", "HCIL-long", "full_L", "full_M"]
+#n_filters_list = ["N1", "N2", "PAH8.6", "PAH8.6_ref", "PAH11.25", "PAH11.25_ref", "[NeII]", "[NeII]_ref", "[SIV]", "[SIV]_ref", "N3", "full_N"]
 
 # make as many dither positions as desired
 dither_position_array = [(0, 0), (1, 0), (0, 1), (1, 1)]
 
-for mask in fpmasks_list:
+#for mask in fpmasks_list:
+
+
+
+def generate_psf_image_quality_data(fp_mask, obs_filter):
+
+    # DO NOT REMOVE THIS 'for'! this option has to be present to avoid a bug that gets triggered in the 'else' case; don't know why
     for mode in ["close BB aperture first for background", "don't close BB aperture first for background"]:
 
-        print('Generating ' + str(mask)) 
-        wcu.set_fpmask(mask)
+        print('Generating ' + str(fp_mask)) 
+        wcu.set_fpmask(fp_mask)
 
         if mode == "close BB aperture first for background":
             # DO NOT REMOVE THIS! this option has to be present to avoid a bug that gets triggered in the 'else' case; don't know why
@@ -87,6 +96,8 @@ for mask in fpmasks_list:
             dither_num_array = [0, 1] # 0: no dither, 1: dither
             wcu.set_bb_aperture(value = 1.0) # open BB source
 
+            metis["filter_wheel"].change_filter(obs_filter)
+
             for dither_pos in dither_position_array:
 
                 # just make background a bunch of zeros for now to get around aforementioned bug
@@ -95,11 +106,12 @@ for mask in fpmasks_list:
 
                 print('--------------------------------')
                 print('Current WCU FP mask:', wcu.fpmask)
+                print('Current Observing filter:', metis["filter_wheel"].current_filter)
                 print('Current WCU PP mask:', metis['pupil_masks'].current_mask)
 
                 # dither by shifting the FP mask
                 # (note these shifts are absolute, not relative)
-                wcu.set_fpmask(mask, angle=0, shift=dither_pos)
+                wcu.set_fpmask(fp_mask, angle=0, shift=dither_pos)
 
                 print('Opening WCU BB aperture...')
 
@@ -108,12 +120,14 @@ for mask in fpmasks_list:
                 #outhdul[1].data
                 #outhdul.writeto(f"IMG_OPT_02_wcu_focal_plane_{mask}.fits", overwrite=True)
 
+                ipdb.set_trace()
+
                 # detector
                 plt.clf()
                 zscale = ZScaleInterval()
                 vmin, vmax = zscale.get_limits(outhdul[1].data)
                 plt.imshow(outhdul[1].data - background, origin='lower', vmin=vmin, vmax=vmax)
-                plt.title(f'Readout\nWCU FP mask: ' + str(mask) + '\nBB temp: ' + str(bb_temp))
+                plt.title(f'Readout\nWCU FP mask: ' + str(fp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp))
                 plt.tight_layout()
                 plt.show()
                 plt.close()
@@ -121,21 +135,30 @@ for mask in fpmasks_list:
                 # histogram
                 plt.clf()
                 plt.hist(outhdul[1].data.ravel(), bins=200)
-                plt.title('Bckgd-subtracted histogram; WCU FP mask: ' + str(mask))
+                plt.title('Bckgd-subtracted histogram; WCU FP mask: ' + str(fp_mask))
                 plt.tight_layout()
                 plt.show()
                 plt.close()
 
                 # save to FITS file
-                file_name = 'IMG_OPT_04_wcu_focal_plane_' + str(mask) + '.fits'
+                file_name = 'IMG_OPT_04_wcu_focal_plane_' + str(fp_mask) + '.fits'
                 outhdul.writeto(file_name, overwrite=True)
                 print('Saved readout without aberrations to ' + file_name)
 
                 # do a hackneyed aberration: blurring made to look like defocus 
-                file_name = 'IMG_OPT_04_wcu_focal_plane_' + str(mask) + '_blur.fits'
+                file_name = 'IMG_OPT_04_wcu_focal_plane_' + str(fp_mask) + '_blur.fits'
                 outhdul[1].data = scipy.ndimage.gaussian_filter(outhdul[1].data, sigma=3)
                 outhdul.writeto(file_name, overwrite=True)
                 print('Saved readout with aberrations to ' + file_name)
+
+
+def main():
+    for fp_mask in fpmasks_list:
+        for obs_filter in lm_filters_list:
+            generate_psf_image_quality_data(fp_mask, obs_filter)
+
+if __name__ == "__main__":
+    main()
 
 
 '''
@@ -144,147 +167,3 @@ CONTINUE HERE:
 - x how to dither?
 - label all plots and write them out when they are seen to be well-behaved
 '''
-
-'''
-# do the same for N band
-cmd = sim.UserCommands(use_instrument='METIS', set_modes=['wcu_img_lm'])
-wcu = metis['wcu_source']
-
-fpmasks_list = ["open", "pinhole_lm", "pinhole_n", "grid_lm"]
-for mask in fpmasks_list:
-    print('Generating ' + str(mask)) 
-    wcu.set_fpmask(mask)
-    wcu.set_temperature(bb_temp=1000*u.K)
-    wcu.set_bb_aperture(value = 0.4)
-    metis.observe()
-    outhdul = metis.readout(ndit = 1, exptime = 0.2)[0]
-    #outhdul[1].data
-    outhdul.writeto(f"IMG_OPT_02_wcu_focal_plane_{mask}_LM.fits", overwrite=True)
-'''
-
-'''
-import numpy as np
-import matplotlib.pyplot as plt
-from astropy.io import fits
-from scipy import ndimage
-from scipy.fft import fft2, ifft2, fftshift, ifftshift
-
-ln_img_plate_scale = 5.5e-3 # 5.5 masec/pix
-
-def add_defocus_to_psf(psf_data, defocus_waves=0.5, wavelength=3.3e-6, pupil_diameter=39.0):
-    """
-    Add defocus to an existing PSF by applying a defocus phase in the pupil plane.
-    
-    Parameters:
-    -----------
-    psf_data : 2D array
-        Input PSF data
-    defocus_waves : float
-        Defocus in waves (RMS)
-    wavelength : float
-        Wavelength in meters
-    pupil_diameter : float
-        Pupil diameter in meters
-    
-    Returns:
-    --------
-    2D array with defocused PSF
-    """
-    # Get PSF dimensions
-    ny, nx = psf_data.shape
-    
-    # Create coordinate grids
-    x = np.linspace(-nx//2, nx//2-1, nx)
-    y = np.linspace(-ny//2, ny//2-1, ny)
-    X, Y = np.meshgrid(x, y)
-    
-    # Convert to angular coordinates (assuming PSF is centered)
-    theta_x = X * ln_img_plate_scale
-    theta_y = Y * ln_img_plate_scale
-
-    print('---')
-    print(ln_img_plate_scale)
-    print(theta_x)
-
-    plt.imshow(theta_x)
-    plt.colorbar()
-    plt.show()
-    
-    # phase screen (defocus: quadratic phase error)
-    defocus_phase = 2 * np.pi * defocus_waves * (theta_x**2 + theta_y**2) / (wavelength / pupil_diameter)
-
-    print('defocus_phase')
-    print(defocus_phase)
-    plt.imshow(defocus_phase)
-    plt.title('phase screen')
-    plt.colorbar()
-    plt.show()
-
-    print('min, defocus_phase')
-    print(np.min(defocus_phase))
-    
-    # Apply defocus by multiplying PSF with phase factor
-    defocused_psf = psf_data * np.exp(1j * defocus_phase)
-    
-    # Take absolute value to get intensity
-    return np.sqrt(np.abs(defocused_psf)**2)
-
-    
-
-# Load your existing PSF
-psf_file = '/playing_with_scopesim/METIS_LMS_olivier_notebooks/inst_pkgs/METIS/PSF_LM_9mag_06seeing.fits'
-hdul = fits.open(psf_file)
-psf_data = hdul[1].data
-hdul.close()
-
-# Add defocus
-psf_data = np.roll(psf_data, 300)
-defocused_psf = add_defocus_to_psf(psf_data, defocus_waves=10)
-
-# Plot comparison
-fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 5))
-ax1.imshow(psf_data, origin='lower', cmap='viridis', norm='log')
-ax1.set_title('Original PSF')
-ax1.set_xlabel('X (pixels)')
-ax1.set_ylabel('Y (pixels)')
-
-ax2.imshow(defocused_psf, origin='lower', cmap='viridis', norm='log')
-ax2.set_title('PSF with 0.5λ defocus')
-ax2.set_xlabel('X (pixels)')
-ax2.set_ylabel('Y (pixels)')
-
-ax3.imshow(defocused_psf-psf_data, origin='lower', cmap='viridis', norm='log')
-ax3.set_title('Residuals')
-ax3.set_xlabel('X (pixels)')
-ax3.set_ylabel('Y (pixels)')
-
-plt.tight_layout()
-plt.show()
-
-print(psf_data)
-print('----')
-print(defocused_psf)
-print('----')
-print(defocused_psf-psf_data)
-'''
-
-# %%
-psf_file = '/playing_with_scopesim/METIS_LMS_olivier_notebooks/inst_pkgs/METIS/PSF_LM_9mag_06seeing.fits'
-hdul = fits.open(psf_file)
-
-# %%
-hdul[1].data
-
-
-# %% [markdown]
-# ## Notes RvB:
-# 
-# ##    take deep PSF measurements for all pupil stops in the Imager Subsystem (IMG)-PP1. APP would be addressed in HCI test.
-
-# %%
-# IMG-LM and IMG-N pupil wheels are not available in ScopeSim yet
-
-# %%
-# will also need to apply (x,y) offsets to all PSFs
-
-
