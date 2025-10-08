@@ -45,37 +45,23 @@ sim.link_irdb("../../../")
 # simulate observations with METIS (comment this out if packages already exist)
 #sim.download_packages(["METIS", "ELT", "Armazones"])
 
-# set up instrument for LM imaging
-cmd = sim.UserCommands(use_instrument='METIS', set_modes=['wcu_img_lm'], properties={"!OBS.filter_name": "Lp"})
-
-# alternative: Mp imaging and different filter
-
-#cmd_2 = sim.UserCommands(use_instrument="METIS", set_modes=["img_lm"],
-#                         properties={"!OBS.filter_name": "Mp", "!OBS.exptime": 100., "!DET.dit": 200})
-#cmd = sim.UserCommands(use_instrument='METIS', set_modes=['img_lm'])
-metis = sim.OpticalTrain(cmd)
-
-#metis["chop_nod"].include = True # allow chopping
-metis.effects.pprint_all()
-wcu = metis['wcu_source']
-#cfo = metis['cfo_source']
-mask = "grid_lm"
-bb_temp = 1000 * u.K
-DIT, NDIT = 30, 120
-
-fpmasks_list = ["open", "pinhole_lm", "pinhole_n", "grid_lm"]
-lm_filters_list = ["Lp", "H2Oice", "shortL", "IB4.05", "PAH3.3", "PAH3.3ref", "Br-alpha", "Br-alpharef", "M'", "CO(1-0)/ice", 
-                    "COref", "HCIL-short", "HCIL-long", "full_L", "full_M"]
-#n_filters_list = ["N1", "N2", "PAH8.6", "PAH8.6_ref", "PAH11.25", "PAH11.25_ref", "[NeII]", "[NeII]_ref", "[SIV]", "[SIV]_ref", "N3", "full_N"]
-
-# make as many dither positions as desired
-dither_position_array = [(0, 0), (1, 0), (0, 1), (1, 1)]
-
-#for mask in fpmasks_list:
 
 
+# see all filters
+#metis["filter_wheel"].filters.keys()
 
-def generate_psf_image_quality_data(fp_mask, obs_filter):
+def generate_psf_image_quality_data(fp_mask, obs_filter, dither_position_array, obs_mode):
+
+    # set up instrument
+    cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode])
+    metis = sim.OpticalTrain(cmd)
+
+    #metis["chop_nod"].include = True # allow chopping
+    metis.effects.pprint_all()
+    wcu = metis['wcu_source']
+    #cfo = metis['cfo_source']
+    bb_temp = 1000 * u.K
+    NDIT, EXPTIME = 1, 0.2
 
     # DO NOT REMOVE THIS 'for'! this option has to be present to avoid a bug that gets triggered in the 'else' case; don't know why
     for mode in ["close BB aperture first for background", "don't close BB aperture first for background"]:
@@ -89,7 +75,7 @@ def generate_psf_image_quality_data(fp_mask, obs_filter):
             # background
             wcu.set_bb_aperture(value = 0.0)
             metis.observe()
-            outhdul_off = metis.readout(ndit = 1, exptime = 0.2)[0]
+            outhdul_off = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
             background = outhdul_off[1].data
         else:
 
@@ -101,7 +87,7 @@ def generate_psf_image_quality_data(fp_mask, obs_filter):
             for dither_pos in dither_position_array:
 
                 # just make background a bunch of zeros for now to get around aforementioned bug
-                outhdul_off = metis.readout(ndit = 1, exptime = 0.2)[0]
+                outhdul_off = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
                 background = np.zeros_like(outhdul_off[1].data)
 
                 print('--------------------------------')
@@ -153,9 +139,26 @@ def generate_psf_image_quality_data(fp_mask, obs_filter):
 
 
 def main():
-    for fp_mask in fpmasks_list:
+
+    # initialize instrument here just to obtain filter lists: LM band
+    cmd = sim.UserCommands(use_instrument='METIS', set_modes=['wcu_img_lm'])
+    metis = sim.OpticalTrain(cmd)
+    lm_filters_list = metis["filter_wheel"].filters.keys()
+    lm_fpmasks_list = ["pinhole_lm", "grid_lm"]
+
+    # same for N band
+    cmd = sim.UserCommands(use_instrument='METIS', set_modes=['wcu_img_n'])
+    metis = sim.OpticalTrain(cmd)
+    n_filters_list = metis["filter_wheel"].filters.keys()
+    n_fpmasks_list = ["pinhole_n"]
+
+    # make as many dither positions as desired
+    dither_position_array = [(0, 0), (1, 0), (0, 1), (1, 1)]
+
+    for fp_mask in lm_fpmasks_list:
         for obs_filter in lm_filters_list:
-            generate_psf_image_quality_data(fp_mask, obs_filter)
+            generate_psf_image_quality_data(fp_mask, obs_filter, dither_position_array=dither_position_array, obs_mode='wcu_img_lm')
+
 
 if __name__ == "__main__":
     main()
