@@ -45,24 +45,29 @@ sim.link_irdb("../../../")
 # simulate observations with METIS (comment this out if packages already exist)
 #sim.download_packages(["METIS", "ELT", "Armazones"])
 
-ipdb.set_trace()
-
 # set up instrument for LM imaging
-#cmd = sim.UserCommands(use_instrument='METIS', set_modes=['wcu_img_lm'])
+cmd = sim.UserCommands(use_instrument='METIS', set_modes=['wcu_img_lm'])
 
 # alternative: Mp imaging and different filter
 
 #cmd_2 = sim.UserCommands(use_instrument="METIS", set_modes=["img_lm"],
 #                         properties={"!OBS.filter_name": "Mp", "!OBS.exptime": 100., "!DET.dit": 200})
-cmd = sim.UserCommands(use_instrument='METIS', set_modes=['wcu_img_lm'])
+#cmd = sim.UserCommands(use_instrument='METIS', set_modes=['img_lm'])
 metis = sim.OpticalTrain(cmd)
+
+#metis["chop_nod"].include = True # allow chopping
 metis.effects.pprint_all()
 wcu = metis['wcu_source']
+#cfo = metis['cfo_source']
 mask = "grid_lm"
 bb_temp = 1000 * u.K
+DIT, NDIT = 30, 120
 
-## START GOOD CODE
 fpmasks_list = ["open", "pinhole_lm", "pinhole_n", "grid_lm"]
+
+# make as many dither positions as desired
+dither_position_array = [(0, 0), (1, 0), (0, 1), (1, 1)]
+
 for mask in fpmasks_list:
     for mode in ["close BB aperture first for background", "don't close BB aperture first for background"]:
 
@@ -78,148 +83,65 @@ for mask in fpmasks_list:
             outhdul_off = metis.readout(ndit = 1, exptime = 0.2)[0]
             background = outhdul_off[1].data
         else:
-            # just make background a bunch of zeros for now to get around aforementioned bug
-            outhdul_off = metis.readout(ndit = 1, exptime = 0.2)[0]
-            background = np.zeros_like(outhdul_off[1].data)
-        
-            print('Opening WCU BB aperture...')
-            wcu.set_bb_aperture(value = 1.0)
-            metis.observe()
-            outhdul = metis.readout(ndit = 1, exptime = 0.2)[0]
-            #outhdul[1].data
-            #outhdul.writeto(f"IMG_OPT_02_wcu_focal_plane_{mask}.fits", overwrite=True)
-            plt.clf()
-            zscale = ZScaleInterval()
-            vmin, vmax = zscale.get_limits(outhdul[1].data)
-            plt.imshow(outhdul[1].data - background, origin='lower', vmin=vmin, vmax=vmax)
-            plt.title(f'Readout\nWCU FP mask: ' + str(mask) + '\nBB temp: ' + str(bb_temp))
-            plt.tight_layout()
-            plt.show()
 
-## END GOOD CODE
-ipdb.set_trace()
+            dither_num_array = [0, 1] # 0: no dither, 1: dither
+            wcu.set_bb_aperture(value = 1.0) # open BB source
 
-# ## 1. Configure WCU FP1 to LM pinhole mask.
-metis = sim.OpticalTrain(cmd)
-metis.effects.pprint_all()
-wcu = metis['wcu_source']
-print('Prior wcu.fpmask:', wcu.fpmask)
+            for dither_pos in dither_position_array:
 
-# set the WCU BB source to 1000 K.
-print('Setting wcu.bb_temp to 1000 K...')
-wcu.set_temperature(bb_temp=1000*u.K)
-print('wcu.bb_temp:', wcu.bb_temp)
-# wait for BB source to reach temperature.
-print('Waiting for BB source to reach temperature (placeholder in lieu of a thermal model)...')
-# placeholder in lieu of a thermal model
-time.sleep(0.5)
-DIT, NDIT = 30, 120
+                # just make background a bunch of zeros for now to get around aforementioned bug
+                outhdul_off = metis.readout(ndit = 1, exptime = 0.2)[0]
+                background = np.zeros_like(outhdul_off[1].data)
 
-fpmasks_list = ["open", "pinhole_lm", "pinhole_n", "grid_lm"]
-wcu = metis['wcu_source']
+                print('--------------------------------')
+                print('Current WCU FP mask:', wcu.fpmask)
+                print('Current WCU PP mask:', metis['pupil_masks'].current_mask)
 
-for mask in fpmasks_list:
+                # dither by shifting the FP mask
+                # (note these shifts are absolute, not relative)
+                wcu.set_fpmask(mask, angle=0, shift=dither_pos)
 
-    print('--------------------------------')
-    
-    print('Prior wcu.fpmask:', wcu.fpmask)
+                print('Opening WCU BB aperture...')
 
-    # ## 2. Set the WCU Flux Controlling Mask to "CLOSED" to take a background
-    '''
-    print('Closing wcu.bb_aperture...')
-    wcu.set_bb_aperture(value = 0.)
-    print('wcu.bb_aperture:', wcu.bb_aperture)
+                metis.observe()
+                outhdul = metis.readout(ndit = 1, exptime = 0.2)[0]
+                #outhdul[1].data
+                #outhdul.writeto(f"IMG_OPT_02_wcu_focal_plane_{mask}.fits", overwrite=True)
 
-    print('Generating ' + str(mask)) 
-    wcu.set_fpmask(mask)
+                # detector
+                plt.clf()
+                zscale = ZScaleInterval()
+                vmin, vmax = zscale.get_limits(outhdul[1].data)
+                plt.imshow(outhdul[1].data - background, origin='lower', vmin=vmin, vmax=vmax)
+                plt.title(f'Readout\nWCU FP mask: ' + str(mask) + '\nBB temp: ' + str(bb_temp))
+                plt.tight_layout()
+                plt.show()
+                plt.close()
 
-    # see current observing params
-    print("\Current observing parameters:")
-    for key, value in cmd['OBS'].items():
-        print(f"  {key}: {value}")
+                # histogram
+                plt.clf()
+                plt.hist(outhdul[1].data.ravel(), bins=200)
+                plt.title('Bckgd-subtracted histogram; WCU FP mask: ' + str(mask))
+                plt.tight_layout()
+                plt.show()
+                plt.close()
 
-    # compile the observation
-    print('Compiling the observation...')
-    #src = sim.source.source_templates.star()
-    #metis.observe(src)
-    metis.observe()
+                # save to FITS file
+                file_name = 'IMG_OPT_04_wcu_focal_plane_' + str(mask) + '.fits'
+                outhdul.writeto(file_name, overwrite=True)
+                print('Saved readout without aberrations to ' + file_name)
 
-    # take background readout
-    # do readout with observation params
-    print('Taking readout...')
-    # Oliver Cz. recommends just using ndit and dit (not exptime)
+                # do a hackneyed aberration: blurring made to look like defocus 
+                file_name = 'IMG_OPT_04_wcu_focal_plane_' + str(mask) + '_blur.fits'
+                outhdul[1].data = scipy.ndimage.gaussian_filter(outhdul[1].data, sigma=3)
+                outhdul.writeto(file_name, overwrite=True)
+                print('Saved readout with aberrations to ' + file_name)
 
-    outhdul = metis.readout(ndit = NDIT, dit = DIT)[0]
-    outhdul.info()
-
-    bckgrnd = outhdul[1].data
-    '''
-
-    # ## 6. Set the WCU Flux Controlling Mask to "OPEN".
-    print('Setting the wcu bb aperture to OPEN')
-    #wcu.set_bb_aperture(value = 1.)
-
-    print('Taking readout with FP mask ' + str(mask) + '...')
-    metis.observe()
-    # get the readout
-    outhdul = metis.readout(ndit = NDIT, dit = DIT)[0]
-
-    sci = outhdul[1].data
-
-    #metis_n = sim.OpticalTrain(cmd)
-    print('Current WCU FP mask:', wcu.fpmask)
-    print('Current WCU PP mask:', metis['pupil_masks'].current_mask)
-
-    '''
-    # plot
-    plt.clf()
-    plt.title('Bckgd-subtracted readout; WCU FP mask: ' + str(mask))
-    plt.imshow(outhdul[1].data, origin='lower')
-    plt.show()
-
-    plt.clf()
-    plt.title('Bckgd-subtracted histogram; WCU FP mask: ' + str(mask))
-    plt.hist(outhdul[1].data.ravel(), bins=200)
-    plt.show()
-    '''
-    
-
-    ipdb.set_trace()
-
-    plt.clf()
-
-    # bckgrnd_subtracted = sci - bckgrnd
-    
-    zscale = ZScaleInterval()
-    vmin, vmax = zscale.get_limits(outhdul[1].data)
-    plt.title('Bckgd-subtracted readout; WCU FP mask: ' + str(mask))
-    #plt.imshow(outhdul[1].data, origin='lower'
-    plt.imshow(sci, origin='lower', vmin=vmin, vmax=vmax)
-    plt.show()
-
-    plt.clf()
-    
-    plt.hist(sci.ravel(), bins=200)
-    plt.title('Bckgd-subtracted histogram; WCU FP mask: ' + str(mask))
-    plt.show()
-
-    ipdb.set_trace()
-
-    # save to FITS file
-    file_name = 'IMG_OPT_04_wcu_focal_plane_' + str(mask) + '.fits'
-    outhdul.writeto(file_name, overwrite=True)
-    print('Saved readout without aberrations to ' + file_name)
-
-    # do a hackneyed aberration: blurring made to look like defocus 
-    file_name = 'IMG_OPT_04_wcu_focal_plane_' + str(mask) + '_blur.fits'
-    outhdul[1].data = scipy.ndimage.gaussian_filter(outhdul[1].data, sigma=3)
-    outhdul.writeto(file_name, overwrite=True)
-    print('Saved readout with aberrations to ' + file_name)
 
 '''
 CONTINUE HERE: 
 - how to treat N-band correctly, too? (note this will require chopping; see Overleaf)
-- how to dither?
+- x how to dither?
 - label all plots and write them out when they are seen to be well-behaved
 '''
 
