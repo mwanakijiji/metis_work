@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # DRAFT IMG-OPT-01
+# # DRAFT IMG-OPT-02
 
-# Maked simulated data for the IMG-OPT-1 FOV, distortion, and ghost measurements
+# Maked simulated data for the IMG-OPT-02 FOV, distortion, and ghost measurements
 
 # Reqs.:
 # - Ref. Overleaf doc IMG_OPT_01_Test_Description_Field_of_View_and_Ghost_Measurement.pdf
@@ -16,6 +16,7 @@
 # 0.1 % of the peak irradiance in the focal planes of the IMG. Hereby, stray light con-
 # tains scattering from opto-mechanical surfaces in Mid-infrared ELT Imager and Spec-
 # trograph (METIS).
+
 # 4. METIS-1367 The size of the field of view of the IMG IFU spectrograph shall cover an area of at
 # least 0.5 square-arcseconds with an aspect ratio between 1:1 and 2:1.
 # 5. METIS-1368 The spatial PSF sampling of the IFU in the along-slice direction shall be at least
@@ -23,6 +24,7 @@
 # 6. METIS-2752 Linear dimensions of the spatial sampling element (slice width and pixel along slice
 # field of view) shall vary by less than 15 % across the field of view when projected
 # onto the sky.
+
 # 7. METIS-1429 The maximum allowed stray light irradiance in the CFO-FP2 plane from an in-field
 # source positioned in the METIS input focal plane shall be less than 0.06 % of the peak
 # irradiance.
