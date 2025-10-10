@@ -45,7 +45,7 @@ sim.link_irdb("../../../")
 # simulate observations with METIS (comment this out if packages already exist)
 #sim.download_packages(["METIS", "ELT", "Armazones"])
 
-def generate_psf_image_quality_data(fp_mask, obs_filter, dither_position_array, obs_mode):
+def generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, dither_position_array, obs_mode):
 
     # set up instrument
     cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode])
@@ -74,10 +74,12 @@ def generate_psf_image_quality_data(fp_mask, obs_filter, dither_position_array, 
 
     for dither_pos in dither_position_array:
 
+        
+
         print('--------------------------------')
+        print('Current Observing filter:', obs_filter)
         print('Current WCU FP mask:', wcu.fpmask)
-        print('Current Observing filter:', metis["filter_wheel"].current_filter)
-        print('Current WCU PP mask:', metis['pupil_masks'].current_mask)
+        print('Current WCU PP mask:', pp_mask)
 
         # dither by shifting the FP mask
         # (note these shifts are absolute, not relative)
@@ -87,22 +89,18 @@ def generate_psf_image_quality_data(fp_mask, obs_filter, dither_position_array, 
 
         metis.observe()
         outhdul = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
-        #outhdul[1].data
-        #outhdul.writeto(f"IMG_OPT_02_wcu_focal_plane_{mask}.fits", overwrite=True)
-
-        ipdb.set_trace()
 
         # background-subtract
         bckgd_subted = outhdul[1].data - background
 
-        ipdb.set_trace()
+        
 
         # detector
         plt.clf()
         zscale = ZScaleInterval()
         vmin, vmax = zscale.get_limits(bckgd_subted)
         plt.imshow(bckgd_subted, origin='lower', vmin=vmin, vmax=vmax)
-        plt.title(f'Readout\nWCU FP mask: ' + str(fp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp))
+        plt.title(f'Readout\nWCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp))
         plt.tight_layout()
         plt.show()
         plt.close()
@@ -110,13 +108,21 @@ def generate_psf_image_quality_data(fp_mask, obs_filter, dither_position_array, 
         # histogram
         plt.clf()
         plt.hist(bckgd_subted.ravel(), bins=200)
-        plt.title('Bckgd-subtracted histogram; WCU FP mask: ' + str(fp_mask))
+        plt.title('Bckgd-subtracted histogram; WCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp))
         plt.tight_layout()
         plt.show()
         plt.close()
 
-        # save to FITS file
+        # save to FITS file, with filter and other info in the header
         file_name = 'IMG_OPT_04_wcu_focal_plane_' + str(fp_mask) + '.fits'
+        outhdul[0].header['FILTER'] = (obs_filter, 'Observing filter')
+        outhdul[0].header['WCU_FP'] = (fp_mask, 'WCU focal plane mask')
+        #outhdul[0].header['DITH_POS'] = (dither_pos, 'WCU dither position')
+        outhdul[0].header['WCU_PP'] = (pp_mask, 'WCU pupil plane mask')
+        outhdul[0].header['BB_TEMP'] = (bb_temp, 'BB temperature')
+        outhdul[0].header['NDIT'] = (NDIT, 'Number of dithered exposures')
+        outhdul[0].header['EXPTIME'] = (EXPTIME, 'Exposure time')
+        
         outhdul.writeto(file_name, overwrite=True)
         print('Saved readout without aberrations to ' + file_name)
 
@@ -144,15 +150,18 @@ def main():
     # make as many dither positions as desired
     dither_position_array = [(0, 0), (1, 0), (0, 1), (1, 1)]
 
+    # just one mask for now (Open)
+    pp_mask = metis['pupil_masks'].meta['current_mask']
+
     # LM band
     for fp_mask in lm_fpmasks_list:
         for obs_filter in lm_filters_list:
-            generate_psf_image_quality_data(fp_mask, obs_filter, dither_position_array=dither_position_array, obs_mode='wcu_img_lm')
+            generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, dither_position_array=dither_position_array, obs_mode='wcu_img_lm')
 
     # N band
     for fp_mask in n_fpmasks_list:
         for obs_filter in n_filters_list:
-            generate_psf_image_quality_data(fp_mask, obs_filter, dither_position_array=dither_position_array, obs_mode='wcu_img_n')
+            generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, dither_position_array=dither_position_array, obs_mode='wcu_img_n')
 
 
 if __name__ == "__main__":
