@@ -48,7 +48,7 @@ write_dir = '/podman-share/metis_work/playing_with_scopesim/IMG_02_output/'
 # simulate observations with METIS (comment this out if packages already exist)
 #sim.download_packages(["METIS", "ELT", "Armazones"])
 
-def determine_fov(fp_mask, pp_mask, obs_filter, dither_position_array, fov, ps, obs_mode, source='bb_source'):
+def four_corner_psf(fp_mask, pp_mask, obs_filter, dither_position_array, fov, ps, obs_mode, source='bb_source'):
     '''
     Image the source at each corner of the FOV.
     
@@ -184,7 +184,7 @@ def determine_fov(fp_mask, pp_mask, obs_filter, dither_position_array, fov, ps, 
         print('Pickled variables to ', file_name_pickle)
 
 
-def get_grid_image(fp_mask, obs_filter, pp_mask, obs_mode, source='bb_source'):
+def image_fp_masks(fp_mask, obs_filter, pp_mask, obs_mode, source='bb_source'):
     '''
     Get a grid image of PSFs.
 
@@ -290,6 +290,28 @@ def get_grid_image(fp_mask, obs_filter, pp_mask, obs_mode, source='bb_source'):
     outhdul.writeto(file_name, overwrite=True)
     print('Saved readout without aberrations to ' + file_name)
 
+
+def image_single_psf(fp_mask, obs_filter, pp_mask, obs_mode, source='bb_source'):
+    '''
+    Image a single PSF, to constrain stray light
+
+    INPUTS:
+    - fp_mask: focal plane mask
+    - obs_filter: observing filter
+    - pp_mask: pupil plane mask
+    - obs_mode: observing mode
+    - source: source of light ('bb_source' or 'laser')
+
+    OUTPUT:
+    - writes pngs and FITS to disk
+    '''
+
+    # set up instrument
+    cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode])
+    metis = sim.OpticalTrain(cmd)
+
+    metis.effects.pprint_all()
+
 def main():
 
     # initialize instrument here just to obtain filter lists: LM band
@@ -338,26 +360,35 @@ def main():
     '''
     for fp_mask in lm_fpmasks_list:
         for obs_filter in lm_filters_list:
-            determine_fov(fp_mask, pp_mask, obs_filter, dither_position_array=rel_dither_position_array, fov=designed_fov_img_lm, ps=designed_pixel_scale_img_lm, obs_mode='wcu_img_lm', source='bb')
+            four_corner_psffov(fp_mask, pp_mask, obs_filter, dither_position_array=rel_dither_position_array, fov=designed_fov_img_lm, ps=designed_pixel_scale_img_lm, obs_mode='wcu_img_lm', source='bb')
 
     # N band
     for fp_mask in n_fpmasks_list:
         for obs_filter in n_filters_list:
-            determine_fov(fp_mask, pp_mask, obs_filter, dither_position_array=rel_dither_position_array, fov=designed_fov_img_n, ps=designed_pixel_scale_img_n, obs_mode='wcu_img_n', source='bb')
+            four_corner_psffov(fp_mask, pp_mask, obs_filter, dither_position_array=rel_dither_position_array, fov=designed_fov_img_n, ps=designed_pixel_scale_img_n, obs_mode='wcu_img_n', source='bb')
     '''
 
     #########################################################################################################################
     ## PLATE SCALE SIMULATION: image a grid of PSFs
+    '''
     lm_fpmasks_list = ["grid_lm"] # only want a grid image
     #n_fpmasks_list = ["pinhole_n"]
 
     # LM band
     for fp_mask in lm_fpmasks_list:
         for obs_filter in lm_filters_list:
-            get_grid_image(fp_mask, obs_filter, pp_mask, obs_mode='wcu_img_lm', source='laser')
+            image_fp_masks(fp_mask, obs_filter, pp_mask, obs_mode='wcu_img_lm', source='bb_source')
 
     # N band TBD; will require a grid mask
+    '''
 
+    #########################################################################################################################
+    ## STRAY LIGHT: image a single PSF
+    lm_fpmasks_list = ["pinhole_lm"]
+    
+    for fp_mask in lm_fpmasks_list:
+        for obs_filter in lm_filters_list:
+            image_fp_masks(fp_mask, obs_filter, pp_mask, obs_mode='wcu_img_lm', source='bb_source')
 
 
 if __name__ == "__main__":
