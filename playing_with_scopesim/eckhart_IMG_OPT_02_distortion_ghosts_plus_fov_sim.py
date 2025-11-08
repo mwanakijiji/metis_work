@@ -22,6 +22,7 @@
 # calibration and flat fielding errors for measurement of the Encircled Energy. The flat field will be derived
 # from IMG-RAD-04.
 
+from typing import Any
 import numpy as np
 from astropy.io import fits
 from astropy import units as u
@@ -113,14 +114,18 @@ def four_corner_psf(fp_mask, pp_mask, obs_filter, dither_position_array, fov, ps
 
     print('Dithering PSF to each corner of the FOV. This is agnostic to whether the source is being translated, ' + 
         'the telescope is being nodded, or an optical element is moving')
+
+    metis.observe()
+    outhdul = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
+
     # dither psf to each corner of the FOV
     for dither_pos in dither_position_array:
-        ipdb.set_trace()
 
         # rescale dither position to the designed pixel scale, FOV
 
         fov_half = int(np.floor(0.5 * fov)) # round down to nearest integer
-        dither_pos = tuple(np.array(dither_pos) * fov_half)
+        dither_pos = tuple(np.array(dither_pos) * fov_half) # arcsec
+        dither_pos_pix = tuple(int(x) for x in (np.array(dither_pos) * 0.45 * 2048 * (1/5))) # pixels; 1/5 factor to account for 5 arcsec across one half of one side
 
         print('--------------------------------')
         print('Current Observing filter:', obs_filter)
@@ -133,19 +138,15 @@ def four_corner_psf(fp_mask, pp_mask, obs_filter, dither_position_array, fov, ps
         # ! ------ this functionality is messed up! just roll the image ------ !
         #wcu.set_fpmask(fp_mask, angle=0, shift=dither_pos)
 
-        wcu.set_fpmask(fp_mask)
-
-        metis.observe()
-        outhdul = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
-
         # ersatz dithering: just roll the image with no dither
-        if dither_pos != (0, 0):
-            #outhdul[1].data = np.roll(outhdul[1].data, dither_pos, axis=(0, 1))
-            ipdb.set_trace()
-            test = np.roll(outhdul[1].data, dither_pos, axis=(0, 1))
+        # This is correct: np.roll for 2D, axis=(0,1) for (y,x)
+        ersatz_dither = np.roll(
+            outhdul[1].data, shift=(dither_pos_pix[1], dither_pos_pix[0]), axis=(0, 1)
+        )
 
         # background-subtract
-        bckgd_subted = outhdul[1].data - background
+        #bckgd_subted = outhdul[1].data - background
+        bckgd_subted = ersatz_dither - background
 
         # detector
         plt.clf()
@@ -180,7 +181,6 @@ def four_corner_psf(fp_mask, pp_mask, obs_filter, dither_position_array, fov, ps
         
         outhdul.writeto(file_name, overwrite=True)
 
-        ipdb.set_trace()
         print('Saved readout without aberrations to ' + file_name)
 
         # do a hackneyed aberration: blurring made to look like defocus 
@@ -312,6 +312,7 @@ def image_fp_masks(fp_mask, obs_filter, pp_mask, obs_mode, source='bb_source'):
 
     # save to FITS file, with filter and other info in the header
     file_name = write_dir + 'IMG_OPT_04_plate_scale_grid_image_' + str(fp_mask) + '_' + str(obs_filter) + '.fits'
+    outhdul[0].data = bckgd_subted # background-subtracted image (note [1] still contains the raw readout)
     outhdul[0].header['FILTER'] = (obs_filter, 'Observing filter')
     outhdul[0].header['WCU_FP'] = (fp_mask, 'WCU focal plane mask')
     outhdul[0].header['WCU_PP'] = (pp_mask, 'WCU pupil plane mask')
@@ -389,20 +390,18 @@ def main():
     #########################################################################################################################
     ## FOV SIMULATION: image PSF at each corner of the array
 
-
-    # LM band
-    ipdb.set_trace()
-    
+    '''
+    # LM band    
     for fp_mask in lm_fpmasks_list:
         for obs_filter in lm_filters_list:
             print('fp_mask: ' + str(fp_mask) + ' obs_filter: ' + str(obs_filter))
-            ipdb.set_trace()
             four_corner_psf(fp_mask, pp_mask, obs_filter, dither_position_array=rel_dither_position_array, fov=designed_fov_img_lm, ps=designed_pixel_scale_img_lm, obs_mode='wcu_img_lm', source='bb')
 
     # N band
     for fp_mask in n_fpmasks_list:
         for obs_filter in n_filters_list:
             four_corner_psf(fp_mask, pp_mask, obs_filter, dither_position_array=rel_dither_position_array, fov=designed_fov_img_n, ps=designed_pixel_scale_img_n, obs_mode='wcu_img_n', source='bb')
+    '''
 
     #########################################################################################################################
     ## PLATE SCALE SIMULATION: image a grid of PSFs
@@ -415,19 +414,19 @@ def main():
     for fp_mask in lm_fpmasks_list:
         for obs_filter in lm_filters_list:
             image_fp_masks(fp_mask, obs_filter, pp_mask, obs_mode='wcu_img_lm', source='bb_source')
-    '''
-    # N band TBD; will require a grid mask
 
+    # N band TBD; will require a grid mask
+    '''
 
     #########################################################################################################################
     ## STRAY LIGHT: image a single PSF
-    '''
+
     lm_fpmasks_list = ["pinhole_lm"]
     
     for fp_mask in lm_fpmasks_list:
         for obs_filter in lm_filters_list:
             image_fp_masks(fp_mask, obs_filter, pp_mask, obs_mode='wcu_img_lm', source='bb_source')
-    '''
+
 
 
 if __name__ == "__main__":
