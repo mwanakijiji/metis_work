@@ -48,7 +48,23 @@ write_dir = '/podman-share/metis_work/playing_with_scopesim/IMG_02_output/'
 # simulate observations with METIS (comment this out if packages already exist)
 #sim.download_packages(["METIS", "ELT", "Armazones"])
 
-def determine_fov(fp_mask, pp_mask, obs_filter, dither_position_array, fov, ps, obs_mode):
+def determine_fov(fp_mask, pp_mask, obs_filter, dither_position_array, fov, ps, obs_mode, source='bb_source'):
+    '''
+    Image the source at each corner of the FOV.
+    
+    INPUTS:
+    - fp_mask: focal plane mask
+    - pp_mask: pupil plane mask
+    - obs_filter: observing filter
+    - dither_position_array: array of dither positions
+    - fov: field of view
+    - ps: pixel scale
+    - obs_mode: observing mode
+    - source: source of light ('bb_source' or 'laser')
+
+    OUTPUT:
+    - writes pngs and FITS to disk
+    '''
 
     # set up instrument
     cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode])
@@ -168,29 +184,51 @@ def determine_fov(fp_mask, pp_mask, obs_filter, dither_position_array, fov, ps, 
         print('Pickled variables to ', file_name_pickle)
 
 
-def get_grid_image(fp_mask, obs_filter, pp_mask, obs_mode):
+def get_grid_image(fp_mask, obs_filter, pp_mask, obs_mode, source='bb_source'):
+    '''
+    Get a grid image of PSFs.
+
+    INPUTS:
+    - fp_mask: focal plane mask
+    - obs_filter: observing filter
+    - pp_mask: pupil plane mask
+    - obs_mode: observing mode
+    - source: source of light ('bb_source' or 'laser')
+
+    OUTPUT:
+    - writes pngs and FITS to disk
+    '''
 
     # set up instrument
     cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode])
     metis = sim.OpticalTrain(cmd)
 
     metis.effects.pprint_all()
-    wcu = metis['wcu_source']
 
-    bb_temp = 1000 * u.K
     NDIT, EXPTIME = 1, 0.2
 
-    print('Generating ' + str(fp_mask)) 
-    wcu.set_fpmask(fp_mask)
-
-    print('Closing WCU BB aperture first for background ...')
-    # background
-    wcu.set_bb_aperture(value = 0.0)
-    metis.observe()
-    outhdul_off = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
-    background = outhdul_off[1].data
-
-    wcu.set_bb_aperture(value = 1.0) # open BB source
+    # initialize stuff
+    background = None
+    bb_temp = 0 * u.K
+    if source == 'bb_source':
+        # default source is BB
+        wcu = metis['wcu_source']
+        print('Generating ' + str(fp_mask)) 
+        wcu.set_fpmask(fp_mask)
+        print('Closing WCU BB aperture first for background ...')
+        # background
+        bb_temp = 1000 * u.K
+        wcu.set_bb_aperture(value = 0.0)
+        # take background
+        metis.observe()
+        outhdul_off = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
+        background = outhdul_off[1].data
+        wcu.set_bb_aperture(value = 1.0) # open BB source
+    elif source == 'laser':
+        metis["wcu_source"].set_lamp("laser")
+        wcu = metis['wcu_source']
+    else:
+        raise ValueError('Invalid source: ' + str(source))
 
     metis["filter_wheel"].change_filter(obs_filter)
 
@@ -211,11 +249,20 @@ def get_grid_image(fp_mask, obs_filter, pp_mask, obs_mode):
     outhdul = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
 
     # background-subtract
-    bckgd_subted = outhdul[1].data - background
+    # if there is a background
+
+    if background is not None:
+        bckgd_subted = outhdul[1].data - background
+    else: 
+        bckgd_subted = outhdul[1].data
+
     zscale = ZScaleInterval()
     vmin, vmax = zscale.get_limits(bckgd_subted)
+    plt.clf()
     plt.imshow(bckgd_subted, origin='lower', vmin=vmin, vmax=vmax)
-
+    plt.title('Bckgd-subtracted; WCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + \
+        'Observing filter: ' + str(obs_filter) + '\n' + 'Source: ' + str(source) + '\n' + \
+            'BB temp (if BB): ' + str(bb_temp))
     plt.tight_layout()
     plt.show()
     plt.close()
@@ -223,7 +270,9 @@ def get_grid_image(fp_mask, obs_filter, pp_mask, obs_mode):
     # histogram
     plt.clf()
     plt.hist(bckgd_subted.ravel(), bins=200)
-    plt.title('Bckgd-subtracted histogram; WCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp))
+    plt.title('Bckgd-subtracted histogram; WCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + \
+        'Observing filter: ' + str(obs_filter) + '\n' + 'Source: ' + str(source) + '\n' + \
+            'BB temp (if BB): ' + str(bb_temp))
     plt.tight_layout()
     plt.show()
     plt.close()
@@ -234,6 +283,7 @@ def get_grid_image(fp_mask, obs_filter, pp_mask, obs_mode):
     outhdul[0].header['WCU_FP'] = (fp_mask, 'WCU focal plane mask')
     outhdul[0].header['WCU_PP'] = (pp_mask, 'WCU pupil plane mask')
     outhdul[0].header['BB_TEMP'] = (bb_temp.value, 'BB temperature')
+    outhdul[0].header['SOURCE'] = (source, 'Source')
     outhdul[0].header['NDIT'] = (NDIT, 'Number of dithered exposures')
     outhdul[0].header['EXPTIME'] = (EXPTIME, 'Exposure time')
     
@@ -288,12 +338,12 @@ def main():
     '''
     for fp_mask in lm_fpmasks_list:
         for obs_filter in lm_filters_list:
-            determine_fov(fp_mask, pp_mask, obs_filter, dither_position_array=rel_dither_position_array, fov=designed_fov_img_lm, ps=designed_pixel_scale_img_lm, obs_mode='wcu_img_lm')
+            determine_fov(fp_mask, pp_mask, obs_filter, dither_position_array=rel_dither_position_array, fov=designed_fov_img_lm, ps=designed_pixel_scale_img_lm, obs_mode='wcu_img_lm', source='bb')
 
     # N band
     for fp_mask in n_fpmasks_list:
         for obs_filter in n_filters_list:
-            determine_fov(fp_mask, pp_mask, obs_filter, dither_position_array=rel_dither_position_array, fov=designed_fov_img_n, ps=designed_pixel_scale_img_n, obs_mode='wcu_img_n')
+            determine_fov(fp_mask, pp_mask, obs_filter, dither_position_array=rel_dither_position_array, fov=designed_fov_img_n, ps=designed_pixel_scale_img_n, obs_mode='wcu_img_n', source='bb')
     '''
 
     #########################################################################################################################
@@ -304,7 +354,7 @@ def main():
     # LM band
     for fp_mask in lm_fpmasks_list:
         for obs_filter in lm_filters_list:
-            get_grid_image(fp_mask, obs_filter, pp_mask, obs_mode='wcu_img_lm')
+            get_grid_image(fp_mask, obs_filter, pp_mask, obs_mode='wcu_img_lm', source='laser')
 
     # N band TBD; will require a grid mask
 
