@@ -14,7 +14,7 @@ from matplotlib import pyplot as plt
 from matplotlib import colors
 from astropy.visualization import ZScaleInterval
 
-#from photutils.centroids import centroid_sources, centroid_com
+from photutils.centroids import centroid_sources, centroid_com, centroid_2dg
 
 import ipdb
 
@@ -106,7 +106,10 @@ def plate_scale(file_name_grid, scaling_reln):
     y_grid = np.array([13.0, 13.0, 13.1, 13.3])
 
     # find the grid centroids
-    x_grid, y_grid = centroid_sources(grid_data, xpos=coords_guesses_x_all, ypos=coords_guesses_y_all)
+    x_grid, y_grid = centroid_sources(grid_data, 
+                                    xpos=coords_guesses_x_all, 
+                                    ypos=coords_guesses_y_all, 
+                                    centroid_func=centroid_2dg)
 
     # zip into one array
     coords_centroided_all = np.vstack((y_grid, x_grid)).T

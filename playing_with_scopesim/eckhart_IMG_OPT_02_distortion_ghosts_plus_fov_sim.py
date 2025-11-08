@@ -38,6 +38,8 @@ import time
 import ipdb
 
 import scopesim as sim
+from scopesim.effects.electronic.exposure import AutoExposure
+
 sim.bug_report()
 
 # Edit this path if you have a custom install directory, otherwise comment it out. [For ReadTheDocs only]
@@ -73,19 +75,38 @@ def four_corner_psf(fp_mask, pp_mask, obs_filter, dither_position_array, fov, ps
     metis.effects.pprint_all()
     wcu = metis['wcu_source']
 
-    bb_temp = 1000 * u.K
-    NDIT, EXPTIME = 1, 0.2
+    bb_temp = 10 * u.K
+    NDIT, EXPTIME = 10, 0.5
 
     print('Generating ' + str(fp_mask)) 
     wcu.set_fpmask(fp_mask)
 
     print('Closing WCU BB aperture first for background ...')
     # background
+
+    '''
+    ## BEGIN DEBUGGING
+    DIT, NDIT = 30, 120
+    wcu.set_bb_aperture(0)
+    metis.observe()
+    readout_off = metis.readout(dit=DIT, ndit=NDIT)[0]
+    wcu.set_bb_aperture(1.)
+    metis.observe()
+    readout_nom = metis.readout(dit=DIT, ndit=NDIT)[0]
+    ## END DEBUGGING
+    '''
+
     wcu.set_bb_aperture(value = 0.0)
     metis.observe()
-    outhdul_off = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
+    #outhdul_off = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
+    #outhdul_off = metis.readout(exptime = 0.001*EXPTIME)[0]
+    #outhdul_off = metis.readout(ndit=40, dit=0.25)[0]
+    #outhdul_off = metis.readout(ndetector_readout_mode='auto', dit=None, ndit=None)
+    outhdul_off = metis.readout(exptime = 25)[0]
+
     background = outhdul_off[1].data
 
+    print('Opening WCU BB aperture...')
     wcu.set_bb_aperture(value = 1.0) # open BB source
 
     metis["filter_wheel"].change_filter(obs_filter)
@@ -94,6 +115,7 @@ def four_corner_psf(fp_mask, pp_mask, obs_filter, dither_position_array, fov, ps
         'the telescope is being nodded, or an optical element is moving')
     # dither psf to each corner of the FOV
     for dither_pos in dither_position_array:
+        ipdb.set_trace()
 
         # rescale dither position to the designed pixel scale, FOV
 
@@ -108,12 +130,19 @@ def four_corner_psf(fp_mask, pp_mask, obs_filter, dither_position_array, fov, ps
 
         # dither by shifting the FP mask
         # (note these shifts are absolute, not relative)
-        wcu.set_fpmask(fp_mask, angle=0, shift=dither_pos)
+        # ! ------ this functionality is messed up! just roll the image ------ !
+        #wcu.set_fpmask(fp_mask, angle=0, shift=dither_pos)
 
-        print('Opening WCU BB aperture...')
+        wcu.set_fpmask(fp_mask)
 
         metis.observe()
         outhdul = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
+
+        # ersatz dithering: just roll the image with no dither
+        if dither_pos != (0, 0):
+            #outhdul[1].data = np.roll(outhdul[1].data, dither_pos, axis=(0, 1))
+            ipdb.set_trace()
+            test = np.roll(outhdul[1].data, dither_pos, axis=(0, 1))
 
         # background-subtract
         bckgd_subted = outhdul[1].data - background
@@ -123,7 +152,9 @@ def four_corner_psf(fp_mask, pp_mask, obs_filter, dither_position_array, fov, ps
         zscale = ZScaleInterval()
         vmin, vmax = zscale.get_limits(bckgd_subted)
         plt.imshow(bckgd_subted, origin='lower', vmin=vmin, vmax=vmax)
-        plt.title(f'Readout\nWCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp))
+        plt.title(f'Readout\nWCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + \
+            '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp) + \
+                '\n' + 'dither position: ' + str(dither_pos))
         plt.tight_layout()
         plt.show()
         plt.close()
@@ -138,6 +169,7 @@ def four_corner_psf(fp_mask, pp_mask, obs_filter, dither_position_array, fov, ps
 
         # save to FITS file, with filter and other info in the header
         file_name = write_dir + 'IMG_OPT_04_wcu_focal_plane_' + str(fp_mask) + '.fits'
+        outhdul[0].data = bckgd_subted # background-subtracted image (note [1] still contains the raw readout)
         outhdul[0].header['FILTER'] = (obs_filter, 'Observing filter')
         outhdul[0].header['WCU_FP'] = (fp_mask, 'WCU focal plane mask')
         #outhdul[0].header['DITH_POS'] = (dither_pos, 'WCU dither position')
@@ -147,6 +179,8 @@ def four_corner_psf(fp_mask, pp_mask, obs_filter, dither_position_array, fov, ps
         outhdul[0].header['EXPTIME'] = (EXPTIME, 'Exposure time')
         
         outhdul.writeto(file_name, overwrite=True)
+
+        ipdb.set_trace()
         print('Saved readout without aberrations to ' + file_name)
 
         # do a hackneyed aberration: blurring made to look like defocus 
@@ -199,6 +233,8 @@ def image_fp_masks(fp_mask, obs_filter, pp_mask, obs_mode, source='bb_source'):
     # set up instrument
     cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode])
     metis = sim.OpticalTrain(cmd)
+
+
 
     metis.effects.pprint_all()
 
@@ -291,10 +327,28 @@ def image_fp_masks(fp_mask, obs_filter, pp_mask, obs_mode, source='bb_source'):
 def main():
 
     # initialize instrument here just to obtain filter lists: LM band
+    '''
     cmd = sim.UserCommands(use_instrument='METIS', set_modes=['wcu_img_lm'])
     metis = sim.OpticalTrain(cmd)
     lm_filters_list = metis["filter_wheel"].filters.keys()
+    '''
+    lm_filters_list = ['Lp', 'short-L', 'L_spec', 'Mp', 'M_spec'] # make a smaller selection of filters
     lm_fpmasks_list = ["pinhole_lm", "grid_lm"]
+
+    ipdb.set_trace()
+    '''
+    ## BEGIN DEBUGGING
+    DIT, NDIT = 30, 120
+    wcu = metis['wcu_source']
+    wcu.set_bb_aperture(0)
+    metis.observe()
+    readout_off = metis.readout(dit=DIT, ndit=NDIT)[0]
+    wcu.set_bb_aperture(1.)
+    metis.observe()
+    readout_nom = metis.readout(dit=DIT, ndit=NDIT)[0]
+    ## END DEBUGGING
+    '''
+
 
     # same for N band
     cmd = sim.UserCommands(use_instrument='METIS', set_modes=['wcu_img_n'])
@@ -312,6 +366,9 @@ def main():
 
     # just one mask for now (Open)
     pp_mask = metis['pupil_masks'].meta['current_mask']
+
+    del(cmd)
+    del(metis)
 
     # use nested for-loops, or generate permutations;
     # example of permutations for LM filters and masks:
@@ -332,17 +389,21 @@ def main():
     #########################################################################################################################
     ## FOV SIMULATION: image PSF at each corner of the array
 
-    '''
+
     # LM band
+    ipdb.set_trace()
+    
     for fp_mask in lm_fpmasks_list:
         for obs_filter in lm_filters_list:
+            print('fp_mask: ' + str(fp_mask) + ' obs_filter: ' + str(obs_filter))
+            ipdb.set_trace()
             four_corner_psf(fp_mask, pp_mask, obs_filter, dither_position_array=rel_dither_position_array, fov=designed_fov_img_lm, ps=designed_pixel_scale_img_lm, obs_mode='wcu_img_lm', source='bb')
 
     # N band
     for fp_mask in n_fpmasks_list:
         for obs_filter in n_filters_list:
             four_corner_psf(fp_mask, pp_mask, obs_filter, dither_position_array=rel_dither_position_array, fov=designed_fov_img_n, ps=designed_pixel_scale_img_n, obs_mode='wcu_img_n', source='bb')
-    '''
+
     #########################################################################################################################
     ## PLATE SCALE SIMULATION: image a grid of PSFs
 
@@ -360,11 +421,13 @@ def main():
 
     #########################################################################################################################
     ## STRAY LIGHT: image a single PSF
+    '''
     lm_fpmasks_list = ["pinhole_lm"]
     
     for fp_mask in lm_fpmasks_list:
         for obs_filter in lm_filters_list:
             image_fp_masks(fp_mask, obs_filter, pp_mask, obs_mode='wcu_img_lm', source='bb_source')
+    '''
 
 
 if __name__ == "__main__":
