@@ -311,7 +311,7 @@ def image_fp_masks(fp_mask, obs_filter, pp_mask, obs_mode, source='bb_source'):
     plt.close()
 
     # save to FITS file, with filter and other info in the header
-    file_name = write_dir + 'IMG_OPT_04_plate_scale_grid_image_' + str(fp_mask) + '_' + str(obs_filter) + '.fits'
+    file_name = write_dir + 'IMG_OPT_image_' + str(fp_mask) + '_' + str(obs_filter) + '.fits'
     outhdul[0].data = bckgd_subted # background-subtracted image (note [1] still contains the raw readout)
     outhdul[0].header['FILTER'] = (obs_filter, 'Observing filter')
     outhdul[0].header['WCU_FP'] = (fp_mask, 'WCU focal plane mask')
