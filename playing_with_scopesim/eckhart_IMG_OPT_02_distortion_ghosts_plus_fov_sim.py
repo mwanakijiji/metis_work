@@ -169,7 +169,7 @@ def four_corner_psf(fp_mask, pp_mask, obs_filter, dither_position_array, fov, ps
         plt.close()
 
         # save to FITS file, with filter and other info in the header
-        file_name = write_dir + 'IMG_OPT_04_wcu_focal_plane_' + str(fp_mask) + '.fits'
+        file_name = write_dir + 'IMG_OPT_02_wcu_focal_plane_' + str(fp_mask) + '.fits'
         outhdul[0].data = bckgd_subted # background-subtracted image (note [1] still contains the raw readout)
         outhdul[0].header['FILTER'] = (obs_filter, 'Observing filter')
         outhdul[0].header['WCU_FP'] = (fp_mask, 'WCU focal plane mask')
@@ -184,7 +184,7 @@ def four_corner_psf(fp_mask, pp_mask, obs_filter, dither_position_array, fov, ps
         print('Saved readout without aberrations to ' + file_name)
 
         # do a hackneyed aberration: blurring made to look like defocus 
-        file_name = write_dir + 'IMG_OPT_04_wcu_focal_plane_' + str(fp_mask) + '_blur.fits'
+        file_name = write_dir + 'IMG_OPT_02_wcu_focal_plane_' + str(fp_mask) + '_blur.fits'
         outhdul[1].data = scipy.ndimage.gaussian_filter(outhdul[1].data, sigma=3)
         outhdul.writeto(file_name, overwrite=True)
         print('Saved readout with aberrations to ' + file_name)
@@ -277,7 +277,6 @@ def image_fp_masks(fp_mask, obs_filter, pp_mask, obs_mode, source='bb_source'):
 
     print('Opening WCU BB aperture...')
 
-
     metis.observe()
     outhdul = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
 
@@ -311,7 +310,7 @@ def image_fp_masks(fp_mask, obs_filter, pp_mask, obs_mode, source='bb_source'):
     plt.close()
 
     # save to FITS file, with filter and other info in the header
-    file_name = write_dir + 'IMG_OPT_image_' + str(fp_mask) + '_' + str(obs_filter) + '.fits'
+    file_name = write_dir + 'IMG_OPT_02_image_' + str(fp_mask) + '_' + str(obs_filter) + '.fits'
     outhdul[0].data = bckgd_subted # background-subtracted image (note [1] still contains the raw readout)
     outhdul[0].header['FILTER'] = (obs_filter, 'Observing filter')
     outhdul[0].header['WCU_FP'] = (fp_mask, 'WCU focal plane mask')
@@ -333,10 +332,11 @@ def main():
     metis = sim.OpticalTrain(cmd)
     lm_filters_list = metis["filter_wheel"].filters.keys()
     '''
-    lm_filters_list = ['Lp', 'short-L', 'L_spec', 'Mp', 'M_spec'] # make a smaller selection of filters
+    lm_filters_list = ['Lp', 'short-L', 'L_spec', 'Mp', 'M_spec', \
+        'Br_alpha', 'Br_alpha_ref', 'PAH_3.3', 'PAH_3.3_ref', 'CO_1-0_ice', \
+            'CO_ref', 'H2O-ice'] # make a smaller selection of filters
     lm_fpmasks_list = ["pinhole_lm", "grid_lm"]
 
-    ipdb.set_trace()
     '''
     ## BEGIN DEBUGGING
     DIT, NDIT = 30, 120
@@ -368,9 +368,6 @@ def main():
     # just one mask for now (Open)
     pp_mask = metis['pupil_masks'].meta['current_mask']
 
-    del(cmd)
-    del(metis)
-
     # use nested for-loops, or generate permutations;
     # example of permutations for LM filters and masks:
     '''
@@ -388,7 +385,9 @@ def main():
     '''
 
     #########################################################################################################################
-    ## FOV SIMULATION: image PSF at each corner of the array
+    ## FOV SIMULATION: 
+    
+    # option 1: image PSF at each corner of the array (this doesn't produce good simmed data)
 
     '''
     # LM band    
@@ -401,6 +400,16 @@ def main():
     for fp_mask in n_fpmasks_list:
         for obs_filter in n_filters_list:
             four_corner_psf(fp_mask, pp_mask, obs_filter, dither_position_array=rel_dither_position_array, fov=designed_fov_img_n, ps=designed_pixel_scale_img_n, obs_mode='wcu_img_n', source='bb')
+    '''
+
+    # option 2: just image a grid
+
+    '''
+    # LM band
+    lm_fpmasks_list = ['grid_lm']
+    for fp_mask in lm_fpmasks_list:
+        for obs_filter in lm_filters_list:
+            image_fp_masks(fp_mask, obs_filter, pp_mask, obs_mode='wcu_img_lm', source='bb_source')
     '''
 
     #########################################################################################################################
@@ -420,6 +429,7 @@ def main():
 
     #########################################################################################################################
     ## STRAY LIGHT: image a single PSF
+
 
     lm_fpmasks_list = ["pinhole_lm"]
     
