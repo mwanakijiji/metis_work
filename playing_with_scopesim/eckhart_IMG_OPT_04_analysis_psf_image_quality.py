@@ -191,6 +191,63 @@ def fit_gaussian_fwhm(cookie_cut_out_sci, coords_centroided, plot_string):
     return fwhm_y_pix, fwhm_x_pix
 
 
+def find_fwhm_scopesim(cookie_cut_out_sci):
+    '''
+    Find FWHM of a PSF using a perfect PSF from ScopeSim
+    
+    INPUTS:
+    
+    '''
+
+    # set up instrument
+    cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode])
+    metis = sim.OpticalTrain(cmd)
+
+    metis.effects.pprint_all()
+    wcu = metis['wcu_source']
+
+    bb_temp = 1000 * u.K
+    NDIT, EXPTIME = 1, 0.2
+
+    print('Generating ' + str(fp_mask)) 
+    wcu.set_fpmask(fp_mask)
+
+    print('Closing WCU BB aperture first for background ...')
+    # background
+    wcu.set_bb_aperture(value = 0.0)
+    metis.observe()
+    outhdul_off = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
+    background = outhdul_off[1].data
+
+    wcu.set_bb_aperture(value = 1.0) # open BB source
+
+    metis["filter_wheel"].change_filter(obs_filter)
+
+    print('--------------------------------')
+    print('Current Observing filter:', obs_filter)
+    print('Current WCU FP mask:', wcu.fpmask)
+    print('Current WCU PP mask:', pp_mask)
+    print('Next absolute dither position:', dither_pos)
+
+    # dither by shifting the FP mask
+    # (note these shifts are absolute, not relative)
+    wcu.set_fpmask(fp_mask, angle=0, shift=dither_pos)
+
+    print('Opening WCU BB aperture...')
+
+    ipdb.set_trace()
+
+    metis.observe()
+    # Get perfect PSF - no detector noise
+    #hdul_perfect = metis.image_planes[0].hdu
+
+    '''
+    FIND FWHM HERE
+    '''
+    
+    return fwhm_y_pix, fwhm_x_pix
+
+
 def strehl_grid(file_name_grid):
     ##################################################################
     ## TEST 2: pixel scale
@@ -266,6 +323,8 @@ def strehl_grid(file_name_grid):
         fwhm_y_pix_empirical, fwhm_x_pix_empirical = fit_empirical_fwhm(cookie_cut_out_sci, plot_string=f'num_coord_{num_coord}')
         # find FWHM of Gaussian-best-fit to empirical
         fwhm_y_pix_empirical, fwhm_x_pix_empirical = fit_gaussian_fwhm(cookie_cut_out_sci, coords_centroided=coords_centroided_all[num_coord], plot_string=f'num_coord_{num_coord}')
+        # find FWHM based on a ScopeSim PSF
+
 
         ipdb.set_trace()
 

@@ -88,7 +88,10 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, dither_positio
         ipdb.set_trace()
 
         metis.observe()
+        # Get perfect PSF - no detector noise
+        #hdul_perfect = metis.image_planes[0].hdu
         outhdul = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
+        ipdb.set_trace()
 
         # background-subtract
         bckgd_subted = outhdul[1].data - background
