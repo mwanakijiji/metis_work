@@ -22,6 +22,8 @@ import pandas as pd
 
 import ipdb
 
+import scopesim as sim
+
 
 def fov(file_names_fov, scaling_reln, dither=False):
     '''
@@ -163,6 +165,7 @@ def plate_scale(file_name_grid, scaling_reln):
     (776, 776), (776, 1026), (776, 1273)
     '''
 
+    # coordinate starting guesses for the grid
     coords_guesses_all = np.array([(1804, 243), (1804, 633), (1804, 1029), (1804, 1418), (1804, 1810), \
         (1415, 241), (1419, 1808), \
             (1023, 241), (1025, 1810), \
@@ -435,8 +438,8 @@ def scattered_light(file_name_pinhole, ps):
 
         ratio_exterior_expected = exterior_fraction[num_ring]
 
-        print('Fraction of irradiance measured exterior to radius: {ratio_exterior_measured:.4f}')
-        print('Fraction of irradiance expected exterior to radius: {ratio_exterior_expected:.4f}')
+        print(f'Fraction of irradiance measured exterior to radius: {ratio_exterior_measured:.4f}')
+        print(f'Fraction of irradiance expected exterior to radius: {ratio_exterior_expected:.4f}')
         print(f'Ratio of exterior pixels measured to expected: {ratio_exterior_measured:.4f} / {ratio_exterior_expected:.4f}')
 
         # FYI plot
@@ -498,6 +501,9 @@ def main():
     # value and units may change depending on experimental setup
     print('! ---------- USING A PLACEHOLDER SCALING RELN ---------- !')
     scaling_reln = 0.00679 # [arcsec/pix]
+
+    # simulate a PSF
+
 
     # check FOV
     #fov(file_names_fov, scaling_reln, dither=False)

@@ -23,6 +23,9 @@ import pandas as pd
 
 import ipdb
 
+import scopesim as sim
+from skimage import measure
+
 def gaussian_2d(xy_mesh, amplitude, xo, yo, sigma_x_pix, sigma_y_pix, theta):
     x, y = xy_mesh
     xo = float(xo)
@@ -32,6 +35,63 @@ def gaussian_2d(xy_mesh, amplitude, xo, yo, sigma_x_pix, sigma_y_pix, theta):
     c = (np.sin(theta)**2) / (2 * sigma_x_pix**2) + (np.cos(theta)**2) / (2 * sigma_y_pix**2)
     g = amplitude * np.exp(-(a * ((x - xo)**2) + 2 * b * (x - xo) * (y - yo) + c * ((y - yo)**2)))
     return g.ravel()
+
+
+def fit_empirical_fwhm(frame, plot_string):
+    '''
+    Take the data as-is, find where the intensity is 50% of the peak intensity, and then calculate the FWHM in x and y.
+
+    INPUTS:
+    frame: 2D array of the frame
+    plot_string: string to add to the plot file name
+    '''
+
+    # find the peak intensity
+    ipdb.set_trace()
+    peak_intensity = np.max(frame)
+    # find where the intensity is 50% of the peak intensity
+    # Find the positions of the maximum value as the initial guess for the center
+    y_peak, x_peak = np.unravel_index(np.argmax(frame), frame.shape)
+    # Create x and y coordinate arrays
+    y, x = np.indices(frame.shape)
+    # Define a threshold for 50% of the peak
+    half_max = 0.5 * peak_intensity
+
+    # fit an oval to the region above half-max
+    mask_half = frame >= half_max
+    labeled = measure.label(mask_half)
+    props = measure.regionprops(labeled)
+    if len(props) > 0:
+        # Select the largest region by area
+        prop_biggest = [max(props, key=lambda p: p.area)]
+    ipdb.set_trace()
+    if len(props) == 0:
+        prop_biggest_dims = np.nan, np.nan
+
+    # use bounding box to get the dims in x and y (instead of just major and minor axis lengths)
+    min_row, min_col, max_row, max_col = prop_biggest[0].bbox
+    height_y = max_row - min_row   # axis-aligned y length
+    width_x  = max_col - min_col   # axis-aligned x length
+
+    # Plot the frame
+    plt.figure()
+    plt.imshow(frame, origin='lower', cmap='gray')
+    # Plot the bounding box if prop_biggest was found
+    if len(props) > 0:
+        rect = plt.Rectangle(
+            (min_col, min_row), width_x, height_y,
+            edgecolor='red', facecolor='none', linewidth=2, linestyle='--'
+        )
+        plt.gca().add_patch(rect)
+    plt.title(f'Frame with Bounding Box at 50% Peak\nFWHM in x (pix): {width_x:.2f}, FWHM in y (pix): {height_y:.2f}')
+    # save the plot to file
+    plot_filename = 'empirical_fwhm_' + plot_string + '.png'
+    plt.savefig(plot_filename, bbox_inches='tight')
+    print(f'Figure saved as {plot_filename}')
+    #plt.show()
+    plt.close()
+
+    return height_y, width_x
 
 
 def fit_gaussian(frame, center_guess):
@@ -76,6 +136,61 @@ def fyi_plot_centroiding(array_to_plot, coords_to_plot, zscale=False):
     plt.close()
 
 
+def fit_gaussian_fwhm(cookie_cut_out_sci, coords_centroided, plot_string):
+    '''
+    Find FWHM of Gaussian-best-fit to empirical; all fit parameters are free
+
+    INPUTS:
+    cookie_cut_out_sci: 2D array of the science frame
+    coords_centroided: 2D array of the centroided coordinates (one coordinate pair)
+    plot_string: string to add to the plot file name
+    '''
+
+    ## ## TO DO: ARE THE INDEXES RIGHT HERE?
+    cookie_cut_out_best_fit, fwhm_x_pix, fwhm_y_pix, sigma_x_pix, sigma_y_pix, angle_theta = fit_gaussian(cookie_cut_out_sci, \
+        [int(cookie_cut_out_sci.shape[1]/2),int(cookie_cut_out_sci.shape[1]/2)])
+    residuals = cookie_cut_out_sci - cookie_cut_out_best_fit
+
+    ipdb.set_trace()
+    # plot four subplots: 2D science, 2D best-fit, 2D residuals, and 1D overplotting of a cross-section of the science and best-fit
+    plt.clf()
+    # Determine vmin and vmax for consistent color scaling across all 2D plots
+    vmin = min(np.nanmin(cookie_cut_out_sci), np.nanmin(cookie_cut_out_best_fit), np.nanmin(residuals))
+    vmax = max(np.nanmax(cookie_cut_out_sci), np.nanmax(cookie_cut_out_best_fit), np.nanmax(residuals))
+    fig, axs = plt.subplots(2, 2, figsize=(10, 8))
+    # 2D Science image
+    im0 = axs[0, 0].imshow(cookie_cut_out_sci, origin='lower', cmap='gray_r', vmin=vmin, vmax=vmax)
+    axs[0, 0].set_title('Science')
+    plt.colorbar(im0, ax=axs[0, 0], fraction=0.046, pad=0.04)
+    # 2D Best-fit image
+    im1 = axs[0, 1].imshow(cookie_cut_out_best_fit, origin='lower', cmap='gray_r', vmin=vmin, vmax=vmax)
+    axs[0, 1].set_title('Best-fit')
+    plt.colorbar(im1, ax=axs[0, 1], fraction=0.046, pad=0.04)
+    # 2D Residuals image
+    im2 = axs[1, 0].imshow(residuals, origin='lower', cmap='gray_r', vmin=vmin, vmax=vmax)
+    axs[1, 0].set_title('Residuals')
+    plt.colorbar(im2, ax=axs[1, 0], fraction=0.046, pad=0.04)
+    # Plot a cross-section through the maximum of the PSF (along the row/col with the peak)
+    max_index = np.unravel_index(np.argmax(cookie_cut_out_sci), cookie_cut_out_sci.shape)
+    # Extract the row and column through the peak
+    sci_row = cookie_cut_out_sci[max_index[0], :]
+    best_fit_row = cookie_cut_out_best_fit[max_index[0], :]
+    axs[1, 1].plot(sci_row, label='Empirical')
+    axs[1, 1].plot(best_fit_row, label='Best-fit')
+    axs[1, 1].legend()
+    axs[1, 1].set_title('1D cross-section, science vs best-fit')
+    plt.suptitle(f'PSF at coord (y,x): {coords_centroided}')
+    plt.tight_layout()
+    plt.show()
+    # Save the plot to file with num_coord as a 2-digit zero-padded string
+    plot_filename = f'psf_gaussian_best_fit_'+plot_string+'.png'
+    plt.savefig(plot_filename, bbox_inches='tight')
+    print(f'Figure saved as {plot_filename}')
+    plt.close()
+
+    return fwhm_y_pix, fwhm_x_pix
+
+
 def strehl_grid(file_name_grid):
     ##################################################################
     ## TEST 2: pixel scale
@@ -93,6 +208,7 @@ def strehl_grid(file_name_grid):
     (776, 776), (776, 1026), (776, 1273)
     '''
 
+    # coordinate starting guesses for the grid
     coords_guesses_all = np.array([(1804, 243), (1804, 633), (1804, 1029), (1804, 1418), (1804, 1810), \
         (1415, 241), (1419, 1808), \
             (1023, 241), (1025, 1810), \
@@ -146,18 +262,17 @@ def strehl_grid(file_name_grid):
         print('! ----------- ADDING IN BACKGROUND VALUE TO MAKE THE BACKGROUND ZERO; NEED TO MODIFY LATER ----------- !')
         cookie_cut_out_sci = cookie_cut_out_sci - np.median(grid_data)
 
-        # make best fit Gaussian to empirical; all fit parameters are free
-        ## ## TO DO: ARE THE INDEXES RIGHT HERE?
-        cookie_cut_out_best_fit, fwhm_x_pix, fwhm_y_pix, sigma_x_pix, sigma_y_pix, angle_theta = fit_gaussian(cookie_cut_out_sci, \
-            [
-                coords_centroided_all[num_coord][1] - (x_pos_pix[num_coord] - 0.5 * cookie_edge_size),
-                coords_centroided_all[num_coord][0] - (y_pos_pix[num_coord] - 0.5 * cookie_edge_size)
-            ])
+        # find FWHM of empirical 
+        fwhm_y_pix_empirical, fwhm_x_pix_empirical = fit_empirical_fwhm(cookie_cut_out_sci, plot_string=f'num_coord_{num_coord}')
+        # find FWHM of Gaussian-best-fit to empirical
+        fwhm_y_pix_empirical, fwhm_x_pix_empirical = fit_gaussian_fwhm(cookie_cut_out_sci, coords_centroided=coords_centroided_all[num_coord], plot_string=f'num_coord_{num_coord}')
 
-        #fit_result, fwhm_x_pix, fwhm_y_pix, sigma_x_pix, sigma_y_pix = fit_gaussian(grid_data, [coords_centroided_all[num_coord][1], coords_centroided_all[num_coord][0]])
+        ipdb.set_trace()
+
+     
+
 
         # make cutout around the model (for plot)
-        #cookie_cut_out_best_fit = fit_result[int(y_pos_pix[0]-0.5*cookie_edge_size):int(y_pos_pix[0]+0.5*cookie_edge_size), int(x_pos_pix[0]-0.5*cookie_edge_size):int(x_pos_pix[0]+0.5*cookie_edge_size)]
 
         # save cookie_cut_out_sci and cookie_cut_out_best_fit as fits files
         file_name_sci = 'cookie_cut_out_sci.fits'
