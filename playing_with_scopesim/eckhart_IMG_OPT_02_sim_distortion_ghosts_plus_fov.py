@@ -415,7 +415,6 @@ def main():
     #########################################################################################################################
     ## PLATE SCALE SIMULATION: image a grid of PSFs
 
-    '''
     lm_fpmasks_list = ["grid_lm"] # only want a grid image
     #n_fpmasks_list = ["pinhole_n"]
 
@@ -425,7 +424,6 @@ def main():
             image_fp_masks(fp_mask, obs_filter, pp_mask, obs_mode='wcu_img_lm', source='bb_source')
 
     # N band TBD; will require a grid mask
-    '''
 
     #########################################################################################################################
     ## STRAY LIGHT: image a single PSF

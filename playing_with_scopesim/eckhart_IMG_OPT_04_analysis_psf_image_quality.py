@@ -191,7 +191,7 @@ def fit_gaussian_fwhm(cookie_cut_out_sci, coords_centroided, plot_string):
     return fwhm_y_pix, fwhm_x_pix
 
 
-def find_fwhm_scopesim(cookie_cut_out_sci):
+def subtract_simmed_psfs(cookie_cut_out_sci, plot_string):
     '''
     Find FWHM of a PSF using a perfect PSF from ScopeSim
     
@@ -200,8 +200,13 @@ def find_fwhm_scopesim(cookie_cut_out_sci):
     '''
 
     # set up instrument
-    cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode])
+    ## ## TO DO: MAKE THIS MORE GENERAL AND FLEXIBLE, FOR MULT OBSERVING MODES
+    cmd = sim.UserCommands(use_instrument='METIS', set_modes=['wcu_img_lm'])
     metis = sim.OpticalTrain(cmd)
+
+    # set the filter
+    obs_filter = 'short-L'  ## ## TO DO: MAKE THIS MORE GENERAL AND FLEXIBLE, FOR MULT OBSERVING MODES
+    metis["filter_wheel"].change_filter(obs_filter)
 
     metis.effects.pprint_all()
     wcu = metis['wcu_source']
@@ -209,7 +214,8 @@ def find_fwhm_scopesim(cookie_cut_out_sci):
     bb_temp = 1000 * u.K
     NDIT, EXPTIME = 1, 0.2
 
-    print('Generating ' + str(fp_mask)) 
+    fp_mask = 'pinhole_lm' ## ## TO DO: MAKE THIS MORE GENERAL AND FLEXIBLE, FOR MULT OBSERVING MODES
+    print('Generating ' + str(fp_mask))
     wcu.set_fpmask(fp_mask)
 
     print('Closing WCU BB aperture first for background ...')
@@ -221,31 +227,33 @@ def find_fwhm_scopesim(cookie_cut_out_sci):
 
     wcu.set_bb_aperture(value = 1.0) # open BB source
 
-    metis["filter_wheel"].change_filter(obs_filter)
+    
+    pp_mask = metis['pupil_masks'].meta['current_mask'] # just one mask for now (Open)
 
     print('--------------------------------')
     print('Current Observing filter:', obs_filter)
     print('Current WCU FP mask:', wcu.fpmask)
     print('Current WCU PP mask:', pp_mask)
-    print('Next absolute dither position:', dither_pos)
 
     # dither by shifting the FP mask
     # (note these shifts are absolute, not relative)
-    wcu.set_fpmask(fp_mask, angle=0, shift=dither_pos)
+    wcu.set_fpmask(fp_mask)
 
     print('Opening WCU BB aperture...')
 
-    ipdb.set_trace()
-
     metis.observe()
-    # Get perfect PSF - no detector noise
-    #hdul_perfect = metis.image_planes[0].hdu
+    # Get perfect, background-subtracted PSF - no detector noise
+    psf_perfect = metis.image_planes[0].hdu.data - background
 
-    '''
-    FIND FWHM HERE
-    '''
-    
-    return fwhm_y_pix, fwhm_x_pix
+    # cut out the central region the same size as the cookie cut-out
+    psf_perfect_cutout = psf_perfect[int(psf_perfect.shape[0]/2-0.5*cookie_cut_out_sci.shape[0]):int(psf_perfect.shape[0]/2+0.5*cookie_cut_out_sci.shape[0]), \
+        int(psf_perfect.shape[1]/2-0.5*cookie_cut_out_sci.shape[1]):int(psf_perfect.shape[1]/2+0.5*cookie_cut_out_sci.shape[1])]
+
+    # multiply psf_perfect_cutout by a coefficient to make it a best-fit to cookie_cut_out_sci
+    coefficient = np.sum(cookie_cut_out_sci) / np.sum(psf_perfect_cutout)
+    psf_perfect_cutout_best_fit = psf_perfect_cutout * coefficient
+
+    return psf_perfect_cutout_best_fit
 
 
 def strehl_grid(file_name_grid):
@@ -254,6 +262,8 @@ def strehl_grid(file_name_grid):
 
     grid_frame = fits.open(file_name_grid)
     grid_data = grid_frame[0].data
+    grid_header = grid_frame[0].header
+    ipdb.set_trace()
 
     '''
     (1804, 243), (1804, 633), (1804, 1029), (1804, 1418), (1804, 1810), 
@@ -310,44 +320,58 @@ def strehl_grid(file_name_grid):
     sigma_y_pix_array = np.zeros(len(y_pos_pix))
     angle_theta_array = np.zeros(len(y_pos_pix))
 
+    # make a copy from which we will subtract the PSFs to see the residuals
+    canvas_grid_data = np.copy(grid_data)
+
     # loop over each centroided PSF
     for num_coord in range(len(y_pos_pix)):
         cookie_edge_size = raw_cutout_size
-        cookie_cut_out_sci = grid_data[int(y_pos_pix[num_coord]-0.5*cookie_edge_size):int(y_pos_pix[num_coord]+0.5*cookie_edge_size), \
-            int(x_pos_pix[num_coord]-0.5*cookie_edge_size):int(x_pos_pix[num_coord]+0.5*cookie_edge_size)]
+        idx_x_start = int(x_pos_pix[num_coord]-0.5*cookie_edge_size)
+        idx_x_end = int(x_pos_pix[num_coord]+0.5*cookie_edge_size)
+        idx_y_start = int(y_pos_pix[num_coord]-0.5*cookie_edge_size)
+        idx_y_end = int(y_pos_pix[num_coord]+0.5*cookie_edge_size)
+        cookie_cut_out_sci = grid_data[idx_y_start:idx_y_end, idx_x_start:idx_x_end]
 
         print('! ----------- ADDING IN BACKGROUND VALUE TO MAKE THE BACKGROUND ZERO; NEED TO MODIFY LATER ----------- !')
         cookie_cut_out_sci = cookie_cut_out_sci - np.median(grid_data)
 
         # find FWHM of empirical 
+        '''
         fwhm_y_pix_empirical, fwhm_x_pix_empirical = fit_empirical_fwhm(cookie_cut_out_sci, plot_string=f'num_coord_{num_coord}')
+        '''
         # find FWHM of Gaussian-best-fit to empirical
-        fwhm_y_pix_empirical, fwhm_x_pix_empirical = fit_gaussian_fwhm(cookie_cut_out_sci, coords_centroided=coords_centroided_all[num_coord], plot_string=f'num_coord_{num_coord}')
-        # find FWHM based on a ScopeSim PSF
+        '''
+        fwhm_y_pix_gaussian_best_fit, fwhm_x_pix_gaussian_best_fit = fit_gaussian_fwhm(cookie_cut_out_sci, coords_centroided=coords_centroided_all[num_coord], plot_string=f'num_coord_{num_coord}')
+        '''
+        # subtract ScopeSim PSFs to see the residals
+        resids_cutout = subtract_simmed_psfs(cookie_cut_out_sci, plot_string=f'num_coord_{num_coord}')
+        canvas_grid_data[idx_y_start:idx_y_end, idx_x_start:idx_x_end] = resids_cutout
 
-
-        ipdb.set_trace()
+        
 
      
 
-
+        ipdb.set_trace()
         # make cutout around the model (for plot)
 
         # save cookie_cut_out_sci and cookie_cut_out_best_fit as fits files
         file_name_sci = 'cookie_cut_out_sci.fits'
         file_name_best_fit = 'cookie_cut_out_best_fit.fits'
         fits.writeto(file_name_sci, cookie_cut_out_sci, overwrite=True)
-        fits.writeto(file_name_best_fit, cookie_cut_out_best_fit, overwrite=True)
+        #fits.writeto(file_name_best_fit, cookie_cut_out_best_fit, overwrite=True)
         print(f'Saved {file_name_sci} and \n{file_name_best_fit}')
 
         # update arrays/lists
+        '''
         cookie_cut_out_best_fit_list.append(cookie_cut_out_best_fit)
         fwhm_x_pix_array[num_coord] = fwhm_x_pix
         fwhm_y_pix_array[num_coord] = fwhm_y_pix
         sigma_x_pix_array[num_coord] = sigma_x_pix
         sigma_y_pix_array[num_coord] = sigma_y_pix
         angle_theta_array[num_coord] = angle_theta
+        '''
 
+    ipdb.set_trace()
     # plot the grid_data and annotate it with the best-fit fwhm in x and y for each PSF
     plt.clf()
     plt.imshow(grid_data, origin='lower', cmap='gray_r')
