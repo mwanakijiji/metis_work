@@ -47,6 +47,7 @@ sim.link_irdb("../../../")
 
 def generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, dither_position_array, obs_mode):
 
+
     # set up instrument
     cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode])
     metis = sim.OpticalTrain(cmd)
@@ -55,9 +56,10 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, dither_positio
     wcu = metis['wcu_source']
 
     bb_temp = 1000 * u.K
-    NDIT, EXPTIME = 1, 0.2
+    NDIT, EXPTIME = 1, 0.01
+    #NDIT, EXPTIME = None, None
 
-    print('Generating ' + str(fp_mask)) 
+    print('Generating ' + str(fp_mask))
     wcu.set_fpmask(fp_mask)
 
     print('Closing WCU BB aperture first for background ...')
@@ -85,26 +87,42 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, dither_positio
 
         print('Opening WCU BB aperture...')
 
-        ipdb.set_trace()
-
         metis.observe()
         # Get perfect PSF - no detector noise
         #hdul_perfect = metis.image_planes[0].hdu
         outhdul = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
-        ipdb.set_trace()
 
         # background-subtract
         bckgd_subted = outhdul[1].data - background
 
         
+        plt.clf()
+        zscale = ZScaleInterval()
+        vmin, vmax = zscale.get_limits(bckgd_subted)
+        plt.imshow(outhdul[1].data, origin='lower', vmin=vmin, vmax=vmax)
+        plt.title(f'Raw readout\nWCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp))
+        plt.colorbar()
+        plt.tight_layout()
+        plt.show()
+        plt.close()
 
+        plt.clf()
+        zscale = ZScaleInterval()
+        vmin, vmax = zscale.get_limits(bckgd_subted)
+        plt.imshow(background, origin='lower', vmin=vmin, vmax=vmax)
+        plt.title(f'Background\nWCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp))
+        plt.colorbar()
+        plt.tight_layout()
+        plt.show()
+        plt.close()
 
         # detector
         plt.clf()
         zscale = ZScaleInterval()
         vmin, vmax = zscale.get_limits(bckgd_subted)
         plt.imshow(bckgd_subted, origin='lower', vmin=vmin, vmax=vmax)
-        plt.title(f'Readout\nWCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp))
+        plt.title(f'Bckgd-subtracted readout\nWCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp))
+        plt.colorbar()
         plt.tight_layout()
         plt.show()
         plt.close()
@@ -116,6 +134,8 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, dither_positio
         plt.tight_layout()
         plt.show()
         plt.close()
+
+        ipdb.set_trace()
 
         # save to FITS file, with filter and other info in the header
         file_name = 'IMG_OPT_04_wcu_focal_plane_' + str(fp_mask) + '.fits'
@@ -153,14 +173,16 @@ def main():
 
     # make as many dither positions as desired
     #dither_position_array = [(0, 0), (1, 0), (0, 1), (1, 1)]
-    dither_position_array = [(1, 1)]
+    #dither_position_array = [(1, 1)]
+    dither_position_array = [(0, 0)]
 
     # just one mask for now (Open)
     pp_mask = metis['pupil_masks'].meta['current_mask']
 
     # use nested for-loops, or generate permutations;
-    # example of permutations for LM filters and masks:
+    
     '''
+    # example of permutations for LM filters and masks:
     obs_counter = 1
     for filt, mask in itertools.product(filter_list_img_lm, wcu_fp2_masks_lm):
         obs_name = f"obs{obs_counter}"

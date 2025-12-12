@@ -12,6 +12,7 @@ import glob
 import os
 from scipy.stats import norm
 from scipy.optimize import curve_fit
+from scipy.ndimage import zoom, shift, center_of_mass
 
 from matplotlib import pyplot as plt
 from matplotlib import colors
@@ -25,6 +26,7 @@ import ipdb
 
 import scopesim as sim
 from skimage import measure
+
 
 def gaussian_2d(xy_mesh, amplitude, xo, yo, sigma_x_pix, sigma_y_pix, theta):
     x, y = xy_mesh
@@ -86,9 +88,11 @@ def fit_empirical_fwhm(frame, plot_string):
     plt.title(f'Frame with Bounding Box at 50% Peak\nFWHM in x (pix): {width_x:.2f}, FWHM in y (pix): {height_y:.2f}')
     # save the plot to file
     plot_filename = 'empirical_fwhm_' + plot_string + '.png'
+    ipdb.set_trace()
     plt.savefig(plot_filename, bbox_inches='tight')
     print(f'Figure saved as {plot_filename}')
     #plt.show()
+
     plt.close()
 
     return height_y, width_x
@@ -257,13 +261,11 @@ def subtract_simmed_psfs(cookie_cut_out_sci, plot_string):
 
 
 def strehl_grid(file_name_grid):
-    ##################################################################
-    ## TEST 2: pixel scale
+    # return the locations and other data for each PSF
 
     grid_frame = fits.open(file_name_grid)
     grid_data = grid_frame[0].data
     grid_header = grid_frame[0].header
-    ipdb.set_trace()
 
     '''
     (1804, 243), (1804, 633), (1804, 1029), (1804, 1418), (1804, 1810), 
@@ -296,18 +298,30 @@ def strehl_grid(file_name_grid):
     y_grid = np.array([13.0, 13.0, 13.1, 13.3])
     '''
 
+    # oversample the image to find centroids, FWHM
+    oversample_factor = 4
+    # Step 1: Oversample the PSFs by a factor of 4 using bicubic interpolation
+    grid_data_oversamp = zoom(grid_data, oversample_factor, order=3)
+    #psf_simmed_oversamp = zoom(psf_simmed, oversample_factor, order=3)
+    coords_guesses_x_all_oversamp = coords_guesses_x_all * oversample_factor
+    coords_guesses_y_all_oversamp = coords_guesses_y_all * oversample_factor
+    coords_guesses_all_oversamp = np.vstack((coords_guesses_y_all_oversamp, coords_guesses_x_all_oversamp)).T
+    ipdb.set_trace()
+
     # find the grid centroids
-    x_pos_pix, y_pos_pix = centroid_sources(grid_data, 
-                                    xpos=coords_guesses_x_all, 
-                                    ypos=coords_guesses_y_all, 
+
+    # ... using photutils built-in fcn
+    x_pos_pix_oversamp, y_pos_pix_oversamp = centroid_sources(grid_data_oversamp, 
+                                    xpos=coords_guesses_x_all_oversamp, 
+                                    ypos=coords_guesses_y_all_oversamp, 
                                     box_size=21,
                                     centroid_func=centroid_2dg)
 
     # zip into one array
-    coords_centroided_all = np.vstack((y_pos_pix, x_pos_pix)).T
+    coords_centroided_all_oversamp = np.vstack((y_pos_pix_oversamp, x_pos_pix_oversamp)).T
 
     # FYI
-    fyi_plot_centroiding(grid_data, coords_centroided_all, zscale=False)
+    fyi_plot_centroiding(grid_data_oversamp, coords_centroided_all_oversamp, zscale=False)
 
     # make a cut-out of each psf and make a best-fit 2D Gaussian
     raw_cutout_size = 31
@@ -339,10 +353,12 @@ def strehl_grid(file_name_grid):
         '''
         fwhm_y_pix_empirical, fwhm_x_pix_empirical = fit_empirical_fwhm(cookie_cut_out_sci, plot_string=f'num_coord_{num_coord}')
         '''
-        # find FWHM of Gaussian-best-fit to empirical
+
         '''
+        # find FWHM of Gaussian-best-fit to empirical
         fwhm_y_pix_gaussian_best_fit, fwhm_x_pix_gaussian_best_fit = fit_gaussian_fwhm(cookie_cut_out_sci, coords_centroided=coords_centroided_all[num_coord], plot_string=f'num_coord_{num_coord}')
         '''
+
         # subtract ScopeSim PSFs to see the residals
         resids_cutout = subtract_simmed_psfs(cookie_cut_out_sci, plot_string=f'num_coord_{num_coord}')
         canvas_grid_data[idx_y_start:idx_y_end, idx_x_start:idx_x_end] = resids_cutout
@@ -351,15 +367,17 @@ def strehl_grid(file_name_grid):
 
      
 
-        ipdb.set_trace()
+        #ipdb.set_trace()
         # make cutout around the model (for plot)
 
         # save cookie_cut_out_sci and cookie_cut_out_best_fit as fits files
+        '''
         file_name_sci = 'cookie_cut_out_sci.fits'
         file_name_best_fit = 'cookie_cut_out_best_fit.fits'
         fits.writeto(file_name_sci, cookie_cut_out_sci, overwrite=True)
         #fits.writeto(file_name_best_fit, cookie_cut_out_best_fit, overwrite=True)
         print(f'Saved {file_name_sci} and \n{file_name_best_fit}')
+        '''
 
         # update arrays/lists
         '''
