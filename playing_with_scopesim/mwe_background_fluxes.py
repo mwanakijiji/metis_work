@@ -82,8 +82,11 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, obs_mode):
     plt.title(f'Raw readout\nWCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp))
     plt.colorbar()
     plt.tight_layout()
-    plt.show()
+    file_name_plot_raw_readout = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_raw_readout.png'
+    plt.savefig(file_name_plot_raw_readout)
+    #plt.show()
     plt.close()
+    print('Saved PNG of raw readout to ' + file_name_plot_raw_readout)
 
     plt.clf()
     zscale = ZScaleInterval()
@@ -92,8 +95,11 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, obs_mode):
     plt.title(f'Background\nWCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp))
     plt.colorbar()
     plt.tight_layout()
-    plt.show()
+    file_name_plot_background = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_background.png'
+    plt.savefig(file_name_plot_background)
+    #plt.show()
     plt.close()
+    print('Saved PNG of background to ' + file_name_plot_background)
 
     # detector
     plt.clf()
@@ -103,20 +109,26 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, obs_mode):
     plt.title(f'Bckgd-subtracted readout\nWCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp))
     plt.colorbar()
     plt.tight_layout()
-    plt.show()
+    file_name_plot_bckgd_subtracted_readout = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_bckgd_subtracted_readout.png'
+    plt.savefig(file_name_plot_bckgd_subtracted_readout)
+    #plt.show()
     plt.close()
+    print('Saved PNG of bckgd-subtracted readout to ' + file_name_plot_bckgd_subtracted_readout)
 
     # histogram
     plt.clf()
     plt.hist(bckgd_subted.ravel(), bins=200)
     plt.title('Bckgd-subtracted histogram; WCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp))
     plt.tight_layout()
-    plt.show()
+    file_name_plot_bckgd_subtracted_histogram = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_bckgd_subtracted_histogram.png'
+    plt.savefig(file_name_plot_bckgd_subtracted_histogram) 
+    #plt.show()
     plt.close()
+    print('Saved PNG of bckgd-subtracted histogram to ' + file_name_plot_bckgd_subtracted_histogram)
 
 
     # save to FITS file, with filter and other info in the header
-    file_name = 'IMG_OPT_04_wcu_focal_plane_' + str(fp_mask) + '.fits'
+    file_name = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '.fits'
     outhdul[0].header['FILTER'] = (obs_filter, 'Observing filter')
     outhdul[0].header['WCU_FP'] = (fp_mask, 'WCU focal plane mask')
     outhdul[0].header['WCU_PP'] = (pp_mask, 'WCU pupil plane mask')
@@ -126,7 +138,6 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, obs_mode):
     
     outhdul.writeto(file_name, overwrite=True)
     print('Saved readout without aberrations to ' + file_name)
-    ipdb.set_trace()
 
 
 def main():
