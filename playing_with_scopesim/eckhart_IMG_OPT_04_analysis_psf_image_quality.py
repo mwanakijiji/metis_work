@@ -157,7 +157,7 @@ def fit_gaussian_fwhm(cookie_cut_out_sci, coords_guess, plot_string, fac_oversam
     '''
 
     ## ## TO DO: ARE THE INDEXES RIGHT HERE?
-    cookie_cut_out_best_fit, x_center_pix, y_center_pix, fwhm_x_pix, fwhm_y_pix, sigma_x_pix, sigma_y_pix, angle_theta_deg = fit_gaussian(cookie_cut_out_sci, \
+    cookie_cut_out_best_fit, x_center_pix_oversamp_cutout, y_center_pix_oversamp_cutout, fwhm_x_pix, fwhm_y_pix, sigma_x_pix, sigma_y_pix, angle_theta_deg = fit_gaussian(cookie_cut_out_sci, \
         center_guess = coords_guess)
     residuals = cookie_cut_out_sci - cookie_cut_out_best_fit
 
@@ -197,7 +197,7 @@ def fit_gaussian_fwhm(cookie_cut_out_sci, coords_guess, plot_string, fac_oversam
     )
     axs[1, 1].legend()
     axs[1, 1].set_title('1D cross-section, empirical vs best-fit')
-    plt.suptitle(f'PSF, oversampling factor: {fac_oversamp:.2f} \n Found coord (y,x): ({y_center_pix:.2f}, {x_center_pix:.2f}) \n Found FWHM x: {fwhm_x_pix:.2f} pix, FWHM y: {fwhm_y_pix:.2f} pix')
+    plt.suptitle(f'PSF, oversampling factor: {fac_oversamp:.2f} \n Found coord (y,x): ({y_center_pix_oversamp_cutout:.2f}, {x_center_pix_oversamp_cutout:.2f}) \n Found FWHM x: {fwhm_x_pix:.2f} pix, FWHM y: {fwhm_y_pix:.2f} pix')
     plt.tight_layout()
     #plt.show()
     # Save the plot to file with num_coord as a 2-digit zero-padded string
@@ -205,16 +205,24 @@ def fit_gaussian_fwhm(cookie_cut_out_sci, coords_guess, plot_string, fac_oversam
     plt.savefig(plot_filename, bbox_inches='tight')
     print(f'Figure saved as {plot_filename}')
     plt.close()
+    ipdb.set_trace()
 
-    return fwhm_y_pix, fwhm_x_pix
+    return x_center_pix_oversamp_cutout, y_center_pix_oversamp_cutout, fwhm_x_pix, fwhm_y_pix
 
 
-def subtract_simmed_psfs(cookie_cut_out_sci, plot_string):
+def fit_simmed_psfs(cookie_cut_out_sci, plot_string, fp_mask, x_center_final_oversamp, y_center_final_oversamp, fac_oversamp):
     '''
     Find FWHM of a PSF using a perfect PSF from ScopeSim
     
     INPUTS:
-    
+    cookie_cut_out_sci: 2D array of the science frame
+    plot_string: string to add to the plot file name
+    x_center_final_oversamp: final x-center of the PSF (i.e., no more centroiding will be done here)
+    y_center_final_oversamp: final y-center of the PSF
+    fac_oversamp: oversampling factor
+
+    OUTPUTS:
+    resids_cutout: 2D array of the residuals
     '''
 
     # set up instrument
@@ -222,59 +230,124 @@ def subtract_simmed_psfs(cookie_cut_out_sci, plot_string):
     cmd = sim.UserCommands(use_instrument='METIS', set_modes=['wcu_img_lm'])
     metis = sim.OpticalTrain(cmd)
 
+    wcu = metis['wcu_source']
+
     # set the filter
-    obs_filter = 'short-L'  ## ## TO DO: MAKE THIS MORE GENERAL AND FLEXIBLE, FOR MULT OBSERVING MODES
+    obs_filter = 'Br_alpha'  ## ## TO DO: MAKE THIS MORE GENERAL AND FLEXIBLE, FOR MULT OBSERVING MODES
     metis["filter_wheel"].change_filter(obs_filter)
 
+    wcu.set_fpmask(fp_mask)
+
+    pp_mask = metis['pupil_masks'].meta['current_mask'] # just one mask for now (Open)
+
     metis.effects.pprint_all()
-    wcu = metis['wcu_source']
 
     bb_temp = 1000 * u.K
     NDIT, EXPTIME = 1, 0.2
 
-    fp_mask = 'pinhole_lm' ## ## TO DO: MAKE THIS MORE GENERAL AND FLEXIBLE, FOR MULT OBSERVING MODES
-    print('Generating ' + str(fp_mask))
-    wcu.set_fpmask(fp_mask)
 
-    print('Closing WCU BB aperture first for background ...')
+    print('--------------------------------')
+    print('Current Observing filter:', obs_filter)
+    print('Current WCU FP mask:', wcu.fpmask)
+    print('Current WCU PP mask:', pp_mask)
+    ipdb.set_trace()
+    # background
+    print('Closing WCU BB aperture first to get a background ...')
     # background
     wcu.set_bb_aperture(value = 0.0)
     metis.observe()
     outhdul_off = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
     background = outhdul_off[1].data
 
+    print('Re-opening WCU BB aperture to get a PSF ...')
     wcu.set_bb_aperture(value = 1.0) # open BB source
 
-    
-    pp_mask = metis['pupil_masks'].meta['current_mask'] # just one mask for now (Open)
+    #metis["filter_wheel"].change_filter(obs_filter)
 
     print('--------------------------------')
     print('Current Observing filter:', obs_filter)
     print('Current WCU FP mask:', wcu.fpmask)
     print('Current WCU PP mask:', pp_mask)
-
-    # dither by shifting the FP mask
-    # (note these shifts are absolute, not relative)
-    wcu.set_fpmask(fp_mask)
-
     print('Opening WCU BB aperture...')
 
     metis.observe()
+    outhdul_on = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
+    sci = outhdul_on[1].data
+    ipdb.set_trace()
     # Get perfect, background-subtracted PSF - no detector noise
-    psf_perfect = metis.image_planes[0].hdu.data - background
+    psf_perfect = sci - background
+
+    print('!!! --- ARTIFICIALLY SUBTRACTING OFF A BACKGROUND RESIDUAL; FIX LATER --- !!')
+    psf_perfect -= np.nanmean(psf_perfect)
+
+    # Oversample the background-subtracted PSF to match the cookie_cut_out_sci oversampling
+    psf_perfect_oversamp = zoom(psf_perfect, fac_oversamp, order=3)
+
+    # for debugging
+    fits.writeto("psf_perfect_oversamp.fits", psf_perfect_oversamp, overwrite=True)
+    print("Saved psf_perfect_oversamp.fits for checking.")
+
+
+    ipdb.set_trace()
+
+    # take a cutout of the PSF at the exact same coordinates as the cookie cut-out
+    psf_perfect_cutout = psf_perfect_oversamp[int(y_center_final_oversamp-0.5*cookie_cut_out_sci.shape[0]):int(y_center_final_oversamp+0.5*cookie_cut_out_sci.shape[0]), \
+        int(x_center_final_oversamp-0.5*cookie_cut_out_sci.shape[1]):int(x_center_final_oversamp+0.5*cookie_cut_out_sci.shape[1])]
 
     # cut out the central region the same size as the cookie cut-out
-    psf_perfect_cutout = psf_perfect[int(psf_perfect.shape[0]/2-0.5*cookie_cut_out_sci.shape[0]):int(psf_perfect.shape[0]/2+0.5*cookie_cut_out_sci.shape[0]), \
-        int(psf_perfect.shape[1]/2-0.5*cookie_cut_out_sci.shape[1]):int(psf_perfect.shape[1]/2+0.5*cookie_cut_out_sci.shape[1])]
+    #psf_perfect_cutout = psf_perfect[int(psf_perfect.shape[0]/2-0.5*cookie_cut_out_sci.shape[0]):int(psf_perfect.shape[0]/2+0.5*cookie_cut_out_sci.shape[0]), \
+    #    int(psf_perfect.shape[1]/2-0.5*cookie_cut_out_sci.shape[1]):int(psf_perfect.shape[1]/2+0.5*cookie_cut_out_sci.shape[1])]
 
     # multiply psf_perfect_cutout by a coefficient to make it a best-fit to cookie_cut_out_sci
     coefficient = np.sum(cookie_cut_out_sci) / np.sum(psf_perfect_cutout)
     psf_perfect_cutout_best_fit = psf_perfect_cutout * coefficient
 
+    # Make subplots of cookie_cut_out_sci, psf_perfect_cutout_best_fit, and the residuals
+    plt.figure(figsize=(12, 4))
+    
+    # Panel 1: cookie_cut_out_sci
+    plt.subplot(1, 3, 1)
+    zscale1 = ZScaleInterval()
+    vmin1, vmax1 = zscale1.get_limits(cookie_cut_out_sci)
+    plt.imshow(cookie_cut_out_sci, origin="lower", cmap="viridis", vmin=vmin1, vmax=vmax1)
+    plt.title("cookie_cut_out_sci")
+    plt.colorbar(shrink=0.7, label="Counts")
+    
+    # Panel 2: psf_perfect_cutout_best_fit
+    plt.subplot(1, 3, 2)
+    zscale2 = ZScaleInterval()
+    vmin2, vmax2 = zscale2.get_limits(psf_perfect_cutout_best_fit)
+    plt.imshow(psf_perfect_cutout_best_fit, origin="lower", cmap="viridis", vmin=vmin2, vmax=vmax2)
+    plt.title("psf_perfect_cutout_best_fit")
+    plt.colorbar(shrink=0.7, label="Counts")
+    
+    # Panel 3: Residuals
+    residuals = cookie_cut_out_sci - psf_perfect_cutout_best_fit
+    plt.subplot(1, 3, 3)
+    zscale3 = ZScaleInterval()
+    vmin3, vmax3 = zscale3.get_limits(residuals)
+    plt.imshow(residuals, origin="lower", cmap="RdBu", vmin=vmin3, vmax=vmax3)
+    plt.title("Residuals (sci - best_fit)")
+    plt.colorbar(shrink=0.7, label="Counts")
+    
+    plt.tight_layout()
+    plt.show()
+
     return psf_perfect_cutout_best_fit
 
 
-def strehl_grid(file_name):
+def strehl_grid(file_name, fp_mask):
+    '''
+    Find the Strehl ratio of a grid of PSFs
+    
+    INPUTS:
+    file_name: name of the file containing the grid of PSFs
+    fp_mask: focal plane mask (string)
+
+    OUTPUTS:
+    None; writes out plots and data
+    '''
+
     # return the locations and other data for each PSF
 
     grid_frame = fits.open(file_name)
@@ -337,7 +410,7 @@ def strehl_grid(file_name):
     #fyi_plot_centroiding(grid_data_oversamp, coords_centroided_all_oversamp, zscale=False)
 
     # make a cut-out of each psf and make a best-fit 2D Gaussian
-    raw_cutout_size = 31 * oversample_factor
+    raw_cutout_size = 20 * oversample_factor
     num_coord = 0
 
     cookie_cut_out_best_fit_list = []
@@ -383,10 +456,10 @@ def strehl_grid(file_name):
         ])
 
 
-        # find FWHM of Gaussian-best-fit to empirical
+        # find FWHM of Gaussian-best-fit to empirical, and get the best centroid on the PSF
         # correct for fact we 
         ipdb.set_trace()
-        fwhm_y_pix_gaussian_best_fit_oversamp, fwhm_x_pix_gaussian_best_fit_oversamp = fit_gaussian_fwhm(cookie_cut_out_sci_oversamp, 
+        x_center_pix_gaussian_best_fit_oversamp, y_center_pix_gaussian_best_fit_oversamp, fwhm_x_pix_gaussian_best_fit_oversamp, fwhm_y_pix_gaussian_best_fit_oversamp = fit_gaussian_fwhm(cookie_cut_out_sci_oversamp, 
                                                                                                         coords_guess=coords_guess_this_cutout, 
                                                                                                         plot_string=f'num_coord_{num_coord}', 
                                                                                                         fac_oversamp=oversample_factor)
@@ -401,8 +474,14 @@ def strehl_grid(file_name):
 
  
         ipdb.set_trace()
-        # subtract ScopeSim PSFs to see the residals
-        resids_cutout = subtract_simmed_psfs(cookie_cut_out_sci_oversamp, plot_string=f'num_coord_{num_coord}')
+        # subtract ScopeSim PSFs to see the residals (note we're still using the cookie cut-out)
+        # note that the 'final' coords are the 'guessed' ones above; the PSF will in general be off-center
+        resids_cutout = fit_simmed_psfs(cookie_cut_out_sci_oversamp, 
+                                        plot_string=f'num_coord_{num_coord}', 
+                                        fp_mask=fp_mask,
+                                        x_center_final_oversamp=x_pos_pix_oversamp[num_coord], 
+                                        y_center_final_oversamp=y_pos_pix_oversamp[num_coord], 
+                                        fac_oversamp=oversample_factor)
         canvas_grid_data[idx_y_start:idx_y_end, idx_x_start:idx_x_end] = resids_cutout
 
         
@@ -467,7 +546,7 @@ def main():
 
 
     # check plate scale 
-    strehl_grid(file_name)
+    strehl_grid(file_name, fp_mask='grid_lm') ## ## TODO: ADD OTHER THIGNS TO ARGUMENT, LIKE OBSERVING FILTER, ETC., TO MAKE EVERYTHING DOWNSTREAM CONSISTENT
 
 
 if __name__ == "__main__":
