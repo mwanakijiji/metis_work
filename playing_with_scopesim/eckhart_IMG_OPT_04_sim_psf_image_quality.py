@@ -33,6 +33,8 @@ from matplotlib import pyplot as plt
 from matplotlib import colors
 from astropy.visualization import ZScaleInterval
 
+from scipy import ndimage
+
 import time
 import ipdb
 
@@ -45,7 +47,20 @@ sim.link_irdb("../../../")
 # simulate observations with METIS (comment this out if packages already exist)
 #sim.download_packages(["METIS", "ELT", "Armazones"])
 
-def generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, obs_mode):
+def generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, obs_mode, angle_array):
+    '''
+    Generate simulated data for the IMG-OPT-04 PSF image quality test
+    
+    INPUTS:
+    - fp_mask: focal plane mask
+    - pp_mask: pupil plane mask
+    - obs_filter: observing filter
+    - obs_mode: observing mode
+    - angle_array: array of clocking angles
+
+    OUTPUTS:
+    - None; writes out files
+    '''
 
     # set up instrument
     cmd = None # reset
@@ -92,76 +107,83 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, obs_mode):
     #hdul_perfect = metis.image_planes[0].hdu
     outhdul = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
 
-    # background-subtract
-    bckgd_subted = outhdul[1].data - background
-    outhdul[1].data = bckgd_subted # reassign; note that this step will have to be done later outside the ScopeSim context
-    #hdu_bckgd_subted = fits.ImageHDU(data=bckgd_subted)
-    #outhdul.append(hdu_bckgd_subted) # outhdul[2].data is the background-subtracted image
+    # rotate (if angle != 0)
+    #import ipdb; ipdb.set_trace()
+    for angle in angle_array:
+        print('Rotating by ' + str(angle) + ' degrees')
 
-    
-    plt.clf()
-    zscale = ZScaleInterval()
-    vmin, vmax = zscale.get_limits(bckgd_subted)
-    plt.imshow(outhdul[1].data, origin='lower', vmin=vmin, vmax=vmax)
-    plt.title(f'Raw readout\nWCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp))
-    plt.colorbar()
-    plt.tight_layout()
-    file_name_plot_raw_readout = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_raw_readout.png'
-    plt.savefig(file_name_plot_raw_readout)
-    #plt.show()
-    plt.close()
-    print('Saved PNG of raw readout to ' + file_name_plot_raw_readout)
+        # background-subtract
+        bckgd_subted = outhdul[1].data - background
 
-    plt.clf()
-    zscale = ZScaleInterval()
-    vmin, vmax = zscale.get_limits(bckgd_subted)
-    plt.imshow(background, origin='lower', vmin=vmin, vmax=vmax)
-    plt.title(f'Background\nWCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp))
-    plt.colorbar()
-    plt.tight_layout()
-    file_name_plot_background = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_background.png'
-    plt.savefig(file_name_plot_background)
-    #plt.show()
-    plt.close()
-    print('Saved PNG of background to ' + file_name_plot_background)
+        sci_rotated = ndimage.rotate(outhdul[1].data, angle, order=3, reshape=False)
+        background_rotated = ndimage.rotate(background, angle, order=3, reshape=False)
+        bckgd_subted_rotated = ndimage.rotate(bckgd_subted, angle, order=3, reshape=False)
 
-    # detector
-    plt.clf()
-    zscale = ZScaleInterval()
-    vmin, vmax = zscale.get_limits(bckgd_subted)
-    plt.imshow(bckgd_subted, origin='lower', vmin=vmin, vmax=vmax)
-    plt.title(f'Bckgd-subtracted readout\nWCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp))
-    plt.colorbar()
-    plt.tight_layout()
-    file_name_plot_bckgd_subtracted_readout = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_bckgd_subtracted_readout.png'
-    plt.savefig(file_name_plot_bckgd_subtracted_readout)
-    #plt.show()
-    plt.close()
-    print('Saved PNG of bckgd-subtracted readout to ' + file_name_plot_bckgd_subtracted_readout)
+        outhdul[1].data = bckgd_subted_rotated # reassign; note that this step will have to be done later outside the ScopeSim context
+        
+        plt.clf()
+        zscale = ZScaleInterval()
+        vmin, vmax = zscale.get_limits(bckgd_subted)
+        plt.imshow(sci_rotated, origin='lower', vmin=vmin, vmax=vmax)
+        plt.title(f'Raw readout\nWCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp) + '\n' + 'Clocking angle: ' + str(angle))
+        plt.colorbar()
+        plt.tight_layout()
+        file_name_plot_raw_readout = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_clocking_angle_' + str(angle) + '_raw_readout.png'
+        plt.savefig(file_name_plot_raw_readout)
+        #plt.show()
+        plt.close()
+        print('Saved PNG of raw readout to ' + file_name_plot_raw_readout)
 
-    # histogram
-    plt.clf()
-    plt.hist(bckgd_subted.ravel(), bins=200)
-    plt.title('Bckgd-subtracted histogram; WCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp))
-    plt.tight_layout()
-    file_name_plot_bckgd_subtracted_histogram = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_bckgd_subtracted_histogram.png'
-    plt.savefig(file_name_plot_bckgd_subtracted_histogram) 
-    #plt.show()
-    plt.close()
-    print('Saved PNG of bckgd-subtracted histogram to ' + file_name_plot_bckgd_subtracted_histogram)
+        plt.clf()
+        zscale = ZScaleInterval()
+        vmin, vmax = zscale.get_limits(bckgd_subted)
+        plt.imshow(background_rotated, origin='lower', vmin=vmin, vmax=vmax)
+        plt.title(f'Background\nWCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp) + '\n' + 'Clocking angle: ' + str(angle))
+        plt.colorbar()
+        plt.tight_layout()
+        file_name_plot_background = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_clocking_angle_' + str(angle) + '_background.png'
+        plt.savefig(file_name_plot_background)
+        #plt.show()
+        plt.close()
+        print('Saved PNG of background to ' + file_name_plot_background)
+
+        # detector
+        plt.clf()
+        zscale = ZScaleInterval()
+        vmin, vmax = zscale.get_limits(bckgd_subted)
+        plt.imshow(bckgd_subted_rotated, origin='lower', vmin=vmin, vmax=vmax)
+        plt.title(f'Bckgd-subtracted readout\nWCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp) + '\n' + 'Clocking angle: ' + str(angle))
+        plt.colorbar()
+        plt.tight_layout()
+        file_name_plot_bckgd_subtracted_readout = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_clocking_angle_' + str(angle) + '_bckgd_subtracted_readout.png'
+        plt.savefig(file_name_plot_bckgd_subtracted_readout)
+        #plt.show()
+        plt.close()
+        print('Saved PNG of bckgd-subtracted readout to ' + file_name_plot_bckgd_subtracted_readout)
+
+        # histogram
+        plt.clf()
+        plt.hist(bckgd_subted.ravel(), bins=200)
+        plt.title('Bckgd-subtracted histogram; WCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp) + '\n' + 'Clocking angle: ' + str(angle))
+        plt.tight_layout()
+        file_name_plot_bckgd_subtracted_histogram = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_clocking_angle_' + str(angle) + '_bckgd_subtracted_histogram.png'
+        plt.savefig(file_name_plot_bckgd_subtracted_histogram) 
+        #plt.show()
+        plt.close()
+        print('Saved PNG of bckgd-subtracted histogram to ' + file_name_plot_bckgd_subtracted_histogram)
 
 
-    # save to FITS file, with filter and other info in the header
-    file_name = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '.fits'
-    outhdul[0].header['FILTER'] = (obs_filter, 'Observing filter')
-    outhdul[0].header['WCU_FP'] = (fp_mask, 'WCU focal plane mask')
-    outhdul[0].header['WCU_PP'] = (pp_mask, 'WCU pupil plane mask')
-    outhdul[0].header['BB_TEMP'] = (bb_temp.value, 'BB temperature')
-    outhdul[0].header['NDIT'] = (NDIT, 'Number of dithered exposures')
-    outhdul[0].header['EXPTIME'] = (EXPTIME, 'Exposure time')
-    
-    outhdul.writeto(file_name, overwrite=True)
-    print('Saved readout without aberrations to ' + file_name)
+        # save to FITS file, with filter and other info in the header
+        file_name = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + 'clocking_angle_' + str(angle) + '.fits'
+        outhdul[0].header['FILTER'] = (obs_filter, 'Observing filter')
+        outhdul[0].header['WCU_FP'] = (fp_mask, 'WCU focal plane mask')
+        outhdul[0].header['WCU_PP'] = (pp_mask, 'WCU pupil plane mask')
+        outhdul[0].header['BB_TEMP'] = (bb_temp.value, 'BB temperature')
+        outhdul[0].header['NDIT'] = (NDIT, 'Number of dithered exposures')
+        outhdul[0].header['EXPTIME'] = (EXPTIME, 'Exposure time')
+        
+        outhdul.writeto(file_name, overwrite=True)
+        print('Saved readout without aberrations to ' + file_name)
 
 
 def main():
@@ -177,6 +199,9 @@ def main():
     metis = sim.OpticalTrain(cmd)
     n_filters_list = metis["filter_wheel"].filters.keys() # filters
     n_fpmasks_list = ["pinhole_n"] # FP masks
+
+    # clocking angles for the PSF
+    angle_array = [0, 45, 60]
 
     # just one mask for now (Open)
     pp_mask = metis['pupil_masks'].meta['current_mask'] # PP mask
@@ -199,12 +224,12 @@ def main():
     # LM band
     for fp_mask in lm_fpmasks_list:
         for obs_filter in lm_filters_list:
-            generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, obs_mode='wcu_img_lm')
+            generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array)
 
     # N band
     for fp_mask in n_fpmasks_list:
         for obs_filter in n_filters_list:
-            generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, obs_mode='wcu_img_n')
+            generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, obs_mode='wcu_img_n', angle_array=angle_array)
 
 
 if __name__ == "__main__":
