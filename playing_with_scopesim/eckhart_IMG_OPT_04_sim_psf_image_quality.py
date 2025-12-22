@@ -105,16 +105,17 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, obs_mode, angl
     metis.observe()
     # Get perfect PSF - no detector noise
     #hdul_perfect = metis.image_planes[0].hdu
-    outhdul = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
 
     # rotate (if angle != 0)
     #import ipdb; ipdb.set_trace()
     for angle in angle_array:
-        print('Rotating by ' + str(angle) + ' degrees')
+
+        outhdul = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
 
         # background-subtract
         bckgd_subted = outhdul[1].data - background
 
+        print('Rotating by ' + str(angle) + ' degrees')
         sci_rotated = ndimage.rotate(outhdul[1].data, angle, order=3, reshape=False)
         background_rotated = ndimage.rotate(background, angle, order=3, reshape=False)
         bckgd_subted_rotated = ndimage.rotate(bckgd_subted, angle, order=3, reshape=False)
@@ -174,7 +175,7 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, obs_mode, angl
 
 
         # save to FITS file, with filter and other info in the header
-        file_name = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + 'clocking_angle_' + str(angle) + '.fits'
+        file_name = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_clocking_angle_' + str(angle) + '.fits'
         outhdul[0].header['FILTER'] = (obs_filter, 'Observing filter')
         outhdul[0].header['WCU_FP'] = (fp_mask, 'WCU focal plane mask')
         outhdul[0].header['WCU_PP'] = (pp_mask, 'WCU pupil plane mask')

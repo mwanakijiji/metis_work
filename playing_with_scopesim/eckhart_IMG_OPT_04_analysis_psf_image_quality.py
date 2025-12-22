@@ -113,7 +113,6 @@ def fit_gaussian(frame, center_guess):
     sigma_x_pix (float): Standard deviation in the x-direction.
     sigma_y_pix (float): Standard deviation in the y-direction.
     """
-    #ipdb.set_trace()
     y, x = np.indices(frame.shape)
     xy_mesh = (x, y)
     p0 = [np.max(frame), center_guess[0], center_guess[1], 1, 1, 0]
@@ -121,11 +120,13 @@ def fit_gaussian(frame, center_guess):
     fitted_array = gaussian_2d(xy_mesh, *popt).reshape(frame.shape)
     fwhm_x_pix = 2 * np.sqrt(2 * np.log(2)) * np.abs(popt[3])
     fwhm_y_pix = 2 * np.sqrt(2 * np.log(2)) * np.abs(popt[4])
+    x_center_pix = popt[1]
+    y_center_pix = popt[2]
     sigma_x_pix = popt[3]
     sigma_y_pix = popt[4]
-    angle_theta = popt[5]
+    angle_theta_deg = popt[5]
     
-    return fitted_array, fwhm_x_pix, fwhm_y_pix, sigma_x_pix, sigma_y_pix, angle_theta
+    return fitted_array, x_center_pix, y_center_pix, fwhm_x_pix, fwhm_y_pix, sigma_x_pix, sigma_y_pix, angle_theta_deg
 
 
 def fyi_plot_centroiding(array_to_plot, coords_to_plot, zscale=False):
@@ -140,22 +141,26 @@ def fyi_plot_centroiding(array_to_plot, coords_to_plot, zscale=False):
     plt.close()
 
 
-def fit_gaussian_fwhm(cookie_cut_out_sci, coords_centroided, plot_string):
+def fit_gaussian_fwhm(cookie_cut_out_sci, coords_guess, plot_string, fac_oversamp):
     '''
     Find FWHM of Gaussian-best-fit to empirical; all fit parameters are free
 
     INPUTS:
     cookie_cut_out_sci: 2D array of the science frame
-    coords_centroided: 2D array of the centroided coordinates (one coordinate pair)
+    coords_guess: 2D array of the centroided coordinates (one coordinate pair)
     plot_string: string to add to the plot file name
+    fac_oversamp: oversampling factor
+
+    OUTPUTS:
+    fwhm_y_pix: FWHM in y-direction
+    fwhm_x_pix: FWHM in x-direction
     '''
 
     ## ## TO DO: ARE THE INDEXES RIGHT HERE?
-    cookie_cut_out_best_fit, fwhm_x_pix, fwhm_y_pix, sigma_x_pix, sigma_y_pix, angle_theta = fit_gaussian(cookie_cut_out_sci, \
-        [int(cookie_cut_out_sci.shape[1]/2),int(cookie_cut_out_sci.shape[1]/2)])
+    cookie_cut_out_best_fit, x_center_pix, y_center_pix, fwhm_x_pix, fwhm_y_pix, sigma_x_pix, sigma_y_pix, angle_theta_deg = fit_gaussian(cookie_cut_out_sci, \
+        center_guess = coords_guess)
     residuals = cookie_cut_out_sci - cookie_cut_out_best_fit
 
-    ipdb.set_trace()
     # plot four subplots: 2D science, 2D best-fit, 2D residuals, and 1D overplotting of a cross-section of the science and best-fit
     plt.clf()
     # Determine vmin and vmax for consistent color scaling across all 2D plots
@@ -181,11 +186,20 @@ def fit_gaussian_fwhm(cookie_cut_out_sci, coords_centroided, plot_string):
     best_fit_row = cookie_cut_out_best_fit[max_index[0], :]
     axs[1, 1].plot(sci_row, label='Empirical')
     axs[1, 1].plot(best_fit_row, label='Best-fit')
+    # Annotate plot with FWHM in x and y
+    fwhm_text = f'FWHM x = {fwhm_x_pix:.2f} pix\nFWHM y = {fwhm_y_pix:.2f} pix'
+    axs[1, 1].text(
+        0.95, 0.05, fwhm_text,
+        transform=axs[1, 1].transAxes,
+        fontsize=10, color='black',
+        verticalalignment='bottom', horizontalalignment='right',
+        bbox=dict(facecolor='white', alpha=0.8, boxstyle='round,pad=0.3')
+    )
     axs[1, 1].legend()
-    axs[1, 1].set_title('1D cross-section, science vs best-fit')
-    plt.suptitle(f'PSF at coord (y,x): {coords_centroided}')
+    axs[1, 1].set_title('1D cross-section, empirical vs best-fit')
+    plt.suptitle(f'PSF, oversampling factor: {fac_oversamp:.2f} \n Found coord (y,x): ({y_center_pix:.2f}, {x_center_pix:.2f}) \n Found FWHM x: {fwhm_x_pix:.2f} pix, FWHM y: {fwhm_y_pix:.2f} pix')
     plt.tight_layout()
-    plt.show()
+    #plt.show()
     # Save the plot to file with num_coord as a 2-digit zero-padded string
     plot_filename = f'psf_gaussian_best_fit_'+plot_string+'.png'
     plt.savefig(plot_filename, bbox_inches='tight')
@@ -260,12 +274,12 @@ def subtract_simmed_psfs(cookie_cut_out_sci, plot_string):
     return psf_perfect_cutout_best_fit
 
 
-def strehl_grid(file_name_grid):
+def strehl_grid(file_name):
     # return the locations and other data for each PSF
 
-    grid_frame = fits.open(file_name_grid)
-    grid_data = grid_frame[0].data
-    grid_header = grid_frame[0].header
+    grid_frame = fits.open(file_name)
+    grid_data = grid_frame[1].data
+    grid_header = grid_frame[1].header
 
     '''
     (1804, 243), (1804, 633), (1804, 1029), (1804, 1418), (1804, 1810), 
@@ -306,7 +320,6 @@ def strehl_grid(file_name_grid):
     coords_guesses_x_all_oversamp = coords_guesses_x_all * oversample_factor
     coords_guesses_y_all_oversamp = coords_guesses_y_all * oversample_factor
     coords_guesses_all_oversamp = np.vstack((coords_guesses_y_all_oversamp, coords_guesses_x_all_oversamp)).T
-    ipdb.set_trace()
 
     # find the grid centroids
 
@@ -321,46 +334,75 @@ def strehl_grid(file_name_grid):
     coords_centroided_all_oversamp = np.vstack((y_pos_pix_oversamp, x_pos_pix_oversamp)).T
 
     # FYI
-    fyi_plot_centroiding(grid_data_oversamp, coords_centroided_all_oversamp, zscale=False)
+    #fyi_plot_centroiding(grid_data_oversamp, coords_centroided_all_oversamp, zscale=False)
 
     # make a cut-out of each psf and make a best-fit 2D Gaussian
-    raw_cutout_size = 31
+    raw_cutout_size = 31 * oversample_factor
     num_coord = 0
 
     cookie_cut_out_best_fit_list = []
-    fwhm_x_pix_array = np.zeros(len(y_pos_pix))
-    fwhm_y_pix_array = np.zeros(len(y_pos_pix))
-    sigma_x_pix_array = np.zeros(len(y_pos_pix))
-    sigma_y_pix_array = np.zeros(len(y_pos_pix))
-    angle_theta_array = np.zeros(len(y_pos_pix))
+    fwhm_x_pix_array = np.zeros(len(y_pos_pix_oversamp))
+    fwhm_y_pix_array = np.zeros(len(y_pos_pix_oversamp))
+    sigma_x_pix_array = np.zeros(len(y_pos_pix_oversamp))
+    sigma_y_pix_array = np.zeros(len(y_pos_pix_oversamp))
+    angle_theta_array = np.zeros(len(y_pos_pix_oversamp))
 
     # make a copy from which we will subtract the PSFs to see the residuals
     canvas_grid_data = np.copy(grid_data)
 
     # loop over each centroided PSF
-    for num_coord in range(len(y_pos_pix)):
-        cookie_edge_size = raw_cutout_size
-        idx_x_start = int(x_pos_pix[num_coord]-0.5*cookie_edge_size)
-        idx_x_end = int(x_pos_pix[num_coord]+0.5*cookie_edge_size)
-        idx_y_start = int(y_pos_pix[num_coord]-0.5*cookie_edge_size)
-        idx_y_end = int(y_pos_pix[num_coord]+0.5*cookie_edge_size)
-        cookie_cut_out_sci = grid_data[idx_y_start:idx_y_end, idx_x_start:idx_x_end]
+    for num_coord in range(len(y_pos_pix_oversamp)):
 
-        print('! ----------- ADDING IN BACKGROUND VALUE TO MAKE THE BACKGROUND ZERO; NEED TO MODIFY LATER ----------- !')
-        cookie_cut_out_sci = cookie_cut_out_sci - np.median(grid_data)
+
+        # is a cutout even necessary?
+        cookie_edge_size = raw_cutout_size
+        idx_x_start = int(x_pos_pix_oversamp[num_coord]-0.5*cookie_edge_size)
+        idx_x_end = int(x_pos_pix_oversamp[num_coord]+0.5*cookie_edge_size)
+        idx_y_start = int(y_pos_pix_oversamp[num_coord]-0.5*cookie_edge_size)
+        idx_y_end = int(y_pos_pix_oversamp[num_coord]+0.5*cookie_edge_size)
+        cookie_cut_out_sci_oversamp = grid_data_oversamp[idx_y_start:idx_y_end, idx_x_start:idx_x_end]
+        ipdb.set_trace()
+
+        # FYI plot
+        plt.clf()
+        plt.imshow(cookie_cut_out_sci_oversamp, origin='lower', cmap='gray_r')
+        # Convert scatter coordinates to cutout-relative coordinates
+        x_scatter = x_pos_pix_oversamp[num_coord] - idx_x_start
+        y_scatter = y_pos_pix_oversamp[num_coord] - idx_y_start
+        plt.scatter(x_scatter, y_scatter, color='red', s=10)
+        plt.title(f'Cookie cut-out sci at coord (y,x): {y_pos_pix_oversamp[num_coord]}, {x_pos_pix_oversamp[num_coord]}')
+        plt.colorbar()
+        plt.show()
+        plt.close()
+        ipdb.set_trace()
+
+        # Adjust the centroid coordinate for the cut-out: subtract the cutout starting indices to get cutout-relative coordinates
+        coords_guess_this_cutout = np.array([
+            coords_centroided_all_oversamp[num_coord][0] - idx_y_start,
+            coords_centroided_all_oversamp[num_coord][1] - idx_x_start
+        ])
+
+
+        # find FWHM of Gaussian-best-fit to empirical
+        # correct for fact we 
+        ipdb.set_trace()
+        fwhm_y_pix_gaussian_best_fit_oversamp, fwhm_x_pix_gaussian_best_fit_oversamp = fit_gaussian_fwhm(cookie_cut_out_sci_oversamp, 
+                                                                                                        coords_guess=coords_guess_this_cutout, 
+                                                                                                        plot_string=f'num_coord_{num_coord}', 
+                                                                                                        fac_oversamp=oversample_factor)
+
+
+        # fit a 2D Gaussian
 
         # find FWHM of empirical 
         '''
         fwhm_y_pix_empirical, fwhm_x_pix_empirical = fit_empirical_fwhm(cookie_cut_out_sci, plot_string=f'num_coord_{num_coord}')
         '''
 
-        '''
-        # find FWHM of Gaussian-best-fit to empirical
-        fwhm_y_pix_gaussian_best_fit, fwhm_x_pix_gaussian_best_fit = fit_gaussian_fwhm(cookie_cut_out_sci, coords_centroided=coords_centroided_all[num_coord], plot_string=f'num_coord_{num_coord}')
-        '''
-
+ 
+        ipdb.set_trace()
         # subtract ScopeSim PSFs to see the residals
-        resids_cutout = subtract_simmed_psfs(cookie_cut_out_sci, plot_string=f'num_coord_{num_coord}')
+        resids_cutout = subtract_simmed_psfs(cookie_cut_out_sci_oversamp, plot_string=f'num_coord_{num_coord}')
         canvas_grid_data[idx_y_start:idx_y_end, idx_x_start:idx_x_end] = resids_cutout
 
         
@@ -420,11 +462,12 @@ def main():
     # files for finding the Strehl
     # if grid mask is used
     # the files for finding the plate scale (grid mask)
-    file_name_grid = stem + 'strehl/IMG_OPT_02_image_grid_lm_short-L.fits'
+    file_name = stem + 'strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_Br_alpha_clocking_angle_0.fits'
+    #file_name = stem + 'strehl/IMG_OPT_04_wcu_focal_mask_pinhole_lm_pupil_mask_open_filter_Br_alpha_clocking_angle_0.fits'
 
 
     # check plate scale 
-    strehl_grid(file_name_grid)
+    strehl_grid(file_name)
 
 
 if __name__ == "__main__":
