@@ -26,6 +26,19 @@ import ipdb
 
 import scopesim as sim
 from skimage import measure
+from scipy.special import j1
+
+
+def intensity_annular_aperture():
+
+    nu = 
+
+    eps =
+    
+    # see Eqn. 43 in 'E-REP-MPIA-1203 0-1 xx-10-2024'
+    I_r = (1/(1-eps**2)**2) * ( 2*j1(nu)/nu - eps**2 * 2*j1(nu*eps)/(nu*eps) ) ** 2
+
+    return I_r
 
 
 def gaussian_2d(xy_mesh, amplitude, xo, yo, sigma_x_pix, sigma_y_pix, theta):
@@ -112,6 +125,7 @@ def fit_gaussian(frame, center_guess):
     fwhm_y_pix (float): Full Width at Half Maximum (FWHM) in the y-direction.
     sigma_x_pix (float): Standard deviation in the x-direction.
     sigma_y_pix (float): Standard deviation in the y-direction.
+    amplitude_counts (float): Amplitude of the Gaussian function in counts.
     """
     y, x = np.indices(frame.shape)
     xy_mesh = (x, y)
@@ -120,13 +134,14 @@ def fit_gaussian(frame, center_guess):
     fitted_array = gaussian_2d(xy_mesh, *popt).reshape(frame.shape)
     fwhm_x_pix = 2 * np.sqrt(2 * np.log(2)) * np.abs(popt[3])
     fwhm_y_pix = 2 * np.sqrt(2 * np.log(2)) * np.abs(popt[4])
+    amplitude_counts = popt[0]
     x_center_pix = popt[1]
     y_center_pix = popt[2]
     sigma_x_pix = popt[3]
     sigma_y_pix = popt[4]
     angle_theta_deg = popt[5]
     
-    return fitted_array, x_center_pix, y_center_pix, fwhm_x_pix, fwhm_y_pix, sigma_x_pix, sigma_y_pix, angle_theta_deg
+    return fitted_array, x_center_pix, y_center_pix, fwhm_x_pix, fwhm_y_pix, sigma_x_pix, sigma_y_pix, angle_theta_deg, amplitude_counts
 
 
 def fyi_plot_centroiding(array_to_plot, coords_to_plot, zscale=False):
@@ -157,7 +172,7 @@ def fit_gaussian_fwhm(cookie_cut_out_sci, coords_guess, plot_string, fac_oversam
     '''
 
     ## ## TO DO: ARE THE INDEXES RIGHT HERE?
-    cookie_cut_out_best_fit, x_center_pix_oversamp_cutout, y_center_pix_oversamp_cutout, fwhm_x_pix, fwhm_y_pix, sigma_x_pix, sigma_y_pix, angle_theta_deg = fit_gaussian(cookie_cut_out_sci, \
+    cookie_cut_out_best_fit, x_center_pix_oversamp_cutout, y_center_pix_oversamp_cutout, fwhm_x_pix, fwhm_y_pix, sigma_x_pix, sigma_y_pix, angle_theta_deg, amplitude_counts = fit_gaussian(cookie_cut_out_sci, \
         center_guess = coords_guess)
     residuals = cookie_cut_out_sci - cookie_cut_out_best_fit
 
@@ -197,7 +212,7 @@ def fit_gaussian_fwhm(cookie_cut_out_sci, coords_guess, plot_string, fac_oversam
     )
     axs[1, 1].legend()
     axs[1, 1].set_title('1D cross-section, empirical vs best-fit')
-    plt.suptitle(f'PSF, oversampling factor: {fac_oversamp:.2f} \n Found coord (y,x): ({y_center_pix_oversamp_cutout:.2f}, {x_center_pix_oversamp_cutout:.2f}) \n Found FWHM x: {fwhm_x_pix:.2f} pix, FWHM y: {fwhm_y_pix:.2f} pix')
+    plt.suptitle(f'PSF, oversampling factor: {fac_oversamp:.2f} \n Found coord (y,x): ({y_center_pix_oversamp_cutout:.2f}, {x_center_pix_oversamp_cutout:.2f}) \n Found FWHM x: {fwhm_x_pix:.2f} pix, FWHM y: {fwhm_y_pix:.2f} pix,\nFound amplitude: {amplitude_counts:.2f} counts')
     plt.tight_layout()
     #plt.show()
     # Save the plot to file with num_coord as a 2-digit zero-padded string
@@ -207,7 +222,7 @@ def fit_gaussian_fwhm(cookie_cut_out_sci, coords_guess, plot_string, fac_oversam
     plt.close()
     #ipdb.set_trace()
 
-    return x_center_pix_oversamp_cutout, y_center_pix_oversamp_cutout, fwhm_x_pix, fwhm_y_pix
+    return x_center_pix_oversamp_cutout, y_center_pix_oversamp_cutout, fwhm_x_pix, fwhm_y_pix, amplitude_counts
 
 
 def fit_simmed_psfs(cookie_cut_out_sci, plot_string, fp_mask, x_center_final_oversamp, y_center_final_oversamp, fac_oversamp):
@@ -222,7 +237,7 @@ def fit_simmed_psfs(cookie_cut_out_sci, plot_string, fp_mask, x_center_final_ove
     fac_oversamp: oversampling factor
 
     OUTPUTS:
-    resids_cutout: 2D array of the residuals
+    psf_perfect_cutout_best_fit: cutout around the best-fit simulated PSF
     '''
 
     # set up instrument
@@ -400,7 +415,7 @@ def strehl_grid(file_name, fp_mask):
     x_pos_pix_oversamp, y_pos_pix_oversamp = centroid_sources(grid_data_oversamp, 
                                     xpos=coords_guesses_x_all_oversamp, 
                                     ypos=coords_guesses_y_all_oversamp, 
-                                    box_size=21,
+                                    box_size=41,
                                     centroid_func=centroid_2dg)
 
     # zip into one array
@@ -414,11 +429,14 @@ def strehl_grid(file_name, fp_mask):
     num_coord = 0
 
     cookie_cut_out_best_fit_list = []
+    coord_x_array = np.zeros(len(y_pos_pix_oversamp))
+    coord_y_array = np.zeros(len(y_pos_pix_oversamp))
     fwhm_x_pix_array = np.zeros(len(y_pos_pix_oversamp))
     fwhm_y_pix_array = np.zeros(len(y_pos_pix_oversamp))
     sigma_x_pix_array = np.zeros(len(y_pos_pix_oversamp))
     sigma_y_pix_array = np.zeros(len(y_pos_pix_oversamp))
     angle_theta_array = np.zeros(len(y_pos_pix_oversamp))
+    amplitude_counts_array = np.zeros(len(y_pos_pix_oversamp))
 
     # make a copy from which we will subtract the PSFs to see the residuals
     canvas_grid_data = np.copy(grid_data)
@@ -434,7 +452,7 @@ def strehl_grid(file_name, fp_mask):
         idx_y_start = int(y_pos_pix_oversamp[num_coord]-0.5*cookie_edge_size)
         idx_y_end = int(y_pos_pix_oversamp[num_coord]+0.5*cookie_edge_size)
         cookie_cut_out_sci_oversamp = grid_data_oversamp[idx_y_start:idx_y_end, idx_x_start:idx_x_end]
-        ipdb.set_trace()
+        #ipdb.set_trace()
 
         # FYI plot
         plt.clf()
@@ -448,7 +466,7 @@ def strehl_grid(file_name, fp_mask):
         plt.colorbar()
         plt.show()
         plt.close()
-        ipdb.set_trace()
+        #ipdb.set_trace()
 
         # Adjust the centroid coordinate for the cut-out: subtract the cutout starting indices to get cutout-relative coordinates
         coords_guess_this_cutout = np.array([
@@ -459,12 +477,16 @@ def strehl_grid(file_name, fp_mask):
 
         # find FWHM of Gaussian-best-fit to empirical, and get the best centroid on the PSF
         # correct for fact we 
-        ipdb.set_trace()
-        x_center_pix_gaussian_best_fit_oversamp, y_center_pix_gaussian_best_fit_oversamp, fwhm_x_pix_gaussian_best_fit_oversamp, fwhm_y_pix_gaussian_best_fit_oversamp = fit_gaussian_fwhm(cookie_cut_out_sci_oversamp, 
+        #ipdb.set_trace()
+        x_center_pix_gaussian_best_fit_oversamp, y_center_pix_gaussian_best_fit_oversamp, fwhm_x_pix_gaussian_best_fit_oversamp, fwhm_y_pix_gaussian_best_fit_oversamp, amplitude_counts_gaussian_best_fit_oversamp = fit_gaussian_fwhm(cookie_cut_out_sci_oversamp, 
                                                                                                         coords_guess=coords_guess_this_cutout, 
                                                                                                         plot_string=f'num_coord_{num_coord}', 
                                                                                                         fac_oversamp=oversample_factor)
 
+
+        # convert the coordinates of the cutout back to those of the entire oversampled image
+        x_center_pix_gaussian_best_fit_oversamp_fullarray = x_center_pix_gaussian_best_fit_oversamp + idx_x_start
+        y_center_pix_gaussian_best_fit_oversamp_fullarray = y_center_pix_gaussian_best_fit_oversamp + idx_y_start
 
         # fit a 2D Gaussian
 
@@ -474,22 +496,26 @@ def strehl_grid(file_name, fp_mask):
         '''
 
  
-        ipdb.set_trace()
+        #ipdb.set_trace()
         # subtract ScopeSim PSFs to see the residals (note we're still using the cookie cut-out)
         # note that the 'final' coords are the 'guessed' ones above; the PSF will in general be off-center
-        resids_cutout = fit_simmed_psfs(cookie_cut_out_sci_oversamp, 
+        best_fit_cutout_oversamp = fit_simmed_psfs(cookie_cut_out_sci_oversamp, 
                                         plot_string=f'num_coord_{num_coord}', 
                                         fp_mask=fp_mask,
                                         x_center_final_oversamp=x_pos_pix_oversamp[num_coord], 
                                         y_center_final_oversamp=y_pos_pix_oversamp[num_coord], 
                                         fac_oversamp=oversample_factor)
-        canvas_grid_data[idx_y_start:idx_y_end, idx_x_start:idx_x_end] = resids_cutout
+        #canvas_grid_data[idx_y_start:idx_y_end, idx_x_start:idx_x_end] = resids_cutout_oversamp
 
         
-
+        # resample back to the original size
+        x_center_pix_gaussian_best_fit_normsamp = x_center_pix_gaussian_best_fit_oversamp_fullarray / oversample_factor
+        y_center_pix_gaussian_best_fit_normsamp = y_center_pix_gaussian_best_fit_oversamp_fullarray / oversample_factor
+        fwhm_x_pix_gaussian_best_fit_normsamp = fwhm_x_pix_gaussian_best_fit_oversamp / oversample_factor
+        fwhm_y_pix_gaussian_best_fit_normsamp = fwhm_y_pix_gaussian_best_fit_oversamp / oversample_factor
      
 
-        ipdb.set_trace()
+        #ipdb.set_trace()
         # make cutout around the model (for plot)
 
         # save cookie_cut_out_sci and cookie_cut_out_best_fit as fits files
@@ -502,31 +528,34 @@ def strehl_grid(file_name, fp_mask):
         '''
 
         # update arrays/lists
-        '''
-        cookie_cut_out_best_fit_list.append(cookie_cut_out_best_fit)
-        fwhm_x_pix_array[num_coord] = fwhm_x_pix
-        fwhm_y_pix_array[num_coord] = fwhm_y_pix
-        sigma_x_pix_array[num_coord] = sigma_x_pix
-        sigma_y_pix_array[num_coord] = sigma_y_pix
-        angle_theta_array[num_coord] = angle_theta
-        '''
+        cookie_cut_out_best_fit_list.append(best_fit_cutout_oversamp)
+
+        coord_x_array[num_coord] = x_center_pix_gaussian_best_fit_normsamp
+        coord_y_array[num_coord] = y_center_pix_gaussian_best_fit_normsamp
+        fwhm_x_pix_array[num_coord] = fwhm_x_pix_gaussian_best_fit_normsamp
+        fwhm_y_pix_array[num_coord] = fwhm_y_pix_gaussian_best_fit_normsamp
+        amplitude_counts_array[num_coord] = amplitude_counts_gaussian_best_fit_oversamp # note the amplitude doesn't need to be resampled
+        #sigma_x_pix_array[num_coord] = sigma_x_pix
+        #sigma_y_pix_array[num_coord] = sigma_y_pix
+        #angle_theta_array[num_coord] = angle_theta
+
 
     ipdb.set_trace()
     # plot the grid_data and annotate it with the best-fit fwhm in x and y for each PSF
     plt.clf()
     plt.imshow(grid_data, origin='lower', cmap='gray_r')
-    for num_coord in range(len(y_pos_pix)):
+    for num_coord in range(len(coord_x_array)):
         # Draw a line from the text location to the PSF's actual (x, y) coordinate
-        text_x = x_pos_pix[num_coord] - 125
-        text_y = y_pos_pix[num_coord] + 10
+        text_x = coord_x_array[num_coord] - 125
+        text_y = coord_y_array[num_coord] + 10
         plt.text(
             text_x,
             text_y,
-            f'x: {fwhm_x_pix_array[num_coord]:.2f}, \n y: {fwhm_y_pix_array[num_coord]:.2f}, \n theta: {angle_theta_array[num_coord]:.2f}',
+            f'x: {fwhm_x_pix_array[num_coord]:.2f}, \n y: {fwhm_y_pix_array[num_coord]:.2f}, \n theta: {angle_theta_array[num_coord]:.2f}, \n amp: {amplitude_counts_array[num_coord]:.2f}',
             color='k',
             fontsize=7, rotation=20
         )
-    plt.title('FWHM in x and y(pix)')
+    plt.title('FWHM in x and y (pix), amplitude (counts)')
     plt.show()
     plt.close()
 
