@@ -49,7 +49,7 @@ def fit_empirical_fwhm(frame, plot_string):
     '''
 
     # find the peak intensity
-    ipdb.set_trace()
+    #ipdb.set_trace()
     peak_intensity = np.max(frame)
     # find where the intensity is 50% of the peak intensity
     # Find the positions of the maximum value as the initial guess for the center
@@ -66,7 +66,7 @@ def fit_empirical_fwhm(frame, plot_string):
     if len(props) > 0:
         # Select the largest region by area
         prop_biggest = [max(props, key=lambda p: p.area)]
-    ipdb.set_trace()
+    #ipdb.set_trace()
     if len(props) == 0:
         prop_biggest_dims = np.nan, np.nan
 
@@ -88,7 +88,7 @@ def fit_empirical_fwhm(frame, plot_string):
     plt.title(f'Frame with Bounding Box at 50% Peak\nFWHM in x (pix): {width_x:.2f}, FWHM in y (pix): {height_y:.2f}')
     # save the plot to file
     plot_filename = 'empirical_fwhm_' + plot_string + '.png'
-    ipdb.set_trace()
+    #ipdb.set_trace()
     plt.savefig(plot_filename, bbox_inches='tight')
     print(f'Figure saved as {plot_filename}')
     #plt.show()
@@ -205,7 +205,7 @@ def fit_gaussian_fwhm(cookie_cut_out_sci, coords_guess, plot_string, fac_oversam
     plt.savefig(plot_filename, bbox_inches='tight')
     print(f'Figure saved as {plot_filename}')
     plt.close()
-    ipdb.set_trace()
+    #ipdb.set_trace()
 
     return x_center_pix_oversamp_cutout, y_center_pix_oversamp_cutout, fwhm_x_pix, fwhm_y_pix
 
@@ -250,7 +250,7 @@ def fit_simmed_psfs(cookie_cut_out_sci, plot_string, fp_mask, x_center_final_ove
     print('Current Observing filter:', obs_filter)
     print('Current WCU FP mask:', wcu.fpmask)
     print('Current WCU PP mask:', pp_mask)
-    ipdb.set_trace()
+    #ipdb.set_trace()
     # background
     print('Closing WCU BB aperture first to get a background ...')
     # background
@@ -273,7 +273,7 @@ def fit_simmed_psfs(cookie_cut_out_sci, plot_string, fp_mask, x_center_final_ove
     metis.observe()
     outhdul_on = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
     sci = outhdul_on[1].data
-    ipdb.set_trace()
+    #ipdb.set_trace()
     # Get perfect, background-subtracted PSF - no detector noise
     psf_perfect = sci - background
 
@@ -288,7 +288,7 @@ def fit_simmed_psfs(cookie_cut_out_sci, plot_string, fp_mask, x_center_final_ove
     print("Saved psf_perfect_oversamp.fits for checking.")
 
 
-    ipdb.set_trace()
+    #ipdb.set_trace()
 
     # take a cutout of the PSF at the exact same coordinates as the cookie cut-out
     psf_perfect_cutout = psf_perfect_oversamp[int(y_center_final_oversamp-0.5*cookie_cut_out_sci.shape[0]):int(y_center_final_oversamp+0.5*cookie_cut_out_sci.shape[0]), \
@@ -440,6 +440,7 @@ def strehl_grid(file_name, fp_mask):
         plt.clf()
         plt.imshow(cookie_cut_out_sci_oversamp, origin='lower', cmap='gray_r')
         # Convert scatter coordinates to cutout-relative coordinates
+        # this point is that found with centroid_sources()
         x_scatter = x_pos_pix_oversamp[num_coord] - idx_x_start
         y_scatter = y_pos_pix_oversamp[num_coord] - idx_y_start
         plt.scatter(x_scatter, y_scatter, color='red', s=10)
@@ -488,7 +489,7 @@ def strehl_grid(file_name, fp_mask):
 
      
 
-        #ipdb.set_trace()
+        ipdb.set_trace()
         # make cutout around the model (for plot)
 
         # save cookie_cut_out_sci and cookie_cut_out_best_fit as fits files
