@@ -29,14 +29,28 @@ from skimage import measure
 from scipy.special import j1
 
 
-def intensity_annular_aperture():
+def intensity_annular_aperture(r_rad_array, wavel, D_aperture, D_obscuration):
+    '''
+    Calculate the intensity through an aperture with a central obscuration
+    Ref. 'E-REP-MPIA-1203 0-1 xx-10-2024', Sec. 4.4
 
-    nu = 
+    INPUTS:
+    - r_rad_array: 2D array of radial distances from the center (units radians)
+    - wavel: wavelength (units meters)
+    - D_aperture: aperture diameter (units meters)
+    - D_obscuration: obscuration diameter (units meters)
 
-    eps =
+    OUTPUTS:
+    - I_r_array: 2D array of intensity on the detector
+    '''
+
+
+    nu_ = np.pi * r_rad_array * D_aperture / wavel # unitless
+
+    eps_ = D_obscuration / D_aperture # unitless
     
     # see Eqn. 43 in 'E-REP-MPIA-1203 0-1 xx-10-2024'
-    I_r = (1/(1-eps**2)**2) * ( 2*j1(nu)/nu - eps**2 * 2*j1(nu*eps)/(nu*eps) ) ** 2
+    I_r = (1/(1-eps_**2)**2) * ( (2*j1(nu_)/nu_) - eps_**2 * (2*j1(nu_*eps_)/(nu_*eps_)) ) ** 2
 
     return I_r
 
@@ -443,6 +457,8 @@ def strehl_grid(file_name, fp_mask):
 
     # loop over each centroided PSF
     for num_coord in range(len(y_pos_pix_oversamp)):
+
+        ipdb.set_trace()
 
 
         # is a cutout even necessary?
