@@ -29,7 +29,15 @@ from skimage import measure
 from scipy.special import j1
 
 
-def intensity_annular_aperture(r_rad_array, wavel, D_aperture, D_obscuration):
+def jinc(x):
+    x = np.asarray(x)
+    y = np.empty_like(x, dtype=float)
+    mask = x != 0
+    y[mask] = j1(x[mask]) / x[mask]
+    y[~mask] = 0.5
+    return y
+
+def intensity_annular_aperture(r_rad_array, wavel, D_aperture, D_obscuration, ampl=1):
     '''
     Calculate the intensity through an aperture with a central obscuration
     Ref. 'E-REP-MPIA-1203 0-1 xx-10-2024', Sec. 4.4
@@ -50,7 +58,10 @@ def intensity_annular_aperture(r_rad_array, wavel, D_aperture, D_obscuration):
     eps_ = D_obscuration / D_aperture # unitless
     
     # see Eqn. 43 in 'E-REP-MPIA-1203 0-1 xx-10-2024'
-    I_r = (1/(1-eps_**2)**2) * ( (2*j1(nu_)/nu_) - eps_**2 * (2*j1(nu_*eps_)/(nu_*eps_)) ) ** 2
+    I_r = (1/(1-eps_**2)**2) * ( (2*jinc(nu_)) - eps_**2 * (2*jinc(nu_*eps_)) ) ** 2
+
+    # normalize to the amplitude
+    I_r = ampl * I_r / np.nanmax(I_r)
 
     return I_r
 
@@ -64,6 +75,231 @@ def gaussian_2d(xy_mesh, amplitude, xo, yo, sigma_x_pix, sigma_y_pix, theta):
     c = (np.sin(theta)**2) / (2 * sigma_x_pix**2) + (np.cos(theta)**2) / (2 * sigma_y_pix**2)
     g = amplitude * np.exp(-(a * ((x - xo)**2) + 2 * b * (x - xo) * (y - yo) + c * ((y - yo)**2)))
     return g.ravel()
+
+
+# Define a wrapper function for curve_fit
+# curve_fit expects: func(x, *params) where x is the independent variable
+# and params are the parameters to fit
+def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shape, valid_mask, wavel):
+    """
+    Fixed wrapper function for intensity_annular_aperture to use with curve_fit.
+    
+    Parameters:
+    - r_rad_1d: 1D array of radial distances (masked, only valid points)
+    - D_aperture: aperture diameter (meters)
+    - D_obscuration: obscuration diameter (meters)
+    - ampl: amplitude
+    - baseline_shape: tuple, shape of the 2D array (fixed, not optimized)
+    - valid_mask: boolean array, mask for valid data points (fixed, not optimized)
+    - fac_oversamp: oversampling factor
+    
+    Returns:
+    - 1D array of intensity values (masked, same length as input)
+    """
+    # Reconstruct the full 2D array by inserting masked values back into their original positions
+    r_rad_2d_full = np.full(baseline_shape, np.nan).flatten()
+    r_rad_2d_full[valid_mask] = r_rad_1d
+    r_rad_2d = r_rad_2d_full.reshape(baseline_shape)
+    
+    # Calculate intensity using the model function
+    intensity_2d = intensity_annular_aperture(
+        r_rad_array=r_rad_2d, 
+        wavel=wavel, 
+        D_aperture=D_aperture, 
+        D_obscuration=D_obscuration, 
+        ampl=ampl
+    )
+    
+    # Flatten and apply the same mask to return only valid points
+    intensity_1d_full = intensity_2d.flatten()
+    return intensity_1d_full[valid_mask]
+
+
+def fit_analytical_psfs(cookie_cut_out_sci, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, wavel, pixel_scale_mas=6.0):
+    '''
+    Fit a 2D analytical PSF to a given frame.
+
+    INPUTS:
+    cookie_cut_out_sci: 2D array of the cookie cut our from the full science frame
+    plot_string: string to add to the plot file name
+    x_center_final_cookie_oversamp: final x-center of the PSF (i.e., no more centroiding will be done here); in coordinates of the cookie cut-out
+    y_center_final_cookie_oversamp: final y-center of the PSF; in coordinates of the cookie cut-out
+    fac_oversamp: oversampling factor
+    wavel: wavelength in meters
+    pixel_scale_mas: pixel scale in mas
+
+    OUTPUTS:
+    '''
+
+    # make the cutout from the full array
+    #psf_perfect_cutout = psf_perfect_oversamp[int(y_center_final_oversamp-0.5*cookie_cut_out_sci.shape[0]):int(y_center_final_oversamp+0.5*cookie_cut_out_sci.shape[0]), \
+    #        int(x_center_final_oversamp-0.5*cookie_cut_out_sci.shape[1]):int(x_center_final_oversamp+0.5*cookie_cut_out_sci.shape[1])]
+
+    # Create a 2D array of distances from the center in arcseconds, with each pixel 6 mas
+    size = cookie_cut_out_sci.shape[0] 
+    baseline_shape = (size, size)
+    pixel_scale_arcsec = pixel_scale_mas / 1000.0  # arcseconds per pixel
+    y, x = np.indices((size, size))
+    center = (y_center_final_cookie_oversamp, x_center_final_cookie_oversamp)
+    r_pix = np.sqrt((x - center[1])**2 + (y - center[0])**2)
+    test_array_arcsec_2d = r_pix * pixel_scale_arcsec
+    # convert to radians
+    r_rad_2d = test_array_arcsec_2d / ( 3600 * (180/np.pi ) )
+
+    # rescale based on the oversampling factor (this effectively makes the plate scale smaller)
+    r_rad_2d = r_rad_2d / fac_oversamp
+
+    ipdb.set_trace()
+
+    # replace nans with median
+    test_empirical_2d = np.where(np.isnan(cookie_cut_out_sci), np.nanmedian(cookie_cut_out_sci), cookie_cut_out_sci)
+    #test_perfect_2d = np.where(np.isnan(test_empirical_2d), np.nanmedian(test_empirical_2d), test_empirical_2d)
+
+    # Flatten both arrays first
+    r_rad_1d_full = r_rad_2d.flatten()
+    test_empirical_1d_full = test_empirical_2d.flatten()
+
+    # Create a SINGLE mask for valid (non-NaN, finite) data points
+    # Apply the SAME mask to both arrays to keep them aligned
+    mask = np.isfinite(test_empirical_1d_full) & np.isfinite(r_rad_1d_full)
+    ipdb.set_trace()
+
+    # Apply the SAME mask to both arrays
+    r_rad_1d = r_rad_1d_full[mask]
+    test_empirical_1d = test_empirical_1d_full[mask]
+
+    # Store the mask as a global variable for use in model_for_fit
+    valid_mask = mask.copy()
+
+    print(f"Original data points: {len(r_rad_1d_full)}")
+    print(f"Valid data points after masking: {len(r_rad_1d)}")
+    print(f"Arrays are aligned: {len(r_rad_1d) == len(test_empirical_1d)}")
+    ipdb.set_trace()
+
+    # Initial parameter guesses
+    # [D_aperture, D_obscuration, ampl]
+    initial_guess = [36., 12., 3500.] 
+
+    # Create a wrapper function that binds the fixed parameters (baseline_shape and valid_mask)
+    # This ensures curve_fit only optimizes D_aperture, D_obscuration, and ampl
+    
+    model_wrapper = lambda r_rad_1d, D_aperture, D_obscuration, ampl: \
+        model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shape, valid_mask, wavel)
+
+    ipdb.set_trace()
+    # Set bounds for parameters: [D_aperture, D_obscuration, ampl]
+    # D_aperture: between 1 and 50
+    # D_obscuration: no bounds (use -inf to +inf, but should be positive and < D_aperture)
+    # ampl: no bounds (use -inf to +inf, but should be positive)
+    lower_bounds = [1.0, 0.0, 0.0]  # D_aperture >= 1, D_obscuration >= 0, ampl >= 0
+    upper_bounds = [50.0, np.inf, np.inf]  # D_aperture <= 50, no upper bounds for others
+    
+    # Perform the fit with the fixed function
+    # Note: 'trf' method supports bounds, 'lm' does not
+    popt, pcov = curve_fit(
+        model_wrapper,
+        r_rad_1d,
+        test_empirical_1d,
+        p0=initial_guess,
+        bounds=(lower_bounds, upper_bounds),
+        method='trf'  # Trust Region Reflective algorithm supports bounds
+    )
+
+    # Extract best-fit parameters and uncertainties
+    D_aperture_fit = popt[0]
+    D_obscuration_fit = popt[1]
+    ampl_fit = popt[2]
+
+    # Calculate parameter uncertainties from covariance matrix
+    param_errors = np.sqrt(np.diag(pcov))
+    D_aperture_err = param_errors[0]
+    D_obscuration_err = param_errors[1]
+    ampl_err = param_errors[2]
+    ipdb.set_trace()
+
+    # Print results
+    print("Best-fit parameters:")
+    print(f"D_aperture = {D_aperture_fit:.2f} ± {D_aperture_err:.2f} meters")
+    print(f"D_obscuration = {D_obscuration_fit:.2f} ± {D_obscuration_err:.2f} meters")
+    print(f"ampl = {ampl_fit:.2f} ± {ampl_err:.2f}")
+
+    # Check if covariance matrix has infs
+    if np.any(np.isinf(pcov)):
+        print("\nWARNING: Covariance matrix contains infinities!")
+        print("This usually means the fit didn't converge properly.")
+    else:
+        print("\nCovariance matrix is finite - fit converged successfully!")
+
+    # generate the best-fit model based on the fit parameters
+    # Note: r_rad_2d needs to be flattened and masked for model_for_fit_fixed
+    r_rad_1d = r_rad_2d.flatten()
+    r_rad_1d_masked = r_rad_1d[valid_mask]
+    
+    initial_guess_model_1d = model_for_fit_fixed(r_rad_1d_masked, initial_guess[0], initial_guess[1], initial_guess[2], baseline_shape, valid_mask, wavel)
+    best_fit_model_1d = model_for_fit_fixed(r_rad_1d_masked, D_aperture_fit, D_obscuration_fit, ampl_fit, baseline_shape, valid_mask, wavel)
+    
+    # Reshape to 2D (though these are already 1D masked arrays, we need to reconstruct the full 2D)
+    # Actually, model_for_fit_fixed returns masked 1D, so we need to reconstruct the full 2D array
+    initial_guess_model_2d_full = np.full(baseline_shape, np.nan).flatten()
+    initial_guess_model_2d_full[valid_mask] = initial_guess_model_1d
+    initial_guess_model_2d = initial_guess_model_2d_full.reshape(baseline_shape)
+    
+    best_fit_model_2d_full = np.full(baseline_shape, np.nan).flatten()
+    best_fit_model_2d_full[valid_mask] = best_fit_model_1d
+    best_fit_model_2d = best_fit_model_2d_full.reshape(baseline_shape)
+
+    # Calculate chi-squared
+    # Both test_empirical_1d and best_fit_model_1d are already masked 1D arrays
+    chi_squared = np.sum((test_empirical_1d - best_fit_model_1d)**2 / (0.01**2))  # assuming noise std = 0.01
+    dof = len(test_empirical_1d) - 3  # degrees of freedom (data points - number of parameters)
+    reduced_chi_squared = chi_squared / dof
+
+    # best_fit_model_2d is already created above
+
+    ipdb.set_trace()
+
+    print(f"\nChi-squared = {chi_squared:.2f}")
+    print(f"Degrees of freedom = {dof}")
+    print(f"Reduced chi-squared = {reduced_chi_squared:.6f}")
+
+    zscale = ZScaleInterval()
+    vmin, vmax = zscale.get_limits(test_empirical_2d)
+
+    fig, axs = plt.subplots(1, 4, figsize=(20, 5))
+
+    # Panel 1: Empirical data
+    im0 = axs[0].imshow(test_empirical_2d, vmin=vmin, vmax=vmax)
+    axs[0].set_title("Empirical")
+
+    # Panel 2: Best fit
+    im1 = axs[1].imshow(best_fit_model_2d, vmin=vmin, vmax=vmax)
+    axs[1].set_title("Best fit")
+
+    # Panel 3: Initial guess
+    im2 = axs[2].imshow(initial_guess_model_2d, vmin=vmin, vmax=vmax)
+    axs[2].set_title("Initial guess")
+
+    # Panel 4: Residuals
+    im2 = axs[3].imshow(test_empirical_2d - best_fit_model_2d, vmin=vmin, vmax=vmax)
+    axs[3].set_title("Empirical - Best fit")
+
+
+    plt.suptitle(
+        f'λ={wavel*1e6:.2f}μm, pix={pixel_scale_mas:.2f}mas, \n'
+        f'Best fits: D_aper={D_aperture_fit:.2f}±{D_aperture_err:.2f}m, '
+        f'D_obsc={D_obscuration_fit:.2f}±{D_obscuration_err:.2f}m',
+        f'Amp={ampl_fit:.2f}±{ampl_err:.2f}',
+        fontsize=10
+    )
+
+
+    # Add one colorbar for all
+    fig.colorbar(im0, ax=axs, orientation='vertical', fraction=0.04, pad=0.04).set_label('Color scale is the same')
+
+    plt.savefig('test.png')
+    plt.show()
+
+    return r_rad_2d
 
 
 def fit_empirical_fwhm(frame, plot_string):
@@ -246,8 +482,8 @@ def fit_simmed_psfs(cookie_cut_out_sci, plot_string, fp_mask, x_center_final_ove
     INPUTS:
     cookie_cut_out_sci: 2D array of the science frame
     plot_string: string to add to the plot file name
-    x_center_final_oversamp: final x-center of the PSF (i.e., no more centroiding will be done here)
-    y_center_final_oversamp: final y-center of the PSF
+    x_center_final_oversamp: final x-center of the PSF (i.e., no more centroiding will be done here); in coordinates of the entire array
+    y_center_final_oversamp: final y-center of the PSF; in coordinates of the entire array
     fac_oversamp: oversampling factor
 
     OUTPUTS:
@@ -515,13 +751,22 @@ def strehl_grid(file_name, fp_mask):
         #ipdb.set_trace()
         # subtract ScopeSim PSFs to see the residals (note we're still using the cookie cut-out)
         # note that the 'final' coords are the 'guessed' ones above; the PSF will in general be off-center
+        '''
         best_fit_cutout_oversamp = fit_simmed_psfs(cookie_cut_out_sci_oversamp, 
                                         plot_string=f'num_coord_{num_coord}', 
                                         fp_mask=fp_mask,
                                         x_center_final_oversamp=x_pos_pix_oversamp[num_coord], 
                                         y_center_final_oversamp=y_pos_pix_oversamp[num_coord], 
                                         fac_oversamp=oversample_factor)
-        #canvas_grid_data[idx_y_start:idx_y_end, idx_x_start:idx_x_end] = resids_cutout_oversamp
+        '''
+
+        best_fit_analytical_oversamp = fit_analytical_psfs(cookie_cut_out_sci_oversamp, 
+                                        plot_string=f'num_coord_{num_coord}', 
+                                        x_center_final_cookie_oversamp=x_center_pix_gaussian_best_fit_oversamp, 
+                                        y_center_final_cookie_oversamp=y_center_pix_gaussian_best_fit_oversamp, 
+                                        wavel=3.8e-6,
+                                        pixel_scale_mas=5.47,
+                                        fac_oversamp=oversample_factor)
 
         
         # resample back to the original size
