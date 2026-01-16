@@ -115,12 +115,13 @@ def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shap
     return intensity_1d_full[valid_mask]
 
 
-def fit_analytical_psfs(cookie_cut_out_sci, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, wavel, pixel_scale_mas=6.0):
+def fit_analytical_psfs(cookie_cut_out_sci, filter_name, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, wavel, pixel_scale_mas):
     '''
     Fit a 2D analytical PSF to a given frame.
 
     INPUTS:
     cookie_cut_out_sci: 2D array of the cookie cut our from the full science frame
+    filter_name: name of the observing filter
     plot_string: string to add to the plot file name
     x_center_final_cookie_oversamp: final x-center of the PSF (i.e., no more centroiding will be done here); in coordinates of the cookie cut-out
     y_center_final_cookie_oversamp: final y-center of the PSF; in coordinates of the cookie cut-out
@@ -218,6 +219,10 @@ def fit_analytical_psfs(cookie_cut_out_sci, plot_string, x_center_final_cookie_o
     ipdb.set_trace()
 
     # Print results
+    print('--------------------------------')
+    print("Fixed observing parameters:")
+    print(f"filter: {filter_name}, λ={wavel*1e6:.2f}μm, ps={pixel_scale_mas:.2f}mas", )
+    print('--------------------------------')
     print("Best-fit parameters:")
     print(f"D_aperture = {D_aperture_fit:.2f} ± {D_aperture_err:.2f} meters")
     print(f"D_obscuration = {D_obscuration_fit:.2f} ± {D_obscuration_err:.2f} meters")
@@ -601,13 +606,16 @@ def fit_simmed_psfs(cookie_cut_out_sci, plot_string, fp_mask, x_center_final_ove
     return psf_perfect_cutout_best_fit
 
 
-def strehl_grid(file_name, fp_mask):
+def strehl_grid(file_name, fp_mask, filter_name=None, wavel=None, pixel_scale_mas=None):
     '''
     Find the Strehl ratio of a grid of PSFs
     
     INPUTS:
     file_name: name of the file containing the grid of PSFs
     fp_mask: focal plane mask (string)
+    filter_name: name of the observing filter
+    wavel: wavelength in meters
+    pixel_scale_mas: pixel scale in mas
 
     OUTPUTS:
     None; writes out plots and data
@@ -630,6 +638,7 @@ def strehl_grid(file_name, fp_mask):
     '''
 
     # coordinate starting guesses for the grid
+    ## TODO: MIGRATE THIS INTO A CONFIG FILE
     coords_guesses_all = np.array([(1804, 243), (1804, 633), (1804, 1029), (1804, 1418), (1804, 1810), \
         (1415, 241), (1419, 1808), \
             (1023, 241), (1025, 1810), \
@@ -659,9 +668,7 @@ def strehl_grid(file_name, fp_mask):
     coords_guesses_y_all_oversamp = coords_guesses_y_all * oversample_factor
     coords_guesses_all_oversamp = np.vstack((coords_guesses_y_all_oversamp, coords_guesses_x_all_oversamp)).T
 
-    # find the grid centroids
-
-    # ... using photutils built-in fcn
+    # find the PSF centroids, first pass
     x_pos_pix_oversamp, y_pos_pix_oversamp = centroid_sources(grid_data_oversamp, 
                                     xpos=coords_guesses_x_all_oversamp, 
                                     ypos=coords_guesses_y_all_oversamp, 
@@ -678,7 +685,7 @@ def strehl_grid(file_name, fp_mask):
     raw_cutout_size = 20 * oversample_factor
     num_coord = 0
 
-    cookie_cut_out_best_fit_list = []
+    #cookie_cut_out_best_fit_list = []
     coord_x_array = np.zeros(len(y_pos_pix_oversamp))
     coord_y_array = np.zeros(len(y_pos_pix_oversamp))
     fwhm_x_pix_array = np.zeros(len(y_pos_pix_oversamp))
@@ -727,9 +734,8 @@ def strehl_grid(file_name, fp_mask):
         ])
 
 
-        # find FWHM of Gaussian-best-fit to empirical, and get the best centroid on the PSF
-        # correct for fact we 
-        #ipdb.set_trace()
+        # find FWHM of Gaussian-best-fit to empirical, and 
+        # centroid the PSF, second pass
         x_center_pix_gaussian_best_fit_oversamp, y_center_pix_gaussian_best_fit_oversamp, fwhm_x_pix_gaussian_best_fit_oversamp, fwhm_y_pix_gaussian_best_fit_oversamp, amplitude_counts_gaussian_best_fit_oversamp = fit_gaussian_fwhm(cookie_cut_out_sci_oversamp, 
                                                                                                         coords_guess=coords_guess_this_cutout, 
                                                                                                         plot_string=f'num_coord_{num_coord}', 
@@ -748,10 +754,8 @@ def strehl_grid(file_name, fp_mask):
         '''
 
  
-        #ipdb.set_trace()
-        # subtract ScopeSim PSFs to see the residals (note we're still using the cookie cut-out)
-        # note that the 'final' coords are the 'guessed' ones above; the PSF will in general be off-center
         '''
+        # fit a ScopeSim PSF
         best_fit_cutout_oversamp = fit_simmed_psfs(cookie_cut_out_sci_oversamp, 
                                         plot_string=f'num_coord_{num_coord}', 
                                         fp_mask=fp_mask,
@@ -760,12 +764,14 @@ def strehl_grid(file_name, fp_mask):
                                         fac_oversamp=oversample_factor)
         '''
 
+        # fit an analytical PSF
         best_fit_analytical_oversamp = fit_analytical_psfs(cookie_cut_out_sci_oversamp, 
+                                        filter_name=filter_name,
                                         plot_string=f'num_coord_{num_coord}', 
                                         x_center_final_cookie_oversamp=x_center_pix_gaussian_best_fit_oversamp, 
                                         y_center_final_cookie_oversamp=y_center_pix_gaussian_best_fit_oversamp, 
-                                        wavel=3.8e-6,
-                                        pixel_scale_mas=5.47,
+                                        wavel=wavel,
+                                        pixel_scale_mas=pixel_scale_mas,
                                         fac_oversamp=oversample_factor)
 
         
@@ -789,7 +795,7 @@ def strehl_grid(file_name, fp_mask):
         '''
 
         # update arrays/lists
-        cookie_cut_out_best_fit_list.append(best_fit_cutout_oversamp)
+        #cookie_cut_out_best_fit_list.append(best_fit_cutout_oversamp)
 
         coord_x_array[num_coord] = x_center_pix_gaussian_best_fit_normsamp
         coord_y_array[num_coord] = y_center_pix_gaussian_best_fit_normsamp
@@ -835,9 +841,31 @@ def main():
     file_name = stem + 'strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_Br_alpha_clocking_angle_0.fits'
     #file_name = stem + 'strehl/IMG_OPT_04_wcu_focal_mask_pinhole_lm_pupil_mask_open_filter_Br_alpha_clocking_angle_0.fits'
 
+    # dictionary of pixel scales
+    pixel_scales = {'img_lm': 5.47, 'img_n': 6.79}
+
+    # dictionary of observing filters and their average wavelengths
+    observing_filters_lm = {
+        'Lp': 3.82e-6, 
+        'short-L': 3.29e-6, 
+        'L_spec': 3.56e-6, 
+        'Mp': 4.76e-6, 
+        'M_spec': 4.87e-6,
+        'Br_alpha': 4.06e-6, 
+        'Br_alpha_ref': 3.93e-6, 
+        'PAH_3.3': 3.31e-6, 
+        'PAH_3.3_ref': 3.45e-6, 
+        'CO_1-0_ice': 4.66e-6,
+        'CO_ref': 4.94e-6, 
+        'H2O-ice': 3.09e-6
+    }
 
     # check plate scale 
-    strehl_grid(file_name, fp_mask='grid_lm') ## ## TODO: ADD OTHER THIGNS TO ARGUMENT, LIKE OBSERVING FILTER, ETC., TO MAKE EVERYTHING DOWNSTREAM CONSISTENT
+    # Pass both the filter name (key) and wavelength (value) as separate parameters
+    filter_name = 'Br_alpha'
+    wavel = observing_filters_lm[filter_name]
+    
+    strehl_grid(file_name, fp_mask='grid_lm', filter_name=filter_name, wavel=wavel, pixel_scale_mas=pixel_scales['img_lm'])
 
 
 if __name__ == "__main__":
