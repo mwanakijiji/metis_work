@@ -193,7 +193,8 @@ def main():
     cmd = sim.UserCommands(use_instrument='METIS', set_modes=['wcu_img_lm'])
     metis = sim.OpticalTrain(cmd)
     lm_filters_list = metis["filter_wheel"].filters.keys() # filters
-    lm_fpmasks_list = ["pinhole_lm", "grid_lm"] # FP masks
+    #lm_fpmasks_list = ["pinhole_lm", "grid_lm"] # FP masks
+    lm_fpmasks_list = ["grid_lm"] # FP masks
 
     # same for N band
     cmd = sim.UserCommands(use_instrument='METIS', set_modes=['wcu_img_n'])
@@ -202,7 +203,8 @@ def main():
     n_fpmasks_list = ["pinhole_n"] # FP masks
 
     # clocking angles for the PSF
-    angle_array = [0, 45, 60]
+    #angle_array = [0, 45, 60]
+    angle_array = [0]
 
     # just one mask for now (Open)
     pp_mask = metis['pupil_masks'].meta['current_mask'] # PP mask
