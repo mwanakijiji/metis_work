@@ -294,8 +294,9 @@ def fit_analytical_psfs(cookie_cut_out_sci, filter_name, plot_string, x_center_f
     # Add one colorbar for all
     fig.colorbar(im0, ax=axs, orientation='vertical', fraction=0.04, pad=0.04).set_label('Color scale is the same')
 
-    plt.savefig('test.png')
-    plt.show()
+    plt.savefig(f'figs_dump/test.png')
+    print(f"Saved test.png to figs_dump/")
+    plt.close()
 
     return r_rad_2d
 
@@ -350,11 +351,10 @@ def fit_empirical_fwhm(frame, plot_string):
     # save the plot to file
     plot_filename = 'empirical_fwhm_' + plot_string + '.png'
     #ipdb.set_trace()
-    plt.savefig(plot_filename, bbox_inches='tight')
+    plt.savefig(f"figs_dump/{plot_filename}", bbox_inches='tight')
+    plt.close()
     print(f'Figure saved as {plot_filename}')
     #plt.show()
-
-    plt.close()
 
     return height_y, width_x
 
@@ -401,7 +401,9 @@ def fyi_plot_centroiding(array_to_plot, coords_to_plot, title_string=None, zscal
     plt.imshow(array_to_plot, origin='lower', vmin=vmin, vmax=vmax, cmap='gray')
     plt.scatter(coords_to_plot[:, 1], coords_to_plot[:, 0], color='red', s=10)
     plt.title(title_string)
-    plt.show()
+    plot_filename = f"fyi_plot_centroiding_{title_string}.png"
+    plt.savefig(f"figs_dump/{plot_filename}", bbox_inches='tight')
+    print(f"Saved {plot_filename} to figs_dump/")
     plt.close()
 
 
@@ -437,7 +439,6 @@ def fit_gaussian_fwhm(cookie_cut_out_sci, obs_filter, fp_mask, pp_mask, coords_g
     print(f'Pupil plane mask: {pp_mask}')
     print(f'Gaussian-based Strehl: {gaussian_based_strehl:.2f}')
 
-    ipdb.set_trace()
 
     # plot four subplots: 2D science, 2D best-fit, 2D residuals, and 1D overplotting of a cross-section of the science and best-fit
     plt.clf()
@@ -480,7 +481,7 @@ def fit_gaussian_fwhm(cookie_cut_out_sci, obs_filter, fp_mask, pp_mask, coords_g
     #plt.show()
     # Save the plot to file with num_coord as a 2-digit zero-padded string
     plot_filename = f'psf_gaussian_best_fit_'+plot_string+'.png'
-    plt.savefig(plot_filename, bbox_inches='tight')
+    plt.savefig(f"figs_dump/{plot_filename}", bbox_inches='tight')
     print(f'Figure saved as {plot_filename}')
     plt.close()
     #ipdb.set_trace()
@@ -519,7 +520,6 @@ def fit_simmed_psfs(cookie_cut_out_sci, plot_string, obs_filter, fp_mask, pp_mas
     wcu.set_fpmask(fp_mask)
 
     #pp_mask = metis['pupil_masks'].meta['current_mask'] # just one mask for now (Open)
-    ipdb.set_trace()
 
     metis.effects.pprint_all()
 
@@ -612,7 +612,9 @@ def fit_simmed_psfs(cookie_cut_out_sci, plot_string, obs_filter, fp_mask, pp_mas
     plt.colorbar(shrink=0.7, label="Counts")
     
     plt.tight_layout()
-    plt.show()
+    plot_filename = "junk_psf_perfect_cutout_best_fit.png"
+    plt.savefig(f"figs_dump/{plot_filename}", bbox_inches="tight")
+    print(f"Saved {plot_filename}")
 
     return psf_perfect_cutout_best_fit
 
@@ -738,8 +740,10 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
         plt.scatter(x_scatter, y_scatter, color='red', s=10)
         plt.title(f'Cookie cut-out sci at coord (y,x): {y_pos_pix_oversamp[num_coord]}, {x_pos_pix_oversamp[num_coord]}')
         plt.colorbar()
-        plt.show()
+        plot_filename = f"junk_cookie_cut_out_sci_oversamp_{num_coord}.png"
+        plt.savefig(f"figs_dump/{plot_filename}", bbox_inches="tight")
         plt.close()
+        print(f"Saved {plot_filename} to figs_dump/")
         #ipdb.set_trace()
 
         # Adjust the centroid coordinate for the cut-out: subtract the cutout starting indices to get cutout-relative coordinates
@@ -830,7 +834,6 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
         #angle_theta_array[num_coord] = angle_theta
 
 
-    ipdb.set_trace()
     # plot the grid_data and annotate it with the best-fit fwhm in x and y for each PSF
     plt.clf()
     plt.imshow(grid_data, origin='lower', cmap='gray_r')
@@ -846,10 +849,11 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
             fontsize=7, rotation=20
         )
     plt.title('FWHM in x and y (pix), amplitude (counts)')
-    plt.show()
+    plot_file_name = f"fyi_plot_fwhm_and_amp.png"
+    plt.savefig(f"figs_dump/{plot_file_name}", bbox_inches="tight")
+    print(f"Saved {plot_file_name} to figs_dump/")
     plt.close()
 
-    ipdb.set_trace()
 
     return
 
