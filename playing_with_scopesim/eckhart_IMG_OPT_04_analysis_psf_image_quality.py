@@ -27,6 +27,7 @@ import ipdb
 import scopesim as sim
 from skimage import measure
 from scipy.special import j1
+import yaml
 
 
 def jinc(x):
@@ -391,7 +392,7 @@ def fit_gaussian(frame, center_guess):
     return fitted_array, x_center_pix, y_center_pix, fwhm_x_pix, fwhm_y_pix, sigma_x_pix, sigma_y_pix, angle_theta_deg, amplitude_counts
 
 
-def fyi_plot_centroiding(array_to_plot, coords_to_plot, zscale=False):
+def fyi_plot_centroiding(array_to_plot, coords_to_plot, title_string=None, zscale=False):
     # INSERT_YOUR_CODE
 
     interval = ZScaleInterval()
@@ -399,6 +400,7 @@ def fyi_plot_centroiding(array_to_plot, coords_to_plot, zscale=False):
     plt.clf()
     plt.imshow(array_to_plot, origin='lower', vmin=vmin, vmax=vmax, cmap='gray')
     plt.scatter(coords_to_plot[:, 1], coords_to_plot[:, 0], color='red', s=10)
+    plt.title(title_string)
     plt.show()
     plt.close()
 
@@ -615,7 +617,7 @@ def fit_simmed_psfs(cookie_cut_out_sci, plot_string, obs_filter, fp_mask, pp_mas
     return psf_perfect_cutout_best_fit
 
 
-def strehl_grid(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel_scale_mas=None, fit_simmed_psf=False, fit_analytical_psf=False, psfs_subset='all'):
+def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel_scale_mas=None, fit_simmed_psf=False, fit_analytical_psf=False, psfs_subset='all', config_file_name=None):
     '''
     Find the Strehl ratio of a grid of PSFs
     
@@ -629,6 +631,8 @@ def strehl_grid(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
     fit_simmed_psf: whether to fit a ScopeSim-simulated PSF
     fit_analytical_psf: whether to fit an analytical PSF
     psfs_subset: 'all' to process all PSFs, or an integer to process only the first N PSFs
+    config_file_name: name of the configuration file containing the coordinates of the PSFs
+
 
     OUTPUTS:
     None; writes out plots and data
@@ -640,26 +644,15 @@ def strehl_grid(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
     grid_data = grid_frame[1].data
     grid_header = grid_frame[1].header
 
-    '''
-    (1804, 243), (1804, 633), (1804, 1029), (1804, 1418), (1804, 1810), 
-    (1415, 241), (1419, 1808), 
-    (1023, 241), (1025, 1810), 
-    (632, 240), (630, 1810), 
-    (240, 242), (240, 632), (238, 1024), (242, 1418), (240, 1808), (1273, 778), (1273, 1024), (1273, 1273),
-    (1024, 778), (1024, 1023), (1024, 1273),
-    (776, 776), (776, 1026), (776, 1273)
-    '''
-
-    # coordinate starting guesses for the grid
-    ## TODO: MIGRATE THIS INTO A CONFIG FILE
-    coords_guesses_all = np.array([(1804, 243), (1804, 633), (1804, 1029), (1804, 1418), (1804, 1810), \
-        (1415, 241), (1419, 1808), \
-            (1023, 241), (1025, 1810), \
-                (632, 240), (630, 1810), \
-                    (240, 242), (240, 632), (238, 1024), (242, 1418), (240, 1808), (1273, 778), (1273, 1024), (1273, 1273),\
-                        (1027, 780), (1024, 1023), (1024, 1273), \
-                            (776, 776), (776, 1026), (776, 1273)])
-
+    # read in coordinate guesses
+    if config_file_name is None:
+        raise ValueError("config_file_name is required to load PSF coordinates.")
+    with open(config_file_name, "r") as config_file:
+        config_data = yaml.safe_load(config_file)
+    coords_entries = config_data.get("coordinates", [])
+    if not coords_entries:
+        raise ValueError(f"No coordinates found in {config_file_name}")
+    coords_guesses_all = np.array([(entry["y"], entry["x"]) for entry in coords_entries])
     coords_guesses_y_all = coords_guesses_all[:, 0]
     coords_guesses_x_all = coords_guesses_all[:, 1]
 
@@ -692,7 +685,7 @@ def strehl_grid(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
     coords_centroided_all_oversamp = np.vstack((y_pos_pix_oversamp, x_pos_pix_oversamp)).T
 
     # FYI
-    #fyi_plot_centroiding(grid_data_oversamp, coords_centroided_all_oversamp, zscale=False)
+    #fyi_plot_centroiding(grid_data_oversamp, coords_centroided_all_oversamp, title_string="PSF first guesses", zscale=False)
 
     # make a cut-out of each psf and make a best-fit 2D Gaussian
     raw_cutout_size = 20 * oversample_factor
@@ -863,7 +856,7 @@ def strehl_grid(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
 
 def main():
 
-    stem = '/podman-share/metis_work/playing_with_scopesim/IMG_04_sample_input_data/'
+    stem = '/podman-share/metis_work/playing_with_scopesim/'
 
     # dictionary of observing filters and their average wavelengths
     observing_filters_lm = {
@@ -887,51 +880,60 @@ def main():
     # pp mask choices
     # 'APP-LMS', 'APP-LM', 'CLS-LMS', 'CLS-LM', 'CLS-N', 'PPS-LMS', 'PPS-LM', 'PPS-N', 'PPS-CFO2', 'RLS-LMS', 'RLS-LM', 'SPM-LMS', 'SPM-LM', 'SPM-N', 'open'
 
+    config_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
+
     # file of sample data
-    file_name = stem + 'strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_Br_alpha_clocking_angle_0.fits'
+    file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_Br_alpha_clocking_angle_0.fits'
     # Pass both the filter name (key) and wavelength (value) as separate parameters
     filter_name = 'Br_alpha'
-    strehl_grid(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1)
+    config_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
+    strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_file_name)
 
     # rinse and repeat
-    file_name = stem + 'strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_Br_alpha_ref_clocking_angle_0.fits'
+    file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_Br_alpha_ref_clocking_angle_0.fits'
     filter_name = 'Br_alpha_ref'
-    strehl_grid(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1)
+    config_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
+    strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_file_name)
 
     # rinse and repeat
     #file_name = stem + 'strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_CO_1-0_ice_clocking_angle_0.fits'
     #filter_name = 'CO_1-0_ice'
-    #strehl_grid(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1)
+    #config_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
+    #strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_file_name)
 
     # rinse and repeat
-    file_name = stem + 'strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_H2O-ice_clocking_angle_0.fits'
+    file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_H2O-ice_clocking_angle_0.fits'
     filter_name = 'H2O-ice'
-    strehl_grid(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1)
+    config_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
+    strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_file_name)
 
     # rinse and repeat
     #file_name = stem + 'strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_L_spec_clocking_angle_0.fits'
     #filter_name = 'L_spec'
-    #strehl_grid(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1)
+    #config_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
+    #strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_file_name)
 
     # rinse and repeat
-    file_name = stem + 'strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_Lp_clocking_angle_0.fits'
+    file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_Lp_clocking_angle_0.fits'
     filter_name = 'Lp'
-    strehl_grid(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1)
+    config_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
+    strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_file_name)
 
     # rinse and repeat
-    file_name = stem + 'strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_PAH_3.3_clocking_angle_0.fits'
+    file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_PAH_3.3_clocking_angle_0.fits'
     filter_name = 'PAH_3.3'
-    strehl_grid(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1)
+    config_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
+    strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_file_name)
 
     # rinse and repeat
-    file_name = stem + 'strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_PAH_3.3_ref_clocking_angle_0.fits'
+    file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_PAH_3.3_ref_clocking_angle_0.fits'
     filter_name = 'PAH_3.3_ref'
-    strehl_grid(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1)
+    strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_file_name)
 
     # rinse and repeat
-    file_name = stem + 'strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_short-L_clocking_angle_0.fits'
+    file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_short-L_clocking_angle_0.fits'
     filter_name = 'short-L'
-    strehl_grid(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1)
+    strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_file_name)
 
 
 if __name__ == "__main__":
