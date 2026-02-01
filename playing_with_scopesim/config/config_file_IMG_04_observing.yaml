@@ -17,5 +17,6 @@ pixel_scales:
   img_n: 6.79
 
 D_aperture:
-  full: 39.0
-  D_obscuration: 11.5
+  full: 36.876
+  D_obscuration: 10.053
+# p. 8 in E-REP-ULG-MET-1033 1-0 01/08/2022

@@ -83,10 +83,12 @@ def gaussian_2d(xy_mesh, amplitude, xo, yo, sigma_x_pix, sigma_y_pix, theta):
     return g.ravel()
 
 
-def strehl_from_annular_aperture(cookie_cut_out_sci, filter_name, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, config_observing, fac_oversamp):
+def strehl_from_annular_aperture_fixed(cookie_cut_out_sci, filter_name, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, config_observing, fac_oversamp):
     '''
     Calculate the Strehl ratio from an annular aperture.
     '''
+    logging.info('--------------------------------')
+    logging.info('Calculating Strehl from annular aperture, with fixed aperture radii')
 
     r_rad_2d = angle_from_center_2d(array_passed_in=cookie_cut_out_sci, 
                     y_center=y_center_final_cookie_oversamp, 
@@ -100,21 +102,21 @@ def strehl_from_annular_aperture(cookie_cut_out_sci, filter_name, plot_string, x
     size = cookie_cut_out_sci.shape[0] 
     baseline_shape = (size, size)
 
-   # Flatten both arrays first
+    # Flatten both arrays first
     r_rad_1d_full = r_rad_2d.flatten()
     test_empirical_1d_full = test_empirical_2d.flatten()
 
     # Create a SINGLE mask for valid (non-NaN, finite) data points
     # Apply the SAME mask to both arrays to keep them aligned
-    mask = np.isfinite(test_empirical_1d_full) & np.isfinite(r_rad_1d_full)
+    mask_valid = np.isfinite(test_empirical_1d_full) & np.isfinite(r_rad_1d_full)
 
     # Apply the SAME mask to both arrays
-    r_rad_1d = r_rad_1d_full[mask]
-    test_empirical_1d = test_empirical_1d_full[mask]
+    r_rad_1d = r_rad_1d_full[mask_valid]
+    test_empirical_1d = test_empirical_1d_full[mask_valid]
 
-    valid_mask = mask.copy()
+    valid_mask = mask_valid.copy()
 
-    
+    # generate a fixed model PSF (output in 1D, for vestigial reasons)
     intensity_1d_full_1d = model_for_fit_fixed(r_rad_1d, 
                                                 D_aperture=config_observing['D_aperture']['full'], 
                                                 D_obscuration=config_observing['D_aperture']['D_obscuration'], 
@@ -122,11 +124,68 @@ def strehl_from_annular_aperture(cookie_cut_out_sci, filter_name, plot_string, x
                                                 baseline_shape=baseline_shape, 
                                                 valid_mask=valid_mask, 
                                                 wavel=config_observing['observing_filters_lm'][filter_name])
-    
-    model_annular_1d_full = intensity_1d_full_1d.reshape(baseline_shape)
-    model_annular_2d_full_norm = (model_annular_1d_full / np.sum(model_annular_1d_full)) * np.sum(cookie_cut_out_sci)
+    model_annular_2d_full = intensity_1d_full_1d.reshape(baseline_shape)
 
-    strehl_from_fixed_annular_aperture = np.max(model_annular_2d_full_norm) / np.max(cookie_cut_out_sci)
+    # normalize the model PSF to the empirical PSF, so that they have the same total power
+    model_annular_2d_full_norm = (model_annular_2d_full / np.sum(model_annular_2d_full)) * np.sum(cookie_cut_out_sci)
+
+    # make mask corresponding to first dark ring for an Airy (but not annular) aperture, so as to see how much power is in the central region
+    ipdb.set_trace()
+    dark_ring_loc_rad = 1.22 * (config_observing['observing_filters_lm'][filter_name] / config_observing['D_aperture']['full'])
+    mask_central = r_rad_2d < dark_ring_loc_rad
+
+    # strehl given the max values of the normalized model and empirical PSF
+    strehl_from_fixed_annular_aperture_max = np.max(cookie_cut_out_sci) / np.max(model_annular_2d_full_norm)
+
+    logging.info(f"Strehl from max val, of empirical and model annular aperture: {strehl_from_fixed_annular_aperture_max}")
+
+    # strehl given the enclosed power in the central region
+    model_annular_2d_full_norm_masked = model_annular_2d_full_norm * mask_central
+    test_empirical_2d_masked = test_empirical_2d * mask_central
+    strehl_from_fixed_annular_aperture_power_enclosed = np.sum(test_empirical_2d_masked) / np.sum(model_annular_2d_full_norm_masked)
+
+    logging.info(f"Strehl from enclosed power in central region, of empirical and model annular aperture: {strehl_from_fixed_annular_aperture_power_enclosed}")
+
+    test_factor = np.copy(strehl_from_fixed_annular_aperture_power_enclosed) # use this as a normalization factor downstream
+    ipdb.set_trace()
+
+    ############################################################
+    # another method: Fourier transform and use the ratios of the MTF
+    pad_width = size // 2
+    model_annular_2d_full_norm_masked_padded = np.pad(
+        model_annular_2d_full_norm_masked,
+        pad_width=pad_width,
+        mode="constant",
+        constant_values=0.0
+    )
+    cookie_cut_out_sci_masked_padded = np.pad(
+        cookie_cut_out_sci,
+        pad_width=pad_width,
+        mode="constant",
+        constant_values=0.0
+    )
+    ipdb.set_trace()
+    fft_model = np.fft.fftshift(np.fft.fft2(model_annular_2d_full_norm_masked_padded))
+    fft_model_power = np.abs(fft_model)
+    fft_empirical = np.fft.fftshift(np.fft.fft2(cookie_cut_out_sci_masked_padded))
+    fft_empirical_power = np.abs(fft_empirical)
+    ipdb.set_trace()
+    # Build frequency grid (cycles per radian) and apply diffraction cutoff
+    rad_per_pix = ((config_observing["pixel_scales"]["img_lm"] / 1000.0) / 206265.0) / fac_oversamp
+    n_fft = model_annular_2d_full_norm_masked_padded.shape[0]
+    fy = np.fft.fftshift(np.fft.fftfreq(n_fft, d=rad_per_pix))
+    fx = np.fft.fftshift(np.fft.fftfreq(n_fft, d=rad_per_pix))
+    fx_grid, fy_grid = np.meshgrid(fx, fy)
+    f_r = np.sqrt(fx_grid**2 + fy_grid**2)
+    cutoff_freq = config_observing["D_aperture"]["full"] / config_observing["observing_filters_lm"][filter_name] ## ## TODO: IS THIS RIGHT?
+    mtf_cutoff_mask = f_r <= cutoff_freq
+    ipdb.set_trace()
+    test_model = fft_model_power * mtf_cutoff_mask
+    test_empirical = fft_empirical_power * mtf_cutoff_mask
+
+    # normalize the powers so that zero freq is equal
+    test_model_norm = test_model * np.nanmax(test_empirical) / np.nanmax(test_model)
+    strehl_from_fixed_annular_aperture_mtf = np.sum(test_empirical) / np.sum(test_model_norm)
     ipdb.set_trace()
 
     # plots subplots of the empirical, normalized model, and residuals
@@ -142,14 +201,20 @@ def strehl_from_annular_aperture(cookie_cut_out_sci, filter_name, plot_string, x
     plt.subplot(1, 3, 3)
     plt.imshow(cookie_cut_out_sci - model_annular_2d_full_norm, origin='lower', cmap='gray_r')
     plt.title('Residuals')
-    plt.suptitle(f"Fixed annular aperture\Fixed: D_aperture={config_observing['D_aperture']['full']:.2f} m, D_obscuration={config_observing['D_aperture']['D_obscuration']:.2f} m\nStrehl: {strehl_from_fixed_annular_aperture:.2f}")
+    plt.suptitle(
+        f"Fixed annular aperture\n"
+        f"Fixed: D_aperture={config_observing['D_aperture']['full']:.2f} m, "
+        f"D_obscuration={config_observing['D_aperture']['D_obscuration']:.2f} m\n"
+        f"Strehl from max: {strehl_from_fixed_annular_aperture_max:.2f}\n"
+        f"Strehl from enclosed power: {strehl_from_fixed_annular_aperture_power_enclosed:.2f}"
+    )
     plt.colorbar()
     plt.show()
     #plt.savefig(f'intensity_1d_full_2d_{plot_string}.png')
 
     ipdb.set_trace()
 
-    return None
+    return strehl_from_fixed_annular_aperture_max, strehl_from_fixed_annular_aperture_power_enclosed
 
 # Define a wrapper function for curve_fit
 # curve_fit expects: func(x, *params) where x is the independent variable
@@ -979,7 +1044,7 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, fit_simmed_psf=Fa
         # strehl from an analytical PSF with fixed parameters: D_aperture, D_obscuration, and ampl
         if fit_annular_aperture_fixed:
             logging.info(f'Calculating Strehl from annular aperture {num_coord} of {num_psfs_to_process}')
-            strehl_annular_aperture = strehl_from_annular_aperture(cookie_cut_out_sci_oversamp, 
+            strehl_annular_aperture = strehl_from_annular_aperture_fixed(cookie_cut_out_sci_oversamp, 
                                             filter_name=filter_name,
                                             plot_string=f'num_coord_{num_coord}', 
                                             x_center_final_cookie_oversamp=x_center_pix_gaussian_best_fit_oversamp, 
