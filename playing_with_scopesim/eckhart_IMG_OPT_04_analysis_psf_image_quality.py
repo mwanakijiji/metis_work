@@ -13,6 +13,8 @@ import os
 from scipy.stats import norm
 from scipy.optimize import curve_fit
 from scipy.ndimage import zoom, shift, center_of_mass
+import datetime
+import logging
 
 from matplotlib import pyplot as plt
 from matplotlib import colors
@@ -640,6 +642,8 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
     None; writes out plots and data
     '''
 
+    logging.info(f'Processing \n\tdata file: {file_name} \n\tfilter: {filter_name} \n\tconfig file: {config_file_name}')
+
     # return the locations and other data for each PSF
 
     grid_frame = fits.open(file_name)
@@ -648,12 +652,13 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
 
     # read in coordinate guesses
     if config_file_name is None:
-        raise ValueError("config_file_name is required to load PSF coordinates.")
+        logging.error("config_file_name is required to load PSF coordinates.")
     with open(config_file_name, "r") as config_file:
         config_data = yaml.safe_load(config_file)
+        logging.info(f'Config file with PSF coord guesses: {config_file_name}')
     coords_entries = config_data.get("coordinates", [])
     if not coords_entries:
-        raise ValueError(f"No coordinates found in {config_file_name}")
+        logging.error(f"No coordinates found in {config_file_name}")
     coords_guesses_all = np.array([(entry["y"], entry["x"]) for entry in coords_entries])
     coords_guesses_y_all = coords_guesses_all[:, 0]
     coords_guesses_x_all = coords_guesses_all[:, 1]
@@ -669,6 +674,7 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
 
     # oversample the image to find centroids, FWHM
     oversample_factor = 4
+    logging.info(f'PSF oversampling factor: {oversample_factor}')
     # Step 1: Oversample the PSFs by a factor of 4 using bicubic interpolation
     grid_data_oversamp = zoom(grid_data, oversample_factor, order=3)
     #psf_simmed_oversamp = zoom(psf_simmed, oversample_factor, order=3)
@@ -677,6 +683,7 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
     coords_guesses_all_oversamp = np.vstack((coords_guesses_y_all_oversamp, coords_guesses_x_all_oversamp)).T
 
     # find the PSF centroids, first pass
+    logging.info('Finding PSF centroids, first pass')
     x_pos_pix_oversamp, y_pos_pix_oversamp = centroid_sources(grid_data_oversamp, 
                                     xpos=coords_guesses_x_all_oversamp, 
                                     ypos=coords_guesses_y_all_oversamp, 
@@ -691,6 +698,7 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
 
     # make a cut-out of each psf and make a best-fit 2D Gaussian
     raw_cutout_size = 20 * oversample_factor
+    logging.info(f'Raw PSF cutout size: {raw_cutout_size}')
     num_coord = 0
 
     #cookie_cut_out_best_fit_list = []
@@ -709,17 +717,22 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
 
     # Determine how many PSFs to process based on psfs_subset parameter
     total_psfs = len(y_pos_pix_oversamp)
+    logging.info(f'Total PSFs: {total_psfs}')
     if psfs_subset == 'all':
         num_psfs_to_process = total_psfs
+        logging.info(f'Processing all {total_psfs} PSFs')
     elif isinstance(psfs_subset, int):
         num_psfs_to_process = min(psfs_subset, total_psfs)  # Don't exceed available PSFs
+        logging.info(f'Processing {num_psfs_to_process} out of {total_psfs} PSFs')
     else:
+        logging.error(f"psfs_subset must be 'all' or an integer, got {psfs_subset}")
         raise ValueError(f"psfs_subset must be 'all' or an integer, got {psfs_subset}")
     
     print(f"Processing {num_psfs_to_process} out of {total_psfs} PSFs")
 
     # loop over each centroided PSF
     for num_coord in range(num_psfs_to_process):
+        logging.info(f'Processing PSF {num_coord} of {num_psfs_to_process}')
 
         # is a cutout even necessary?
         cookie_edge_size = raw_cutout_size
@@ -743,7 +756,7 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
         plot_filename = f"junk_cookie_cut_out_sci_oversamp_{num_coord}.png"
         plt.savefig(f"figs_dump/{plot_filename}", bbox_inches="tight")
         plt.close()
-        print(f"Saved {plot_filename} to figs_dump/")
+        logging.info(f"Saved {plot_filename} to figs_dump/")
         #ipdb.set_trace()
 
         # Adjust the centroid coordinate for the cut-out: subtract the cutout starting indices to get cutout-relative coordinates
@@ -755,6 +768,7 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
 
         # find FWHM and Streof Gaussian-best-fit to empirical, and 
         # centroid the PSF, second pass
+        logging.info(f'Fitting Gaussian to PSF {num_coord} of {num_psfs_to_process}')
         x_center_pix_gaussian_best_fit_oversamp, y_center_pix_gaussian_best_fit_oversamp, fwhm_x_pix_gaussian_best_fit_oversamp, fwhm_y_pix_gaussian_best_fit_oversamp, amplitude_counts_gaussian_best_fit_oversamp, gaussian_based_strehl = fit_gaussian_fwhm(cookie_cut_out_sci_oversamp, 
                                                                                                         obs_filter=filter_name,
                                                                                                         fp_mask=fp_mask,
@@ -779,6 +793,7 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
 
         # fit a ScopeSim PSF
         if fit_simmed_psf:
+            logging.info(f'Fitting ScopeSim PSF {num_coord} of {num_psfs_to_process}')
             best_fit_cutout_oversamp = fit_simmed_psfs(cookie_cut_out_sci_oversamp, 
                                             plot_string=f'num_coord_{num_coord}', 
                                             obs_filter=filter_name,
@@ -791,6 +806,7 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
 
         # fit an analytical PSF
         if fit_analytical_psf:
+            logging.info(f'Fitting analytical PSF {num_coord} of {num_psfs_to_process}')
             best_fit_analytical_oversamp = fit_analytical_psfs(cookie_cut_out_sci_oversamp, 
                                             filter_name=filter_name,
                                             plot_string=f'num_coord_{num_coord}', 
@@ -861,6 +877,25 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
 def main():
 
     stem = '/podman-share/metis_work/playing_with_scopesim/'
+
+    
+    now = datetime.datetime.now()
+    log_dir = stem + 'IMG_04_logs/'
+    log_file_name = log_dir + 'log_IMG_04_analysis_psf_image_quality_' + now.strftime('%Y-%m-%d_%H-%M-%S') + '.txt'
+
+    # Ensure log directory exists and force config in case handlers already set
+    os.makedirs(log_dir, exist_ok=True)
+    logging.basicConfig(
+        filename=log_file_name,
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        force=True
+    )
+
+    logging.info(f'Log file created at {now.strftime("%Y-%m-%d %H:%M:%S")}')
+    logging.info(f'Log file name: {log_file_name}')
+    logging.info(f'Log file directory: {stem + "IMG_04_logs/"}')
+    logging.info(f'Log file directory: {stem + "IMG_04_logs/"}')
 
     # dictionary of observing filters and their average wavelengths
     observing_filters_lm = {
