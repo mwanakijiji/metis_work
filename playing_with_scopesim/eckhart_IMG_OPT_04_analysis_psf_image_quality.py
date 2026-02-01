@@ -3,7 +3,8 @@ import numpy as np
 from astropy.io import fits
 from astropy import units as u
 from astropy.wcs import WCS
-from astropy.modeling.functional_models import AiryDisk2D
+from astropy.modeling.models import AiryDisk2D
+
 
 import scipy
 from scipy.spatial import distance_matrix
@@ -20,6 +21,7 @@ import logging
 from matplotlib import pyplot as plt
 from matplotlib import colors
 from astropy.visualization import ZScaleInterval
+from matplotlib.colors import LogNorm
 
 from photutils.centroids import centroid_sources, centroid_com, centroid_2dg
 
@@ -130,7 +132,7 @@ def total_power_comparison(cookie_cut_out_sci, x_center_pix_gaussian_best_fit_ov
     pixel_scale_mas: the pixel scale in mas
     fac_oversamp: the oversampling factor
     wavel: the wavelength in meters
-    D_aperture: the aperture diameter in meters
+    config_observing: config object containing the observing parameters
     plot_string: the string to add to the plot file name
 
     OUTPUTS:
@@ -138,25 +140,60 @@ def total_power_comparison(cookie_cut_out_sci, x_center_pix_gaussian_best_fit_ov
     total_power_gaussian_best_fit: the total power of the Gaussian-best-fit PSF
     '''
 
-    ipdb.set_trace()
     total_power_empirical = np.sum(cookie_cut_out_sci)
     # generate an Airy PSF with the same total power as the empirical PSF
     ## TODO: implement central obscuration
-    r_rad_2d = arcsecs_2d(array_passed_in=cookie_cut_out_sci, 
+    r_rad_2d = angle_from_center_2d(array_passed_in=cookie_cut_out_sci, 
                     y_center=y_center_pix_gaussian_best_fit_oversamp, 
                     x_center=x_center_pix_gaussian_best_fit_oversamp, 
                     pixel_scale_mas=pixel_scale_mas, 
-                    fac_oversamp=fac_oversamp)
-    
-    airy_psf = AiryDisk2D(amplitude=1, 
-                            x_0=x_center_pix_gaussian_best_fit_oversamp, 
-                            y_0=y_center_pix_gaussian_best_fit_oversamp, 
-                            radius=1.22 * (wavel / config_observing['D_aperture']['full']))
+                    fac_oversamp=fac_oversamp, 
+                    units='radians')
+    # radius of first zero in pixel space of cookie_cut_out_sci
+    rad_per_pix = ((pixel_scale_mas / 1000.0) / 206265.0) / fac_oversamp # radians per pixel, where pixels are those of the input array, not the detector
+    radius_pix = (1.22 * (wavel / float(config_observing['D_aperture']['full']))) / rad_per_pix
+    airy_model = AiryDisk2D(amplitude=1,
+                                x_0=x_center_pix_gaussian_best_fit_oversamp, 
+                                y_0=y_center_pix_gaussian_best_fit_oversamp, 
+                                radius=radius_pix)
+    yy, xx = np.mgrid[0:cookie_cut_out_sci.shape[0], 0:cookie_cut_out_sci.shape[1]]
+    airy_psf = airy_model(xx, yy)
+
+    # normalize the power to that of the empirical PSF
+    airy_psf = (airy_psf / np.sum(airy_psf)) * total_power_empirical
+
     # compare the peak fluxes
     peak_flux_empirical = np.max(cookie_cut_out_sci) ## ## TO DO: MAKE THIS ROBUST TO BAD PIXELS
-    peak_flux_gaussian_best_fit = np.max(cookie_cut_out_sci_gaussian_best_fit_oversamp)
-    return peak_flux_empirical, peak_flux_gaussian_best_fit
-    return total_power_empirical, total_power_gaussian_best_fit
+    peak_flux_airy = np.max(airy_psf)
+
+    logging.info(f'Strehl from comparison with Airy: {total_power_empirical}')
+
+    # make plots comparing the empirical and airy PSFs with log color scaling
+   
+    plt.figure(figsize=(15, 5))
+    # Empirical PSF
+    plt.subplot(1, 3, 1)
+    plt.imshow(cookie_cut_out_sci, origin='lower', cmap='gray_r', norm=LogNorm(vmin=np.maximum(np.nanmin(cookie_cut_out_sci[cookie_cut_out_sci > 0]), 1e-3), vmax=np.nanmax(cookie_cut_out_sci)))
+    plt.title('Empirical PSF')
+    plt.colorbar()
+    # Airy PSF
+    plt.subplot(1, 3, 2)
+    plt.imshow(airy_psf, origin='lower', cmap='gray_r', norm=LogNorm(vmin=np.maximum(np.nanmin(airy_psf[airy_psf > 0]), 1e-3), vmax=np.nanmax(airy_psf)))
+    plt.title('Airy PSF')
+    plt.colorbar()
+    plt.subplot(1, 3, 3)
+    plt.imshow(cookie_cut_out_sci - airy_psf, origin='lower', cmap='gray_r')
+    plt.title('Residuals')
+    plt.colorbar()
+
+    plot_filename = f'total_power_comparison_{plot_string}.png'
+    plt.show()
+    plt.savefig(plot_filename)
+    logging.info(f'Saved {plot_filename} to figs_dump/')
+
+    strehl = peak_flux_empirical / peak_flux_airy
+
+    return strehl
 
 def airy_disk(wavel, D_aperture, ampl=1):
     '''
@@ -184,7 +221,7 @@ def angle_from_center_2d(array_passed_in, y_center, x_center, pixel_scale_mas, f
     y, x = np.indices((size, size))
     center = (y_center, x_center)
     r_pix = np.sqrt((x - center[1])**2 + (y - center[0])**2)
-    test_array_arcsec_2d = r_pix * pixel_scale_arcsec
+    test_array_arcsec_2d = r_pix * pixel_scale_arcsec # note this pixel scale is the physical one
 
     if units == 'radians':
         # convert to radians
@@ -194,7 +231,7 @@ def angle_from_center_2d(array_passed_in, y_center, x_center, pixel_scale_mas, f
     else:
         raise ValueError(f"Invalid units: {units}. Must be 'radians' or 'arcseconds'.")
 
-    # rescale based on the oversampling factor (this effectively makes the plate scale smaller)
+    # rescale based on the oversampling factor to fit the input array (this effectively makes the plate scale smaller)
     r_rad_2d = r_rad_2d / fac_oversamp
 
     return r_rad_2d
@@ -221,7 +258,6 @@ def fit_analytical_psfs(cookie_cut_out_sci, filter_name, plot_string, x_center_f
     #psf_perfect_cutout = psf_perfect_oversamp[int(y_center_final_oversamp-0.5*cookie_cut_out_sci.shape[0]):int(y_center_final_oversamp+0.5*cookie_cut_out_sci.shape[0]), \
     #        int(x_center_final_oversamp-0.5*cookie_cut_out_sci.shape[1]):int(x_center_final_oversamp+0.5*cookie_cut_out_sci.shape[1])]
 
-    ipdb.set_trace()
     r_rad_2d = angle_from_center_2d(array_passed_in=cookie_cut_out_sci, 
                         y_center=y_center_final_cookie_oversamp, 
                         x_center=x_center_final_cookie_oversamp, 
@@ -258,7 +294,8 @@ def fit_analytical_psfs(cookie_cut_out_sci, filter_name, plot_string, x_center_f
 
     # Create a wrapper function that binds the fixed parameters (baseline_shape and valid_mask)
     # This ensures curve_fit only optimizes D_aperture, D_obscuration, and ampl
-    
+    size = cookie_cut_out_sci.shape[0] 
+    baseline_shape = (size, size)
     model_wrapper = lambda r_rad_1d, D_aperture, D_obscuration, ampl: \
         model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shape, valid_mask, wavel)
 
@@ -697,7 +734,7 @@ def fit_simmed_psfs(cookie_cut_out_sci, plot_string, obs_filter, fp_mask, pp_mas
     return psf_perfect_cutout_best_fit
 
 
-def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel_scale_mas=None, fit_simmed_psf=False, fit_analytical_psf=False, psfs_subset='all', config_coords_guesses_file_name=None, config_observing=None):
+def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, fit_simmed_psf=False, fit_analytical_psf=False, psfs_subset='all', config_coords_guesses_file_name=None, config_observing=None):
     '''
     Find the Strehl ratio of a grid of PSFs
     
@@ -706,8 +743,6 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
     fp_mask: focal plane mask (string)
     pp_mask: pupil plane mask (string)
     filter_name: name of the observing filter
-    wavel: wavelength in meters
-    pixel_scale_mas: pixel scale in mas
     fit_simmed_psf: whether to fit a ScopeSim-simulated PSF
     fit_analytical_psf: whether to fit an analytical PSF
     psfs_subset: 'all' to process all PSFs, or an integer to process only the first N PSFs
@@ -852,13 +887,13 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
         x_center_pix_gaussian_best_fit_oversamp_fullarray = x_center_pix_gaussian_best_fit_oversamp + idx_x_start
         y_center_pix_gaussian_best_fit_oversamp_fullarray = y_center_pix_gaussian_best_fit_oversamp + idx_y_start
 
-        # make a best fit based on 
+        # make a best fit based on Airy function
         _ = total_power_comparison(cookie_cut_out_sci_oversamp, 
                                     x_center_pix_gaussian_best_fit_oversamp, 
                                     y_center_pix_gaussian_best_fit_oversamp, 
-                                    pixel_scale_mas=pixel_scale_mas, 
+                                    pixel_scale_mas=config_observing['pixel_scales']['img_lm'], 
                                     fac_oversamp=oversample_factor, 
-                                    wavel=wavel, 
+                                    wavel=config_observing['observing_filters_lm'][filter_name], 
                                     config_observing=config_observing, 
                                     plot_string=f'num_coord_{num_coord}')
 
@@ -892,11 +927,11 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
                                             plot_string=f'num_coord_{num_coord}', 
                                             x_center_final_cookie_oversamp=x_center_pix_gaussian_best_fit_oversamp, 
                                             y_center_final_cookie_oversamp=y_center_pix_gaussian_best_fit_oversamp, 
-                                            wavel=wavel,
-                                            pixel_scale_mas=pixel_scale_mas,
+                                            wavel=config_observing['observing_filters_lm'][filter_name],
+                                            pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
                                             fac_oversamp=oversample_factor)
 
-        
+
         # resample back to the original size
         x_center_pix_gaussian_best_fit_normsamp = x_center_pix_gaussian_best_fit_oversamp_fullarray / oversample_factor
         y_center_pix_gaussian_best_fit_normsamp = y_center_pix_gaussian_best_fit_oversamp_fullarray / oversample_factor
@@ -977,11 +1012,10 @@ def main():
     logging.info(f'Log file directory: {stem + "IMG_04_logs/"}')
     logging.info(f'Log file directory: {stem + "IMG_04_logs/"}')
 
-
-   # config file containing guesses for the PSF coordinates
-    config_coords_guesses_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
     # config file containing the observing parameters
     observing_config_file = stem + 'config/config_file_IMG_04_observing.yaml'
+   # config file containing guesses for the PSF coordinates
+    config_coords_guesses_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
     
     with open(observing_config_file, "r") as config_file:
         observing_config = yaml.safe_load(config_file)
@@ -999,7 +1033,13 @@ def main():
                     logging.info(f"\t  {item}")
         else:
             logging.info(f"\t{key}: {value}")
-    
+
+    logging.info(f'Config coords guesses:')
+
+    with open(config_coords_guesses_file_name, "r") as f:
+        config_coords_guesses = yaml.safe_load(f)
+        logging.info(f'Config coords guesses: {config_coords_guesses}')
+
     # dictionary of observing filters and their average wavelengths
     #observing_filters_lm = observing_config["observing_filters_lm"]
 
@@ -1019,20 +1059,30 @@ def main():
                 fp_mask='grid_lm', 
                 pp_mask='open', 
                 filter_name=filter_name, 
-                wavel=observing_config['observing_filters_lm'][filter_name],
-                pixel_scale_mas=observing_config['pixel_scales']['img_lm'],
                 fit_simmed_psf=False, 
                 fit_analytical_psf=True,
                 psfs_subset=1, 
                 config_coords_guesses_file_name=config_coords_guesses_file_name, 
-                config_observing=observing_config_file)
+                config_observing=observing_config)
 
-    ipdb.set_trace()
+
     # rinse and repeat
+    ipdb.set_trace()
     file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_Br_alpha_ref_clocking_angle_0.fits'
     filter_name = 'Br_alpha_ref'
-    config_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
-    strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_coords_guesses_file_name)
+    strehl_psfs(file_name, 
+                fp_mask='grid_lm', 
+                pp_mask='open', 
+                filter_name=filter_name, 
+                fit_simmed_psf=False, 
+                fit_analytical_psf=True,
+                psfs_subset=1, 
+                config_coords_guesses_file_name=config_coords_guesses_file_name, 
+                config_observing=observing_config)
+    ipdb.set_trace()
+
+    #config_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
+    #strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_coords_guesses_file_name)
 
     # rinse and repeat
     #file_name = stem + 'strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_CO_1-0_ice_clocking_angle_0.fits'
@@ -1043,36 +1093,20 @@ def main():
     # rinse and repeat
     file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_H2O-ice_clocking_angle_0.fits'
     filter_name = 'H2O-ice'
-    config_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
-    strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_coords_guesses_file_name)
-
-    # rinse and repeat
-    #file_name = stem + 'strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_L_spec_clocking_angle_0.fits'
-    #filter_name = 'L_spec'
-    #config_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
-    #strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_file_name)
-
-    # rinse and repeat
+   # rinse and repeat
     file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_Lp_clocking_angle_0.fits'
     filter_name = 'Lp'
-    config_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
-    strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_coords_guesses_file_name)
-
     # rinse and repeat
     file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_PAH_3.3_clocking_angle_0.fits'
     filter_name = 'PAH_3.3'
-    config_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
-    strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_coords_guesses_file_name)
 
     # rinse and repeat
     file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_PAH_3.3_ref_clocking_angle_0.fits'
     filter_name = 'PAH_3.3_ref'
-    strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_coords_guesses_file_name)
 
     # rinse and repeat
     file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_short-L_clocking_angle_0.fits'
     filter_name = 'short-L'
-    strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_coords_guesses_file_name)
 
 
 if __name__ == "__main__":
