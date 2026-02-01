@@ -18,3 +18,4 @@ pixel_scales:
 
 D_aperture:
   full: 39.0
+  D_obscuration: 11.5
