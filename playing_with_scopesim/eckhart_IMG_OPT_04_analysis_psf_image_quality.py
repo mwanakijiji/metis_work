@@ -118,6 +118,69 @@ def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shap
     return intensity_1d_full[valid_mask]
 
 
+def total_power_comparison(cookie_cut_out_sci, x_center_pix_gaussian_best_fit_oversamp, y_center_pix_gaussian_best_fit_oversamp, pixel_scale_mas, fac_oversamp, wavel, D_aperture, plot_string=None):
+    '''
+    Generate an Airy PSF with the same total power as the empirical PSF, then compare the peak fluxes.  
+
+    INPUTS:
+    cookie_cut_out_sci: the empirical PSF
+    x_center_pix_gaussian_best_fit_oversamp: the x-center of the Gaussian-best-fit PSF
+    y_center_pix_gaussian_best_fit_oversamp: the y-center of the Gaussian-best-fit PSF
+    pixel_scale_mas: the pixel scale in mas
+    fac_oversamp: the oversampling factor
+    wavel: the wavelength in meters
+    D_aperture: the aperture diameter in meters
+    plot_string: the string to add to the plot file name
+
+    OUTPUTS:
+    total_power_empirical: the total power of the empirical PSF
+    total_power_gaussian_best_fit: the total power of the Gaussian-best-fit PSF
+    '''
+
+    total_power_empirical = np.sum(cookie_cut_out_sci)
+    # generate an Airy PSF with the same total power as the empirical PSF
+    ## TODO: implement central obscuration
+    r_rad_2d = arcsecs_2d(array_passed_in=cookie_cut_out_sci, 
+                    y_center=y_center_pix_gaussian_best_fit_oversamp, 
+                    x_center=x_center_pix_gaussian_best_fit_oversamp, 
+                    pixel_scale_mas=pixel_scale_mas, 
+                    fac_oversamp=fac_oversamp)
+    #airy_psf = airy_disk(wavel, D_aperture, ampl=ampl)
+    # compare the peak fluxes
+    peak_flux_empirical = np.max(cookie_cut_out_sci)
+    peak_flux_gaussian_best_fit = np.max(cookie_cut_out_sci_gaussian_best_fit_oversamp)
+    return peak_flux_empirical, peak_flux_gaussian_best_fit
+    return total_power_empirical, total_power_gaussian_best_fit
+
+
+def arcsecs_2d(array_passed_in, y_center, x_center, pixel_scale_mas, fac_oversamp):
+    '''
+    Create a 2D array of distances from the center in arcseconds, with each pixel 6 mas
+
+    array_passed_in: the array to create the 2D array of distances from the center in arcseconds from
+    y_center: the y-center of the array
+    x_center: the x-center of the array
+    pixel_scale_mas: the pixel scale in mas
+    fac_oversamp: the oversampling factor
+
+    OUTPUTS:
+    r_rad_2d: the 2D array of distances from the center in arcseconds
+    '''
+
+    size = array_passed_in.shape[0] 
+    baseline_shape = (size, size)
+    pixel_scale_arcsec = pixel_scale_mas / 1000.0  # arcseconds per pixel
+    y, x = np.indices((size, size))
+    center = (y_center, x_center)
+    r_pix = np.sqrt((x - center[1])**2 + (y - center[0])**2)
+    test_array_arcsec_2d = r_pix * pixel_scale_arcsec
+    # convert to radians
+    r_rad_2d = test_array_arcsec_2d / ( 3600 * (180/np.pi ) )
+
+    # rescale based on the oversampling factor (this effectively makes the plate scale smaller)
+    r_rad_2d = r_rad_2d / fac_oversamp
+
+
 def fit_analytical_psfs(cookie_cut_out_sci, filter_name, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, wavel, pixel_scale_mas):
     '''
     Fit a 2D analytical PSF to a given frame.
@@ -130,7 +193,7 @@ def fit_analytical_psfs(cookie_cut_out_sci, filter_name, plot_string, x_center_f
     y_center_final_cookie_oversamp: final y-center of the PSF; in coordinates of the cookie cut-out
     fac_oversamp: oversampling factor
     wavel: wavelength in meters
-    pixel_scale_mas: pixel scale in mas
+    pixel_scale_mas: pixel scale in mas (the true one of the detector; don't use the oversampled one here)
 
     OUTPUTS:
     '''
@@ -139,19 +202,12 @@ def fit_analytical_psfs(cookie_cut_out_sci, filter_name, plot_string, x_center_f
     #psf_perfect_cutout = psf_perfect_oversamp[int(y_center_final_oversamp-0.5*cookie_cut_out_sci.shape[0]):int(y_center_final_oversamp+0.5*cookie_cut_out_sci.shape[0]), \
     #        int(x_center_final_oversamp-0.5*cookie_cut_out_sci.shape[1]):int(x_center_final_oversamp+0.5*cookie_cut_out_sci.shape[1])]
 
-    # Create a 2D array of distances from the center in arcseconds, with each pixel 6 mas
-    size = cookie_cut_out_sci.shape[0] 
-    baseline_shape = (size, size)
-    pixel_scale_arcsec = pixel_scale_mas / 1000.0  # arcseconds per pixel
-    y, x = np.indices((size, size))
-    center = (y_center_final_cookie_oversamp, x_center_final_cookie_oversamp)
-    r_pix = np.sqrt((x - center[1])**2 + (y - center[0])**2)
-    test_array_arcsec_2d = r_pix * pixel_scale_arcsec
-    # convert to radians
-    r_rad_2d = test_array_arcsec_2d / ( 3600 * (180/np.pi ) )
-
-    # rescale based on the oversampling factor (this effectively makes the plate scale smaller)
-    r_rad_2d = r_rad_2d / fac_oversamp
+    ipdb.set_trace()
+    r_rad_2d = arcsecs_2d(array_passed_in=cookie_cut_out_sci, 
+                        y_center=y_center_final_cookie_oversamp, 
+                        x_center=x_center_final_cookie_oversamp, 
+                        pixel_scale_mas=pixel_scale_mas, 
+                        fac_oversamp=fac_oversamp)
 
     # replace nans with median
     test_empirical_2d = np.where(np.isnan(cookie_cut_out_sci), np.nanmedian(cookie_cut_out_sci), cookie_cut_out_sci)
@@ -766,8 +822,8 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
         ])
 
 
-        # find FWHM and Streof Gaussian-best-fit to empirical, and 
-        # centroid the PSF, second pass
+        # find FWHM, PSF coords (second-pass fit), and Strehl based on Gaussian
+        # (note the Strehl here is bogus, because )
         logging.info(f'Fitting Gaussian to PSF {num_coord} of {num_psfs_to_process}')
         x_center_pix_gaussian_best_fit_oversamp, y_center_pix_gaussian_best_fit_oversamp, fwhm_x_pix_gaussian_best_fit_oversamp, fwhm_y_pix_gaussian_best_fit_oversamp, amplitude_counts_gaussian_best_fit_oversamp, gaussian_based_strehl = fit_gaussian_fwhm(cookie_cut_out_sci_oversamp, 
                                                                                                         obs_filter=filter_name,
@@ -776,11 +832,19 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, wavel=None, pixel
                                                                                                         coords_guess=coords_guess_this_cutout, 
                                                                                                         plot_string=f'num_coord_{num_coord}', 
                                                                                                         fac_oversamp=oversample_factor)
-
-
         # convert the coordinates of the cutout back to those of the entire oversampled image
         x_center_pix_gaussian_best_fit_oversamp_fullarray = x_center_pix_gaussian_best_fit_oversamp + idx_x_start
         y_center_pix_gaussian_best_fit_oversamp_fullarray = y_center_pix_gaussian_best_fit_oversamp + idx_y_start
+
+        # make a best fit based on 
+        _ = total_power_comparison(cookie_cut_out_sci_oversamp, 
+                                    x_center_pix_gaussian_best_fit_oversamp, 
+                                    y_center_pix_gaussian_best_fit_oversamp, 
+                                    pixel_scale_mas=pixel_scale_mas, 
+                                    fac_oversamp=oversample_factor, 
+                                    wavel=wavel, 
+                                    D_aperture=D_aperture, 
+                                    plot_string=f'num_coord_{num_coord}')
 
         # fit a 2D Gaussian
 
@@ -897,24 +961,29 @@ def main():
     logging.info(f'Log file directory: {stem + "IMG_04_logs/"}')
     logging.info(f'Log file directory: {stem + "IMG_04_logs/"}')
 
+    observing_config_file = stem + 'config/config_file_IMG_04_observing.yaml'
+    with open(observing_config_file, "r") as config_file:
+        observing_config = yaml.safe_load(config_file)
+        logging.info(f'Observing config file: {observing_config}')
+
+    logging.info("Observing config parameters:")
+    for key, value in observing_config.items():
+        if isinstance(value, (list, tuple, dict)):
+            logging.info(f"\t{key}:")
+            if isinstance(value, dict):
+                for subkey, subval in value.items():
+                    logging.info(f"\t  {subkey}: {subval}")
+            else:  # It's a list or tuple
+                for item in value:
+                    logging.info(f"\t  {item}")
+        else:
+            logging.info(f"\t{key}: {value}")
+    
     # dictionary of observing filters and their average wavelengths
-    observing_filters_lm = {
-        'Lp': 3.82e-6, 
-        'short-L': 3.29e-6, 
-        'L_spec': 3.56e-6, 
-        'Mp': 4.76e-6, 
-        'M_spec': 4.87e-6,
-        'Br_alpha': 4.06e-6, 
-        'Br_alpha_ref': 3.93e-6, 
-        'PAH_3.3': 3.31e-6, 
-        'PAH_3.3_ref': 3.45e-6, 
-        'CO_1-0_ice': 4.66e-6,
-        'CO_ref': 4.94e-6, 
-        'H2O-ice': 3.09e-6
-    }
+    observing_filters_lm = observing_config["observing_filters_lm"]
 
     # dictionary of pixel scales (units mas)
-    pixel_scales = {'img_lm': 5.47, 'img_n': 6.79}
+    pixel_scales = observing_config["pixel_scales"]
 
     # pp mask choices
     # 'APP-LMS', 'APP-LM', 'CLS-LMS', 'CLS-LM', 'CLS-N', 'PPS-LMS', 'PPS-LM', 'PPS-N', 'PPS-CFO2', 'RLS-LMS', 'RLS-LM', 'SPM-LMS', 'SPM-LM', 'SPM-N', 'open'

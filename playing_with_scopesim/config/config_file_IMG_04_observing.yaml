@@ -1,0 +1,20 @@
+observing_filters_lm:
+  Lp: 3.82e-6
+  short-L: 3.29e-6
+  L_spec: 3.56e-6
+  Mp: 4.76e-6
+  M_spec: 4.87e-6
+  Br_alpha: 4.06e-6
+  Br_alpha_ref: 3.93e-6
+  PAH_3.3: 3.31e-6
+  PAH_3.3_ref: 3.45e-6
+  CO_1-0_ice: 4.66e-6
+  CO_ref: 4.94e-6
+  H2O-ice: 3.09e-6
+
+pixel_scales:
+  img_lm: 5.47
+  img_n: 6.79
+
+D_aperture:
+  full: 39.0
