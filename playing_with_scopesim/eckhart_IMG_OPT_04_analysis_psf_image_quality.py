@@ -23,6 +23,7 @@ from matplotlib import pyplot as plt
 from matplotlib import colors
 from astropy.visualization import ZScaleInterval
 from matplotlib.colors import LogNorm
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from photutils.centroids import centroid_sources, centroid_com, centroid_2dg
 
@@ -137,53 +138,21 @@ def strehl_from_annular_aperture_fixed(cookie_cut_out_sci, filter_name, plot_str
     # strehl given the max values of the normalized model and empirical PSF
     strehl_from_fixed_annular_aperture_max = np.max(cookie_cut_out_sci) / np.max(model_annular_2d_full_norm)
 
-    logging.info(f"Strehl from max val, of empirical and model annular aperture: {strehl_from_fixed_annular_aperture_max}")
-
     # strehl given the enclosed power in the central region
     model_annular_2d_full_norm_masked = model_annular_2d_full_norm * mask_central
     test_empirical_2d_masked = test_empirical_2d * mask_central
     strehl_from_fixed_annular_aperture_power_enclosed = np.sum(test_empirical_2d_masked) / np.sum(model_annular_2d_full_norm_masked)
-
-    logging.info(f"Strehl from enclosed power in central region, of empirical and model annular aperture: {strehl_from_fixed_annular_aperture_power_enclosed}")
 
     #test_factor = np.copy(strehl_from_fixed_annular_aperture_power_enclosed) # use this as a normalization factor downstream
     #ipdb.set_trace()
 
     ############################################################
     # another method: Fourier transform and use the ratios of the MTF
-    pad_width = size // 2
-    model_annular_2d_full_norm_padded = np.pad(
-        model_annular_2d_full_norm,
-        pad_width=pad_width,
-        mode="constant",
-        constant_values=0.0
-    )
-    cookie_cut_out_sci_padded = np.pad(
-        cookie_cut_out_sci,
-        pad_width=pad_width,
-        mode="constant",
-        constant_values=0.0
-    )
-    #ipdb.set_trace()
-    fft_model = np.fft.fftshift(np.fft.fft2(model_annular_2d_full_norm_padded))
-    fft_model_power = np.abs(fft_model)
-    fft_empirical = np.fft.fftshift(np.fft.fft2(cookie_cut_out_sci_padded))
-    fft_empirical_power = np.abs(fft_empirical)
-    #ipdb.set_trace()
-    # Build frequency grid (cycles per radian) and apply diffraction cutoff
-    rad_per_pix = ((config_observing["pixel_scales"]["img_lm"] / 1000.0) / 206265.0) / fac_oversamp
-    n_fft = model_annular_2d_full_norm_padded.shape[0]
-    fy = np.fft.fftshift(np.fft.fftfreq(n_fft, d=rad_per_pix))
-    fx = np.fft.fftshift(np.fft.fftfreq(n_fft, d=rad_per_pix))
-    fx_grid, fy_grid = np.meshgrid(fx, fy)
-    f_r = np.sqrt(fx_grid**2 + fy_grid**2)
-    cutoff_freq = config_observing["D_aperture"]["full"] / config_observing["observing_filters_lm"][filter_name] ## ## TODO: IS THIS RIGHT?
-    mtf_cutoff_mask = f_r <= cutoff_freq
-    #ipdb.set_trace()
-    fft_model_power_cutoff = fft_model_power * mtf_cutoff_mask
-    fft_empirical_power_cutoff = fft_empirical_power * mtf_cutoff_mask
+    # (note this masks based on max frequency, but not based on the dark rings in physical space)
 
-    # normalize the powers so that zero freq is equal
+    fft_model_power_cutoff, fft_empirical_power_cutoff, cutoff_freq, fx, fy, n_fft = mtf_arrays(array_empirical=cookie_cut_out_sci, array_model=model_annular_2d_full_norm, config_observing=config_observing, fac_oversamp=fac_oversamp, size=size, filter_name=filter_name)
+
+    # normalize the powers so that power at zero freq is the same in both
     fft_model_power_cutoff_norm = fft_model_power_cutoff * np.nanmax(fft_empirical_power_cutoff) / np.nanmax(fft_model_power_cutoff)
     strehl_from_fixed_annular_aperture_mtf = np.sum(fft_empirical_power_cutoff) / np.sum(fft_model_power_cutoff_norm)
     #ipdb.set_trace()
@@ -219,19 +188,35 @@ def strehl_from_annular_aperture_fixed(cookie_cut_out_sci, filter_name, plot_str
     plt.clf()
     plt.figure(figsize=(15, 5))
     plt.subplot(1, 1, 1)
-    plt.plot(fx, fft_empirical_power_cutoff[n_fft//2], label='Empirical')
-    plt.plot(fx, fft_model_power_cutoff_norm[n_fft//2], label='Model')
+    # Restrict x-range to ±2 * cutoff_freq
+    x_mask = (fx >= -2*cutoff_freq) & (fx <= 2*cutoff_freq)
+    plt.plot(fx[x_mask], fft_empirical_power_cutoff[n_fft//2][x_mask], label='Empirical')
+    plt.plot(fx[x_mask], fft_model_power_cutoff_norm[n_fft//2][x_mask], label='Model')
+    plt.xlabel('Frequency (cycles per radian)')
+    plt.ylabel('Power (units TBD)')
+    plt.axvline(x=cutoff_freq, color='k', linestyle='--', label='Cutoff frequency', alpha=0.5)
+    plt.axvline(x=-cutoff_freq, color='k', linestyle='--', alpha=0.5)
     plt.legend()
-    plt.title('MTFs')
-    plt.show()
+    plt.title(f'Cross-sections of MTFs\nStrehl from MTF: {strehl_from_fixed_annular_aperture_mtf:.2f}')
+    file_name_plot = f'figs_dump/mtf_{plot_string}.png'
+    plt.savefig(file_name_plot)
+    logging.info(f'Saved {file_name_plot} to figs_dump/')
 
-    ipdb.set_trace()
+    logging.info(f"Strehl from fixed annular aperture, max: {strehl_from_fixed_annular_aperture_max}")
+    logging.info(f"Strehl from fixed annular aperture, enclosed power: {strehl_from_fixed_annular_aperture_power_enclosed}")
+    logging.info(f"Strehl from fixed annular aperture, MTF: {strehl_from_fixed_annular_aperture_mtf}")
 
-    logging.info(f"Strehl from annular aperture, max: {strehl_from_fixed_annular_aperture_max}")
-    logging.info(f"Strehl from annular aperture, enclosed power: {strehl_from_fixed_annular_aperture_power_enclosed}")
-    logging.info(f"Strehl from annular aperture, MTF: {strehl_from_fixed_annular_aperture_mtf}")
-
-    return strehl_from_fixed_annular_aperture_max, strehl_from_fixed_annular_aperture_power_enclosed, strehl_from_fixed_annular_aperture_mtf
+    # strehls based on 
+    # 1. max of the empirical and model PSFs
+    # 2. enclosed power in the central region
+    # 3. MTF
+    # INSERT_YOUR_CODE
+    strehl_results = {
+        'strehl_fixed_annular_aperture_max': strehl_from_fixed_annular_aperture_max,
+        'strehl_fixed_annular_aperture_enclosed_power': strehl_from_fixed_annular_aperture_power_enclosed,
+        'strehl_fixed_annular_aperture_mtf': strehl_from_fixed_annular_aperture_mtf
+    }
+    return strehl_results
 
 # Define a wrapper function for curve_fit
 # curve_fit expects: func(x, *params) where x is the independent variable
@@ -291,7 +276,6 @@ def fit_airy_psf(cookie_cut_out_sci, obs_filter, x_center_pix_gaussian_best_fit_
 
     total_power_empirical = np.sum(cookie_cut_out_sci)
     # generate an Airy PSF with the same total power as the empirical PSF
-    ## TODO: implement central obscuration
     r_rad_2d = angle_from_center_2d(array_passed_in=cookie_cut_out_sci, 
                     y_center=y_center_pix_gaussian_best_fit_oversamp, 
                     x_center=x_center_pix_gaussian_best_fit_oversamp, 
@@ -316,32 +300,61 @@ def fit_airy_psf(cookie_cut_out_sci, obs_filter, x_center_pix_gaussian_best_fit_
     peak_flux_airy = np.max(airy_psf)
 
     # make plots comparing the empirical and airy PSFs with log color scaling
-   
-    plt.figure(figsize=(15, 5))
-    # Empirical PSF
-    plt.subplot(1, 3, 1)
-    plt.imshow(cookie_cut_out_sci, origin='lower', cmap='gray_r', norm=LogNorm(vmin=np.maximum(np.nanmin(cookie_cut_out_sci[cookie_cut_out_sci > 0]), 1e-3), vmax=np.nanmax(cookie_cut_out_sci)))
-    plt.title('Empirical PSF')
-    plt.colorbar()
-    # Airy PSF
-    plt.subplot(1, 3, 2)
-    plt.imshow(airy_psf, origin='lower', cmap='gray_r', norm=LogNorm(vmin=np.maximum(np.nanmin(airy_psf[airy_psf > 0]), 1e-3), vmax=np.nanmax(airy_psf)))
-    plt.title('Airy PSF')
-    plt.colorbar()
-    plt.subplot(1, 3, 3)
-    plt.imshow(cookie_cut_out_sci - airy_psf, origin='lower', cmap='gray_r')
-    plt.title('Residuals')
-    plt.colorbar()
+    fig, axs = plt.subplots(1, 4, figsize=(23, 5), constrained_layout=True)  # use the axs array for all plotting
 
+    padding_colorbars = 0.1
+    # Empirical PSF
+    im0 = axs[0].imshow(cookie_cut_out_sci, origin='lower', cmap='gray_r',
+                       norm=LogNorm(vmin=np.maximum(np.nanmin(cookie_cut_out_sci[cookie_cut_out_sci > 0]), 1e-3),
+                                    vmax=np.nanmax(cookie_cut_out_sci)))
+    axs[0].set_title('Empirical PSF')
+    axs[0].set_xlabel('Pixel')
+    axs[0].set_ylabel('Pixel')
+    divider0 = make_axes_locatable(axs[0])
+    cax0 = divider0.append_axes("right", size="5%", pad=padding_colorbars)
+    fig.colorbar(im0, cax=cax0)
+
+    # Airy PSF
+    im1 = axs[1].imshow(airy_psf, origin='lower', cmap='gray_r',
+                       norm=LogNorm(vmin=np.maximum(np.nanmin(airy_psf[airy_psf > 0]), 1e-3),
+                                    vmax=np.nanmax(airy_psf)))
+    axs[1].set_title('Airy PSF')
+    axs[1].set_xlabel('Pixel')
+    axs[1].set_ylabel('Pixel')
+    divider1 = make_axes_locatable(axs[1])
+    cax1 = divider1.append_axes("right", size="5%", pad=padding_colorbars)
+    fig.colorbar(im1, cax=cax1)
+
+    # Middle row cross-section
+    mid_row = cookie_cut_out_sci.shape[0] // 2
+    y_pixels = np.arange(cookie_cut_out_sci.shape[1])
+    axs[2].plot(y_pixels, cookie_cut_out_sci[mid_row, :], label='Empirical', color='blue')
+    axs[2].plot(y_pixels, airy_psf[mid_row, :], label='Model (Airy)', color='orange', linestyle='--')
+    axs[2].set_title('Cross-section')
+    axs[2].set_xlabel('Pixel')
+    axs[2].set_ylabel('Counts')
+    axs[2].legend()
+
+    # Residuals
+    im3 = axs[3].imshow(cookie_cut_out_sci - airy_psf, origin='lower', cmap='gray_r')
+    axs[3].set_title('Residuals')
+    axs[3].set_xlabel('Pixel')
+    axs[3].set_ylabel('Pixel')
+    divider3 = make_axes_locatable(axs[3])
+    cax3 = divider3.append_axes("right", size="5%", pad=padding_colorbars)
+    fig.colorbar(im3, cax=cax3)
     plot_filename = f'total_power_comparison_{plot_string}.png'
-    #plt.show()
+    plt.show()
     plt.savefig(plot_filename)
     logging.info(f'Saved {plot_filename} to figs_dump/')
 
-    strehl_airy = peak_flux_empirical / peak_flux_airy
-    logging.info(f'Strehl from comparison with Airy: {strehl_airy}')
+    strehl_airy_max = peak_flux_empirical / peak_flux_airy
+    logging.info(f'Strehl from unobstructed circular aperture (-> Airy), max vals: {strehl_airy_max}')
 
-    return strehl_airy
+    strehl_results = {
+        'strehl_airy_max': strehl_airy_max
+    }
+    return strehl_results
 
 
 def angle_from_center_2d(array_passed_in, y_center, x_center, pixel_scale_mas, fac_oversamp, units='radians'):
@@ -516,6 +529,37 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
     print(f"Degrees of freedom = {dof}")
     print(f"Reduced chi-squared = {reduced_chi_squared:.6f}")
 
+    ############################################################
+    # Find the Strehl from the MTF, like in fit_annular_aperture_fixed
+    fft_model_power_cutoff, fft_empirical_power_cutoff, cutoff_freq, fx, fy, n_fft = mtf_arrays(array_empirical=cookie_cut_out_sci, array_model=best_fit_model_2d, config_observing=config_observing, fac_oversamp=fac_oversamp, size=size, filter_name=filter_name)
+
+    # normalize the powers so that zero freq is equal
+    fft_model_power_cutoff_norm = (
+        fft_model_power_cutoff
+        * np.nanmax(fft_empirical_power_cutoff)
+        / np.nanmax(fft_model_power_cutoff)
+    )
+    strehl_from_free_annular_aperture_mtf = np.sum(fft_empirical_power_cutoff) / np.sum(fft_model_power_cutoff_norm)
+    logging.info(f"Strehl from free annular aperture, MTF: {strehl_from_free_annular_aperture_mtf}")
+
+    # plot a cross-section through the FTs of the empirical and model PSFs
+    plt.clf()
+    plt.figure(figsize=(15, 5))
+    plt.subplot(1, 1, 1)
+    x_mask = (fx >= -2 * cutoff_freq) & (fx <= 2 * cutoff_freq)
+    plt.plot(fx[x_mask], fft_empirical_power_cutoff[n_fft // 2][x_mask], label='Empirical')
+    plt.plot(fx[x_mask], fft_model_power_cutoff_norm[n_fft // 2][x_mask], label='Model')
+    plt.xlabel('Frequency (cycles per radian)')
+    plt.ylabel('Power (units TBD)')
+    plt.axvline(x=cutoff_freq, color='k', linestyle='--', label='Cutoff frequency', alpha=0.5)
+    plt.axvline(x=-cutoff_freq, color='k', linestyle='--', alpha=0.5)
+    plt.legend()
+    plt.title(f'Cross-sections of MTFs\nStrehl from MTF: {strehl_from_free_annular_aperture_mtf:.2f}')
+    file_name_plot = f'figs_dump/mtf_free_{plot_string}.png'
+    plt.savefig(file_name_plot)
+    logging.info(f'Saved {file_name_plot} to figs_dump/')
+    plt.close()
+
     zscale = ZScaleInterval()
     vmin, vmax = zscale.get_limits(test_empirical_2d)
 
@@ -550,12 +594,53 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
     # Add one colorbar for all
     fig.colorbar(im0, ax=axs, orientation='vertical', fraction=0.04, pad=0.04).set_label('Color scale is the same')
 
-    plt.savefig(f'figs_dump/test.png')
-    print(f"Saved test.png to figs_dump/")
+    file_name_plot = 'figs_dump/test.png'
+    plt.savefig(file_name_plot)
+    print(f"Saved {file_name_plot} to figs_dump/")
     plt.close()
 
-    return r_rad_2d
+    # return dict of Strehl ratios found with different methods
+    strehl_results = {
+        'strehl_from_free_annular_aperture_mtf': strehl_from_free_annular_aperture_mtf
+    }
 
+    return strehl_results
+
+def mtf_arrays(array_empirical, array_model, config_observing, fac_oversamp, size, filter_name):
+
+    pad_width = size // 2
+    model_annular_2d_full_norm_padded = np.pad(
+        array_model,
+        pad_width=pad_width,
+        mode="constant",
+        constant_values=0.0
+    )
+    cookie_cut_out_sci_padded = np.pad(
+        array_empirical,
+        pad_width=pad_width,
+        mode="constant",
+        constant_values=0.0
+    )
+    #ipdb.set_trace()
+    fft_model = np.fft.fftshift(np.fft.fft2(model_annular_2d_full_norm_padded))
+    fft_model_power = np.abs(fft_model)
+    fft_empirical = np.fft.fftshift(np.fft.fft2(cookie_cut_out_sci_padded))
+    fft_empirical_power = np.abs(fft_empirical)
+    #ipdb.set_trace()
+    # Build frequency grid (cycles per radian) and apply diffraction cutoff
+    rad_per_pix = ((config_observing["pixel_scales"]["img_lm"] / 1000.0) / 206265.0) / fac_oversamp
+    n_fft = model_annular_2d_full_norm_padded.shape[0]
+    fy = np.fft.fftshift(np.fft.fftfreq(n_fft, d=rad_per_pix))
+    fx = np.fft.fftshift(np.fft.fftfreq(n_fft, d=rad_per_pix))
+    fx_grid, fy_grid = np.meshgrid(fx, fy)
+    f_r = np.sqrt(fx_grid**2 + fy_grid**2)
+    cutoff_freq = config_observing["D_aperture"]["full"] / config_observing["observing_filters_lm"][filter_name] ## ## TODO: IS THIS RIGHT?
+    mtf_cutoff_mask = f_r <= cutoff_freq
+    #ipdb.set_trace()
+    fft_model_power_cutoff = fft_model_power * mtf_cutoff_mask
+    fft_empirical_power_cutoff = fft_empirical_power * mtf_cutoff_mask
+
+    return fft_model_power_cutoff, fft_empirical_power_cutoff, cutoff_freq, fx, fy, n_fft
 
 def fit_empirical_fwhm(frame, plot_string):
     '''
@@ -681,6 +766,9 @@ def fit_gaussian_psf(cookie_cut_out_sci, obs_filter, fp_mask, pp_mask, coords_gu
     fwhm_x_pix: FWHM in x-direction
     '''
 
+    logging.info('--------------------------------')
+    logging.info('Calculating coordinates and Strehl from Gaussian best-fit')
+
     ## ## TO DO: ARE THE INDEXES RIGHT HERE?
     cookie_cut_out_best_fit, x_center_pix_oversamp_cutout, y_center_pix_oversamp_cutout, fwhm_x_pix, fwhm_y_pix, sigma_x_pix, sigma_y_pix, angle_theta_deg, amplitude_counts = fit_gaussian(cookie_cut_out_sci, \
         center_guess = coords_guess)
@@ -688,12 +776,11 @@ def fit_gaussian_psf(cookie_cut_out_sci, obs_filter, fp_mask, pp_mask, coords_gu
 
     # strehl based on the Gaussian fit
     gaussian_based_strehl = np.max(cookie_cut_out_sci) / np.max(cookie_cut_out_best_fit)
-    print('--------------------------------')
-    print(f'Observing filter: {obs_filter}')
-    print(f'PSF ID: {plot_string}')
-    print(f'Focal plane mask: {fp_mask}')
-    print(f'Pupil plane mask: {pp_mask}')
-    print(f'Gaussian-based Strehl: {gaussian_based_strehl:.2f}')
+    #print(f'Observing filter: {obs_filter}')
+    #print(f'PSF ID: {plot_string}')
+    #print(f'Focal plane mask: {fp_mask}')
+    #print(f'Pupil plane mask: {pp_mask}')
+    logging.info(f'Strehl from Gaussian best-fit: {gaussian_based_strehl:.2f}')
 
 
     # plot four subplots: 2D science, 2D best-fit, 2D residuals, and 1D overplotting of a cross-section of the science and best-fit
@@ -875,7 +962,16 @@ def fit_simmed_psfs(cookie_cut_out_sci, plot_string, obs_filter, fp_mask, pp_mas
     return psf_perfect_cutout_best_fit
 
 
-def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, fit_simmed_psf=False, fit_annular_aperture_free=False, fit_annular_aperture_fixed=False, psfs_subset='all', config_coords_guesses_file_name=None, config_observing=None):
+def strehl_psfs(file_name, 
+                fp_mask, 
+                pp_mask, 
+                filter_name=None, 
+                fit_simmed_psf=False, 
+                fit_annular_aperture_free=False, 
+                fit_annular_aperture_fixed=False, 
+                psfs_subset='all', 
+                config_coords_guesses_file_name=None, 
+                config_observing=None):
     '''
     Find the Strehl ratio of a grid of PSFs
     
@@ -1030,6 +1126,7 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, fit_simmed_psf=Fa
 
         # make a best fit based on Airy function
         if fit_airy_psf:
+            # return dict of Strehl ratio
             strehl_airy = fit_airy_psf(cookie_cut_out_sci_oversamp, 
                                         obs_filter=filter_name,
                                         x_center_pix_gaussian_best_fit_oversamp=x_center_pix_gaussian_best_fit_oversamp, 
@@ -1049,6 +1146,7 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, fit_simmed_psf=Fa
         # fit a ScopeSim PSF
         if fit_simmed_psf:
             logging.info(f'Fitting ScopeSim PSF {num_coord} of {num_psfs_to_process}')
+            # return 2D array of ScopeSim best-fit
             best_fit_cutout_oversamp = fit_simmed_psfs(cookie_cut_out_sci_oversamp, 
                                             plot_string=f'num_coord_{num_coord}', 
                                             obs_filter=filter_name,
@@ -1061,7 +1159,8 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, fit_simmed_psf=Fa
         # strehl from an analytical PSF with fixed parameters: D_aperture, D_obscuration, and ampl
         if fit_annular_aperture_fixed:
             logging.info(f'Calculating Strehl from annular aperture {num_coord} of {num_psfs_to_process}')
-            strehl_annular_aperture = strehl_from_annular_aperture_fixed(cookie_cut_out_sci_oversamp, 
+            # return dict of Strehl ratios found with different methods
+            strehl_annular_aperture_fixed = strehl_from_annular_aperture_fixed(cookie_cut_out_sci_oversamp, 
                                             filter_name=filter_name,
                                             plot_string=f'num_coord_{num_coord}', 
                                             x_center_final_cookie_oversamp=x_center_pix_gaussian_best_fit_oversamp, 
@@ -1072,7 +1171,7 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, fit_simmed_psf=Fa
         # fit an analytical PSF: free parameters are D_aperture, D_obscuration, and ampl
         if fit_annular_aperture_free:
             logging.info(f'Fitting analytical PSF {num_coord} of {num_psfs_to_process}')
-            best_fit_analytical_oversamp = fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, 
+            strehl_annular_aperture_free = fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, 
                                             filter_name=filter_name,
                                             plot_string=f'num_coord_{num_coord}', 
                                             x_center_final_cookie_oversamp=x_center_pix_gaussian_best_fit_oversamp, 
@@ -1113,6 +1212,9 @@ def strehl_psfs(file_name, fp_mask, pp_mask, filter_name=None, fit_simmed_psf=Fa
         #sigma_y_pix_array[num_coord] = sigma_y_pix
         #angle_theta_array[num_coord] = angle_theta
 
+    ipdb.set_trace()
+    # merge the Strehl dicts and print
+    strehl_results_all = {**strehl_airy, **strehl_annular_aperture_fixed, **strehl_annular_aperture_free}
 
     # plot the grid_data and annotate it with the best-fit fwhm in x and y for each PSF
     plt.clf()
@@ -1150,9 +1252,12 @@ def main():
     # Ensure log directory exists and force config in case handlers already set
     os.makedirs(log_dir, exist_ok=True)
     logging.basicConfig(
-        filename=log_file_name,
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file_name),
+            logging.StreamHandler()
+        ],
         force=True
     )
 
@@ -1207,7 +1312,7 @@ def main():
                 pp_mask='open', 
                 filter_name=filter_name, 
                 fit_simmed_psf=False, 
-                fit_annular_aperture_free=False,
+                fit_annular_aperture_free=True,
                 fit_annular_aperture_fixed=True,
                 psfs_subset=1, 
                 config_coords_guesses_file_name=config_coords_guesses_file_name, 
