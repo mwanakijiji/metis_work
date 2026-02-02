@@ -1,4 +1,5 @@
 # Does some simple analysis of simulated images written out by the sim notebook.
+from math import log
 import numpy as np
 from astropy.io import fits
 from astropy import units as u
@@ -130,7 +131,6 @@ def strehl_from_annular_aperture_fixed(cookie_cut_out_sci, filter_name, plot_str
     model_annular_2d_full_norm = (model_annular_2d_full / np.sum(model_annular_2d_full)) * np.sum(cookie_cut_out_sci)
 
     # make mask corresponding to first dark ring for an Airy (but not annular) aperture, so as to see how much power is in the central region
-    ipdb.set_trace()
     dark_ring_loc_rad = 1.22 * (config_observing['observing_filters_lm'][filter_name] / config_observing['D_aperture']['full'])
     mask_central = r_rad_2d < dark_ring_loc_rad
 
@@ -146,49 +146,50 @@ def strehl_from_annular_aperture_fixed(cookie_cut_out_sci, filter_name, plot_str
 
     logging.info(f"Strehl from enclosed power in central region, of empirical and model annular aperture: {strehl_from_fixed_annular_aperture_power_enclosed}")
 
-    test_factor = np.copy(strehl_from_fixed_annular_aperture_power_enclosed) # use this as a normalization factor downstream
-    ipdb.set_trace()
+    #test_factor = np.copy(strehl_from_fixed_annular_aperture_power_enclosed) # use this as a normalization factor downstream
+    #ipdb.set_trace()
 
     ############################################################
     # another method: Fourier transform and use the ratios of the MTF
     pad_width = size // 2
-    model_annular_2d_full_norm_masked_padded = np.pad(
-        model_annular_2d_full_norm_masked,
+    model_annular_2d_full_norm_padded = np.pad(
+        model_annular_2d_full_norm,
         pad_width=pad_width,
         mode="constant",
         constant_values=0.0
     )
-    cookie_cut_out_sci_masked_padded = np.pad(
+    cookie_cut_out_sci_padded = np.pad(
         cookie_cut_out_sci,
         pad_width=pad_width,
         mode="constant",
         constant_values=0.0
     )
-    ipdb.set_trace()
-    fft_model = np.fft.fftshift(np.fft.fft2(model_annular_2d_full_norm_masked_padded))
+    #ipdb.set_trace()
+    fft_model = np.fft.fftshift(np.fft.fft2(model_annular_2d_full_norm_padded))
     fft_model_power = np.abs(fft_model)
-    fft_empirical = np.fft.fftshift(np.fft.fft2(cookie_cut_out_sci_masked_padded))
+    fft_empirical = np.fft.fftshift(np.fft.fft2(cookie_cut_out_sci_padded))
     fft_empirical_power = np.abs(fft_empirical)
-    ipdb.set_trace()
+    #ipdb.set_trace()
     # Build frequency grid (cycles per radian) and apply diffraction cutoff
     rad_per_pix = ((config_observing["pixel_scales"]["img_lm"] / 1000.0) / 206265.0) / fac_oversamp
-    n_fft = model_annular_2d_full_norm_masked_padded.shape[0]
+    n_fft = model_annular_2d_full_norm_padded.shape[0]
     fy = np.fft.fftshift(np.fft.fftfreq(n_fft, d=rad_per_pix))
     fx = np.fft.fftshift(np.fft.fftfreq(n_fft, d=rad_per_pix))
     fx_grid, fy_grid = np.meshgrid(fx, fy)
     f_r = np.sqrt(fx_grid**2 + fy_grid**2)
     cutoff_freq = config_observing["D_aperture"]["full"] / config_observing["observing_filters_lm"][filter_name] ## ## TODO: IS THIS RIGHT?
     mtf_cutoff_mask = f_r <= cutoff_freq
-    ipdb.set_trace()
-    test_model = fft_model_power * mtf_cutoff_mask
-    test_empirical = fft_empirical_power * mtf_cutoff_mask
+    #ipdb.set_trace()
+    fft_model_power_cutoff = fft_model_power * mtf_cutoff_mask
+    fft_empirical_power_cutoff = fft_empirical_power * mtf_cutoff_mask
 
     # normalize the powers so that zero freq is equal
-    test_model_norm = test_model * np.nanmax(test_empirical) / np.nanmax(test_model)
-    strehl_from_fixed_annular_aperture_mtf = np.sum(test_empirical) / np.sum(test_model_norm)
-    ipdb.set_trace()
+    fft_model_power_cutoff_norm = fft_model_power_cutoff * np.nanmax(fft_empirical_power_cutoff) / np.nanmax(fft_model_power_cutoff)
+    strehl_from_fixed_annular_aperture_mtf = np.sum(fft_empirical_power_cutoff) / np.sum(fft_model_power_cutoff_norm)
+    #ipdb.set_trace()
 
-    # plots subplots of the empirical, normalized model, and residuals
+    # plots subplots of the empirical, normalized model PSF, and residuals
+    plt.clf()
     plt.figure(figsize=(15, 5))
     plt.subplot(1, 3, 1)
     plt.imshow(cookie_cut_out_sci, origin='lower', cmap='gray_r')
@@ -209,12 +210,28 @@ def strehl_from_annular_aperture_fixed(cookie_cut_out_sci, filter_name, plot_str
         f"Strehl from enclosed power: {strehl_from_fixed_annular_aperture_power_enclosed:.2f}"
     )
     plt.colorbar()
+    #plt.show()
+    file_name_plot = f'figs_dump/intensity_1d_full_2d_{plot_string}.png'
+    plt.savefig(file_name_plot)
+    logging.info(f'Saved {file_name_plot} to figs_dump/')
+
+    # plot a cross-section through the FTs of the empirical and model PSFs
+    plt.clf()
+    plt.figure(figsize=(15, 5))
+    plt.subplot(1, 1, 1)
+    plt.plot(fx, fft_empirical_power_cutoff[n_fft//2], label='Empirical')
+    plt.plot(fx, fft_model_power_cutoff_norm[n_fft//2], label='Model')
+    plt.legend()
+    plt.title('MTFs')
     plt.show()
-    #plt.savefig(f'intensity_1d_full_2d_{plot_string}.png')
 
     ipdb.set_trace()
 
-    return strehl_from_fixed_annular_aperture_max, strehl_from_fixed_annular_aperture_power_enclosed
+    logging.info(f"Strehl from annular aperture, max: {strehl_from_fixed_annular_aperture_max}")
+    logging.info(f"Strehl from annular aperture, enclosed power: {strehl_from_fixed_annular_aperture_power_enclosed}")
+    logging.info(f"Strehl from annular aperture, MTF: {strehl_from_fixed_annular_aperture_mtf}")
+
+    return strehl_from_fixed_annular_aperture_max, strehl_from_fixed_annular_aperture_power_enclosed, strehl_from_fixed_annular_aperture_mtf
 
 # Define a wrapper function for curve_fit
 # curve_fit expects: func(x, *params) where x is the independent variable
@@ -317,7 +334,7 @@ def fit_airy_psf(cookie_cut_out_sci, obs_filter, x_center_pix_gaussian_best_fit_
     plt.colorbar()
 
     plot_filename = f'total_power_comparison_{plot_string}.png'
-    plt.show()
+    #plt.show()
     plt.savefig(plot_filename)
     logging.info(f'Saved {plot_filename} to figs_dump/')
 
