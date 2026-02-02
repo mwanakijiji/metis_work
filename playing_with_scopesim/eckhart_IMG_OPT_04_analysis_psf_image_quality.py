@@ -594,7 +594,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
     # Add one colorbar for all
     fig.colorbar(im0, ax=axs, orientation='vertical', fraction=0.04, pad=0.04).set_label('Color scale is the same')
 
-    file_name_plot = 'figs_dump/test.png'
+    file_name_plot = f'figs_dump/free_ann_ap_best_fit_{plot_string}.png'
     plt.savefig(file_name_plot)
     logging.info(f"Saved {file_name_plot} to figs_dump/")
     plt.close()
@@ -1119,7 +1119,7 @@ def strehl_psfs(file_name,
                                                                                                         fp_mask=fp_mask,
                                                                                                         pp_mask=pp_mask,
                                                                                                         coords_guess=coords_guess_this_cutout, 
-                                                                                                        plot_string=f'num_coord_{num_coord}', 
+                                                                                                        plot_string=f'num_coord_{num_coord}_fpmask_{fp_mask}_ppmask_{pp_mask}_filter_{filter_name}', 
                                                                                                         fac_oversamp=oversample_factor)
         # convert the coordinates of the cutout back to those of the entire oversampled image
         x_center_pix_gaussian_best_fit_oversamp_fullarray = x_center_pix_gaussian_best_fit_oversamp + idx_x_start
@@ -1134,7 +1134,7 @@ def strehl_psfs(file_name,
                                         y_center_pix_gaussian_best_fit_oversamp=y_center_pix_gaussian_best_fit_oversamp, 
                                         fac_oversamp=oversample_factor,
                                         config_observing=config_observing,
-                                        plot_string=f'num_coord_{num_coord}')
+                                        plot_string=f'num_coord_{num_coord}_fpmask_{fp_mask}_ppmask_{pp_mask}_filter_{filter_name}')
 
 
         # find FWHM of empirical 
@@ -1149,7 +1149,7 @@ def strehl_psfs(file_name,
             logging.info(f'Fitting ScopeSim PSF {num_coord} of {num_psfs_to_process}')
             # return 2D array of ScopeSim best-fit
             best_fit_cutout_oversamp = fit_simmed_psfs(cookie_cut_out_sci_oversamp, 
-                                            plot_string=f'num_coord_{num_coord}', 
+                                            plot_string=f'num_coord_{num_coord}_fpmask_{fp_mask}_ppmask_{pp_mask}_filter_{filter_name}', 
                                             obs_filter=filter_name,
                                             fp_mask=fp_mask,
                                             pp_mask=pp_mask,
@@ -1163,7 +1163,7 @@ def strehl_psfs(file_name,
             # return dict of Strehl ratios found with different methods
             strehl_annular_aperture_fixed = strehl_from_annular_aperture_fixed(cookie_cut_out_sci_oversamp, 
                                             filter_name=filter_name,
-                                            plot_string=f'num_coord_{num_coord}', 
+                                            plot_string=f'num_coord_{num_coord}_fpmask_{fp_mask}_ppmask_{pp_mask}_filter_{filter_name}', 
                                             x_center_final_cookie_oversamp=x_center_pix_gaussian_best_fit_oversamp, 
                                             y_center_final_cookie_oversamp=y_center_pix_gaussian_best_fit_oversamp, 
                                             config_observing=config_observing,
@@ -1174,7 +1174,7 @@ def strehl_psfs(file_name,
             logging.info(f'Fitting analytical PSF {num_coord} of {num_psfs_to_process}')
             strehl_annular_aperture_free = fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, 
                                             filter_name=filter_name,
-                                            plot_string=f'num_coord_{num_coord}', 
+                                            plot_string=f'num_coord_{num_coord}_fpmask_{fp_mask}_ppmask_{pp_mask}_filter_{filter_name}', 
                                             x_center_final_cookie_oversamp=x_center_pix_gaussian_best_fit_oversamp, 
                                             y_center_final_cookie_oversamp=y_center_pix_gaussian_best_fit_oversamp, 
                                             config_observing=config_observing,
