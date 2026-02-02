@@ -544,7 +544,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
 
     # plot a cross-section through the FTs of the empirical and model PSFs
     plt.clf()
-    plt.figure(figsize=(15, 5))
+    plt.figure(figsize=(30, 5))
     plt.subplot(1, 1, 1)
     x_mask = (fx >= -2 * cutoff_freq) & (fx <= 2 * cutoff_freq)
     plt.plot(fx[x_mask], fft_empirical_power_cutoff[n_fft // 2][x_mask], label='Empirical')
@@ -563,7 +563,9 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
     zscale = ZScaleInterval()
     vmin, vmax = zscale.get_limits(test_empirical_2d)
 
-    fig, axs = plt.subplots(1, 4, figsize=(20, 5))
+    fig, axs = plt.subplots(1, 5, figsize=(20, 5))
+    for ax in axs:
+        ax.set_box_aspect(1)
 
     # Panel 1: Empirical data
     im0 = axs[0].imshow(test_empirical_2d, vmin=vmin, vmax=vmax)
@@ -573,17 +575,26 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
     im1 = axs[1].imshow(best_fit_model_2d, vmin=vmin, vmax=vmax)
     axs[1].set_title("Best fit")
 
+    # Panel 3: Cross-section between empirical and best-fit PSF
+    center_y, center_x = np.array(test_empirical_2d.shape) // 2
+    cross_empirical = test_empirical_2d[center_y, :]
+    cross_best_fit = best_fit_model_2d[center_y, :]
+    axs[2].plot(cross_empirical, label="Empirical")
+    axs[2].plot(cross_best_fit, label="Best fit")
+    axs[2].set_title("Cross-section")
+    axs[2].legend()
+
     # Panel 3: Initial guess
-    im2 = axs[2].imshow(initial_guess_model_2d, vmin=vmin, vmax=vmax)
-    axs[2].set_title("Initial guess")
+    im2 = axs[3].imshow(initial_guess_model_2d, vmin=vmin, vmax=vmax)
+    axs[3].set_title("Initial guess")
 
     # Panel 4: Residuals
-    im2 = axs[3].imshow(test_empirical_2d - best_fit_model_2d, vmin=vmin, vmax=vmax)
-    axs[3].set_title("Empirical - Best fit")
+    im2 = axs[4].imshow(test_empirical_2d - best_fit_model_2d, vmin=vmin, vmax=vmax)
+    axs[4].set_title("Empirical - Best fit")
 
 
     plt.suptitle(
-        f"λ={config_observing['observing_filters_lm'][filter_name]*1e6:.2f}μm, pix={config_observing['pixel_scales']['img_lm']:.2f}mas, \n"
+        f"Filter: {filter_name}, λ={config_observing['observing_filters_lm'][filter_name]*1e6:.2f}μm, pix={config_observing['pixel_scales']['img_lm']:.2f}mas, \n"
         f"Best fits: D_aper={D_aperture_fit:.2f}±{D_aperture_err:.2f}m, "
         f'D_obsc={D_obscuration_fit:.2f}±{D_obscuration_err:.2f}m, '
         f'Amp={ampl_fit:.2f}±{ampl_err:.2f}',
@@ -901,8 +912,9 @@ def fit_simmed_psfs(cookie_cut_out_sci, plot_string, obs_filter, fp_mask, pp_mas
     # Get perfect, background-subtracted PSF - no detector noise
     psf_perfect = sci - background
 
+    print('FIX THIS PART FIRST')
     logging.info('!!! --- ARTIFICIALLY SUBTRACTING OFF A BACKGROUND RESIDUAL; FIX LATER --- !!')
-    psf_perfect -= np.nanmean(psf_perfect)
+    psf_perfect -= np.nanmedian(psf_perfect)
 
     # Oversample the background-subtracted PSF to match the cookie_cut_out_sci oversampling
     psf_perfect_oversamp = zoom(psf_perfect, fac_oversamp, order=3)
@@ -999,6 +1011,9 @@ def strehl_psfs(file_name,
     grid_frame = fits.open(file_name)
     grid_data = grid_frame[1].data
     grid_header = grid_frame[1].header
+
+    logging.info('!!! --- ARTIFICIALLY SUBTRACTING OFF A BACKGROUND RESIDUAL; FIX LATER --- !!')
+    grid_data -= np.nanmedian(grid_data)
 
     # read in coordinate guesses
     with open(config_coords_guesses_file_name, "r") as f:
@@ -1310,6 +1325,7 @@ def main():
     # 'APP-LMS', 'APP-LM', 'CLS-LMS', 'CLS-LM', 'CLS-N', 'PPS-LMS', 'PPS-LM', 'PPS-N', 'PPS-CFO2', 'RLS-LMS', 'RLS-LM', 'SPM-LMS', 'SPM-LM', 'SPM-N', 'open'
 
     # file of sample data
+    '''
     file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_Br_alpha_clocking_angle_0.fits'
     # Pass both the filter name (key) and wavelength (value) as separate parameters
     filter_name = 'Br_alpha'
@@ -1317,13 +1333,14 @@ def main():
                 fp_mask='grid_lm',
                 pp_mask='open', 
                 filter_name=filter_name, 
-                fit_simmed_psf=False, 
+                fit_simmed_psf=True, 
                 fit_annular_aperture_free=True,
-                fit_annular_aperture_fixed=False,
+                fit_annular_aperture_fixed=True,
                 psfs_subset=1, 
                 config_coords_guesses_file_name=config_coords_guesses_file_name, 
                 config_observing=observing_config)
-
+    '''
+    ipdb.set_trace()
 
     # rinse and repeat
     file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_Br_alpha_ref_clocking_angle_0.fits'
@@ -1332,12 +1349,46 @@ def main():
                 fp_mask='grid_lm',
                 pp_mask='open', 
                 filter_name=filter_name, 
+                fit_simmed_psf=True, 
+                fit_annular_aperture_free=True,
+                fit_annular_aperture_fixed=True,
+                psfs_subset=1, 
+                config_coords_guesses_file_name=config_coords_guesses_file_name, 
+                config_observing=observing_config)
+
+    ipdb.set_trace()
+
+    # rinse and repeat
+    file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_Lp_clocking_angle_0.fits'
+    filter_name = 'Lp'
+    strehl_psfs(file_name, 
+                fp_mask='grid_lm',
+                pp_mask='open', 
+                filter_name=filter_name, 
+                fit_simmed_psf=True, 
+                fit_annular_aperture_free=True,
+                fit_annular_aperture_fixed=True,
+                psfs_subset=1, 
+                config_coords_guesses_file_name=config_coords_guesses_file_name, 
+                config_observing=observing_config)
+
+    ipdb.set_trace()
+
+    # rinse and repeat
+    file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_H2O-ice_clocking_angle_0.fits'
+    filter_name = 'H2O-ice'
+    strehl_psfs(file_name, 
+                fp_mask='grid_lm',
+                pp_mask='open', 
+                filter_name=filter_name, 
                 fit_simmed_psf=False, 
                 fit_annular_aperture_free=True,
                 fit_annular_aperture_fixed=False,
                 psfs_subset=1, 
                 config_coords_guesses_file_name=config_coords_guesses_file_name, 
                 config_observing=observing_config)
+
+    ipdb.set_trace()
 
     #config_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
     #strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_coords_guesses_file_name)
@@ -1349,6 +1400,7 @@ def main():
     #strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_file_name)
 
     # rinse and repeat
+    '''
     file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_H2O-ice_clocking_angle_0.fits'
     filter_name = 'H2O-ice'
     strehl_psfs(file_name, 
@@ -1417,6 +1469,7 @@ def main():
                 psfs_subset=1, 
                 config_coords_guesses_file_name=config_coords_guesses_file_name, 
                 config_observing=observing_config)
+    '''
 
 
 if __name__ == "__main__":
