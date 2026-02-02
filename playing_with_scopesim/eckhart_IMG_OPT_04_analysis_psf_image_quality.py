@@ -198,7 +198,7 @@ def strehl_from_annular_aperture_fixed(cookie_cut_out_sci, filter_name, plot_str
     plt.axvline(x=-cutoff_freq, color='k', linestyle='--', alpha=0.5)
     plt.legend()
     plt.title(f'Cross-sections of MTFs\nStrehl from MTF: {strehl_from_fixed_annular_aperture_mtf:.2f}')
-    file_name_plot = f'figs_dump/mtf_{plot_string}.png'
+    file_name_plot = f'figs_dump/mtf_fixed_ann_ap_{plot_string}.png'
     plt.savefig(file_name_plot)
     logging.info(f'Saved {file_name_plot} to figs_dump/')
 
@@ -212,9 +212,9 @@ def strehl_from_annular_aperture_fixed(cookie_cut_out_sci, filter_name, plot_str
     # 3. MTF
     # INSERT_YOUR_CODE
     strehl_results = {
-        'strehl_fixed_annular_aperture_max': strehl_from_fixed_annular_aperture_max,
-        'strehl_fixed_annular_aperture_enclosed_power': strehl_from_fixed_annular_aperture_power_enclosed,
-        'strehl_fixed_annular_aperture_mtf': strehl_from_fixed_annular_aperture_mtf
+        'strehl_fix_ann_ap_max': strehl_from_fixed_annular_aperture_max,
+        'strehl_fix_ann_ap_pow': strehl_from_fixed_annular_aperture_power_enclosed,
+        'strehl_fix_ann_ap_mtf': strehl_from_fixed_annular_aperture_mtf
     }
     return strehl_results
 
@@ -344,7 +344,7 @@ def fit_airy_psf(cookie_cut_out_sci, obs_filter, x_center_pix_gaussian_best_fit_
     cax3 = divider3.append_axes("right", size="5%", pad=padding_colorbars)
     fig.colorbar(im3, cax=cax3)
     plot_filename = f'total_power_comparison_{plot_string}.png'
-    plt.show()
+    #plt.show()
     plt.savefig(plot_filename)
     logging.info(f'Saved {plot_filename} to figs_dump/')
 
@@ -438,9 +438,9 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
 
     valid_mask = mask.copy()
 
-    print(f"Original data points: {len(r_rad_1d_full)}")
-    print(f"Valid data points after masking: {len(r_rad_1d)}")
-    print(f"Arrays are aligned: {len(r_rad_1d) == len(test_empirical_1d)}")
+    logging.info(f"Original data points: {len(r_rad_1d_full)}")
+    logging.info(f"Valid data points after masking: {len(r_rad_1d)}")
+    logging.info(f"Arrays are aligned: {len(r_rad_1d) == len(test_empirical_1d)}")
 
     # Initial parameter guesses
     # [D_aperture, D_obscuration, ampl]
@@ -483,21 +483,21 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
     ampl_err = param_errors[2]
 
     # Print results
-    print('--------------------------------')
-    print("Fixed observing parameters:")
-    print(f"filter: {filter_name}, λ={config_observing['observing_filters_lm'][filter_name]*1e6:.2f}μm, ps={config_observing['pixel_scales']['img_lm']:.2f}mas", )
-    print('--------------------------------')
-    print("Best-fit parameters:")
-    print(f"D_aperture = {D_aperture_fit:.2f} ± {D_aperture_err:.2f} meters")
-    print(f"D_obscuration = {D_obscuration_fit:.2f} ± {D_obscuration_err:.2f} meters")
-    print(f"ampl = {ampl_fit:.2f} ± {ampl_err:.2f}")
+    logging.info('--------------------------------')
+    logging.info("Fixed observing parameters, annular aperture:")
+    logging.info(f"filter: {filter_name}, λ={config_observing['observing_filters_lm'][filter_name]*1e6:.2f}μm, ps={config_observing['pixel_scales']['img_lm']:.2f}mas", )
+    logging.info('--------------------------------')
+    logging.info("Best-fit parameters, annular aperture:")
+    logging.info(f"D_aperture = {D_aperture_fit:.2f} ± {D_aperture_err:.2f} meters")
+    logging.info(f"D_obscuration = {D_obscuration_fit:.2f} ± {D_obscuration_err:.2f} meters")
+    logging.info(f"ampl = {ampl_fit:.2f} ± {ampl_err:.2f}")
 
     # Check if covariance matrix has infs
     if np.any(np.isinf(pcov)):
-        print("\nWARNING: Covariance matrix contains infinities!")
-        print("This usually means the fit didn't converge properly.")
+        logging.warning("\nWARNING: Covariance matrix contains infinities!")
+        logging.warning("This usually means the fit didn't converge properly.")
     else:
-        print("\nCovariance matrix is finite - fit converged successfully!")
+        logging.info("\nCovariance matrix is finite - fit converged successfully!")
 
     # generate the best-fit model based on the fit parameters
     # Note: r_rad_2d needs to be flattened and masked for model_for_fit_fixed
@@ -525,9 +525,9 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
 
     # best_fit_model_2d is already created above
 
-    print(f"\nChi-squared = {chi_squared:.2f}")
-    print(f"Degrees of freedom = {dof}")
-    print(f"Reduced chi-squared = {reduced_chi_squared:.6f}")
+    logging.info(f"\nChi-squared = {chi_squared:.2f}")
+    logging.info(f"Degrees of freedom = {dof}")
+    logging.info(f"Reduced chi-squared = {reduced_chi_squared:.6f}")
 
     ############################################################
     # Find the Strehl from the MTF, like in fit_annular_aperture_fixed
@@ -555,7 +555,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
     plt.axvline(x=-cutoff_freq, color='k', linestyle='--', alpha=0.5)
     plt.legend()
     plt.title(f'Cross-sections of MTFs\nStrehl from MTF: {strehl_from_free_annular_aperture_mtf:.2f}')
-    file_name_plot = f'figs_dump/mtf_free_{plot_string}.png'
+    file_name_plot = f'figs_dump/mtf_free_ann_ap_{plot_string}.png'
     plt.savefig(file_name_plot)
     logging.info(f'Saved {file_name_plot} to figs_dump/')
     plt.close()
@@ -596,12 +596,12 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
 
     file_name_plot = 'figs_dump/test.png'
     plt.savefig(file_name_plot)
-    print(f"Saved {file_name_plot} to figs_dump/")
+    logging.info(f"Saved {file_name_plot} to figs_dump/")
     plt.close()
 
     # return dict of Strehl ratios found with different methods
     strehl_results = {
-        'strehl_from_free_annular_aperture_mtf': strehl_from_free_annular_aperture_mtf
+        'strehl_free_ann_ap_mtf': strehl_from_free_annular_aperture_mtf
     }
 
     return strehl_results
@@ -694,7 +694,7 @@ def fit_empirical_fwhm(frame, plot_string):
     #ipdb.set_trace()
     plt.savefig(f"figs_dump/{plot_filename}", bbox_inches='tight')
     plt.close()
-    print(f'Figure saved as {plot_filename}')
+    logging.info(f'Figure saved as {plot_filename}')
     #plt.show()
 
     return height_y, width_x
@@ -744,7 +744,7 @@ def fyi_plot_centroiding(array_to_plot, coords_to_plot, title_string=None, zscal
     plt.title(title_string)
     plot_filename = f"fyi_plot_centroiding_{title_string}.png"
     plt.savefig(f"figs_dump/{plot_filename}", bbox_inches='tight')
-    print(f"Saved {plot_filename} to figs_dump/")
+    logging.info(f"Saved {plot_filename} to figs_dump/")
     plt.close()
 
 
@@ -825,7 +825,7 @@ def fit_gaussian_psf(cookie_cut_out_sci, obs_filter, fp_mask, pp_mask, coords_gu
     # Save the plot to file with num_coord as a 2-digit zero-padded string
     plot_filename = f'psf_gaussian_best_fit_'+plot_string+'.png'
     plt.savefig(f"figs_dump/{plot_filename}", bbox_inches='tight')
-    print(f'Figure saved as {plot_filename}')
+    logging.info(f'Figure saved as {plot_filename}')
     plt.close()
     #ipdb.set_trace()
 
@@ -870,29 +870,29 @@ def fit_simmed_psfs(cookie_cut_out_sci, plot_string, obs_filter, fp_mask, pp_mas
     NDIT, EXPTIME = 1, 0.2
 
 
-    print('--------------------------------')
-    print('Current Observing filter:', obs_filter)
-    print('Current WCU FP mask:', wcu.fpmask)
-    print('Current WCU PP mask:', pp_mask)
+    logging.info('--------------------------------')
+    logging.info('Current Observing filter:', obs_filter)
+    logging.info('Current WCU FP mask:', wcu.fpmask)
+    logging.info('Current WCU PP mask:', pp_mask)
     #ipdb.set_trace()
     # background
-    print('Closing WCU BB aperture first to get a background ...')
+    logging.info('Closing WCU BB aperture first to get a background ...')
     # background
     wcu.set_bb_aperture(value = 0.0)
     metis.observe()
     outhdul_off = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
     background = outhdul_off[1].data
 
-    print('Re-opening WCU BB aperture to get a PSF ...')
+    logging.info('Re-opening WCU BB aperture to get a PSF ...')
     wcu.set_bb_aperture(value = 1.0) # open BB source
 
     #metis["filter_wheel"].change_filter(obs_filter)
 
-    print('--------------------------------')
-    print('Current Observing filter:', obs_filter)
-    print('Current WCU FP mask:', wcu.fpmask)
-    print('Current WCU PP mask:', pp_mask)
-    print('Opening WCU BB aperture...')
+    logging.info('--------------------------------')
+    logging.info('Current Observing filter:', obs_filter)
+    logging.info('Current WCU FP mask:', wcu.fpmask)
+    logging.info('Current WCU PP mask:', pp_mask)
+    logging.info('Opening WCU BB aperture...')
 
     metis.observe()
     outhdul_on = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
@@ -901,15 +901,16 @@ def fit_simmed_psfs(cookie_cut_out_sci, plot_string, obs_filter, fp_mask, pp_mas
     # Get perfect, background-subtracted PSF - no detector noise
     psf_perfect = sci - background
 
-    print('!!! --- ARTIFICIALLY SUBTRACTING OFF A BACKGROUND RESIDUAL; FIX LATER --- !!')
+    logging.info('!!! --- ARTIFICIALLY SUBTRACTING OFF A BACKGROUND RESIDUAL; FIX LATER --- !!')
     psf_perfect -= np.nanmean(psf_perfect)
 
     # Oversample the background-subtracted PSF to match the cookie_cut_out_sci oversampling
     psf_perfect_oversamp = zoom(psf_perfect, fac_oversamp, order=3)
 
     # for debugging
-    fits.writeto("psf_perfect_oversamp.fits", psf_perfect_oversamp, overwrite=True)
-    print("Saved psf_perfect_oversamp.fits for checking.")
+    file_name_plot = "psf_perfect_oversamp.fits"
+    fits.writeto(file_name_plot, psf_perfect_oversamp, overwrite=True)
+    logging.info("Saved " + file_name_plot + " for checking.")
 
 
     #ipdb.set_trace()
@@ -957,7 +958,7 @@ def fit_simmed_psfs(cookie_cut_out_sci, plot_string, obs_filter, fp_mask, pp_mas
     plt.tight_layout()
     plot_filename = "junk_psf_perfect_cutout_best_fit.png"
     plt.savefig(f"figs_dump/{plot_filename}", bbox_inches="tight")
-    print(f"Saved {plot_filename}")
+    logging.info(f"Saved {plot_filename}")
 
     return psf_perfect_cutout_best_fit
 
@@ -1072,7 +1073,7 @@ def strehl_psfs(file_name,
         logging.error(f"psfs_subset must be 'all' or an integer, got {psfs_subset}")
         raise ValueError(f"psfs_subset must be 'all' or an integer, got {psfs_subset}")
     
-    print(f"Processing {num_psfs_to_process} out of {total_psfs} PSFs")
+    logging.info(f"Processing {num_psfs_to_process} out of {total_psfs} PSFs")
 
     # loop over each centroided PSF
     for num_coord in range(num_psfs_to_process):
@@ -1212,9 +1213,14 @@ def strehl_psfs(file_name,
         #sigma_y_pix_array[num_coord] = sigma_y_pix
         #angle_theta_array[num_coord] = angle_theta
 
-    ipdb.set_trace()
     # merge the Strehl dicts and print
-    strehl_results_all = {**strehl_airy, **strehl_annular_aperture_fixed, **strehl_annular_aperture_free}
+    strehl_results_all = {}
+    for d in [locals().get('strehl_airy'), locals().get('strehl_annular_aperture_fixed'), locals().get('strehl_annular_aperture_free')]:
+        if isinstance(d, dict):
+            strehl_results_all.update(d)
+    logging.info(f'Strehl results:')
+    for k, v in strehl_results_all.items():
+        logging.info(f"\t{k}:\t{v:.3f}")
 
     # plot the grid_data and annotate it with the best-fit fwhm in x and y for each PSF
     plt.clf()
@@ -1233,7 +1239,7 @@ def strehl_psfs(file_name,
     plt.title('FWHM in x and y (pix), amplitude (counts)')
     plot_file_name = f"fyi_plot_fwhm_and_amp.png"
     plt.savefig(f"figs_dump/{plot_file_name}", bbox_inches="tight")
-    print(f"Saved {plot_file_name} to figs_dump/")
+    logging.info(f"Saved {plot_file_name} to figs_dump/")
     plt.close()
 
 
@@ -1313,18 +1319,25 @@ def main():
                 filter_name=filter_name, 
                 fit_simmed_psf=False, 
                 fit_annular_aperture_free=True,
-                fit_annular_aperture_fixed=True,
+                fit_annular_aperture_fixed=False,
                 psfs_subset=1, 
                 config_coords_guesses_file_name=config_coords_guesses_file_name, 
                 config_observing=observing_config)
 
 
     # rinse and repeat
-    ipdb.set_trace()
     file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_Br_alpha_ref_clocking_angle_0.fits'
     filter_name = 'Br_alpha_ref'
-
-    ipdb.set_trace()
+    strehl_psfs(file_name, 
+                fp_mask='grid_lm',
+                pp_mask='open', 
+                filter_name=filter_name, 
+                fit_simmed_psf=False, 
+                fit_annular_aperture_free=True,
+                fit_annular_aperture_fixed=False,
+                psfs_subset=1, 
+                config_coords_guesses_file_name=config_coords_guesses_file_name, 
+                config_observing=observing_config)
 
     #config_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
     #strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_coords_guesses_file_name)
@@ -1338,20 +1351,72 @@ def main():
     # rinse and repeat
     file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_H2O-ice_clocking_angle_0.fits'
     filter_name = 'H2O-ice'
+    strehl_psfs(file_name, 
+                fp_mask='grid_lm',
+                pp_mask='open', 
+                filter_name=filter_name, 
+                fit_simmed_psf=False, 
+                fit_annular_aperture_free=True,
+                fit_annular_aperture_fixed=False,
+                psfs_subset=1, 
+                config_coords_guesses_file_name=config_coords_guesses_file_name, 
+                config_observing=observing_config)
+
    # rinse and repeat
     file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_Lp_clocking_angle_0.fits'
     filter_name = 'Lp'
+    strehl_psfs(file_name, 
+                fp_mask='grid_lm',
+                pp_mask='open', 
+                filter_name=filter_name, 
+                fit_simmed_psf=False, 
+                fit_annular_aperture_free=True,
+                fit_annular_aperture_fixed=False,
+                psfs_subset=1, 
+                config_coords_guesses_file_name=config_coords_guesses_file_name, 
+                config_observing=observing_config)
+
     # rinse and repeat
     file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_PAH_3.3_clocking_angle_0.fits'
     filter_name = 'PAH_3.3'
+    strehl_psfs(file_name, 
+                fp_mask='grid_lm',
+                pp_mask='open', 
+                filter_name=filter_name, 
+                fit_simmed_psf=False, 
+                fit_annular_aperture_free=True,
+                fit_annular_aperture_fixed=False,
+                psfs_subset=1, 
+                config_coords_guesses_file_name=config_coords_guesses_file_name, 
+                config_observing=observing_config)
 
     # rinse and repeat
     file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_PAH_3.3_ref_clocking_angle_0.fits'
     filter_name = 'PAH_3.3_ref'
+    strehl_psfs(file_name, 
+                fp_mask='grid_lm',
+                pp_mask='open', 
+                filter_name=filter_name, 
+                fit_simmed_psf=False, 
+                fit_annular_aperture_free=True,
+                fit_annular_aperture_fixed=False,
+                psfs_subset=1, 
+                config_coords_guesses_file_name=config_coords_guesses_file_name, 
+                config_observing=observing_config)
 
     # rinse and repeat
     file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_short-L_clocking_angle_0.fits'
     filter_name = 'short-L'
+    strehl_psfs(file_name, 
+                fp_mask='grid_lm',
+                pp_mask='open', 
+                filter_name=filter_name, 
+                fit_simmed_psf=False, 
+                fit_annular_aperture_free=True,
+                fit_annular_aperture_fixed=False,
+                psfs_subset=1, 
+                config_coords_guesses_file_name=config_coords_guesses_file_name, 
+                config_observing=observing_config)
 
 
 if __name__ == "__main__":
