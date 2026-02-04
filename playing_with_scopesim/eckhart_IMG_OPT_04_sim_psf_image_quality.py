@@ -65,25 +65,66 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
 
     # set up instrument
     cmd = None # reset
-    cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode])
+    cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": obs_filter, "!WCU.current_fpmask": "grid_lm", "!WCU.current_ppmask": "Open"})
     metis = sim.OpticalTrain(cmd)
 
     wcu = metis['wcu_source']
+
+    print('! ----- GET THIS THING FIXED FIRST, WHERE PSFS IN SOME FILTERS DO NOW SHOW UP ----- !')
 
     bb_temp = 1000 * u.K
     NDIT = ndit
     EXPTIME = exptime
 
+    
+
     print('Setting FP mask: ' + str(fp_mask))
     wcu.set_fpmask(fp_mask)
+
+    #cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": obs_filter})
+    #metis = sim.OpticalTrain(cmd)
+
+    ########## START DEBUGGING HERE ##########
+
+    ipdb.set_trace()
+    cmd = None # reset
+    cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": "Mp", "!WCU.current_fpmask": "grid_lm", "!WCU.current_ppmask": "Open"})
+    metis = sim.OpticalTrain(cmd)
+
+    wcu = metis['wcu_source']
+
+    bb_temp = 1000 * u.K
+    NDIT = 1
+    EXPTIME = 10
+
+    wcu.set_temperature(bb_temp=bb_temp)
+    wcu.set_bb_aperture(value = 1.0)
+
+    metis.observe()
+    outhdul = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
+
+    test_array = outhdul[1].data - np.median(outhdul[1].data)
+    hdu = fits.PrimaryHDU(test_array)
+    hdulist = fits.HDUList([hdu])
+    hdulist.writeto('junk.fits', overwrite=True)
+    ipdb.set_trace()
+
+    ########## END DEBUGGING HERE ##########
 
     print('Setting PP mask: ' + str(pp_mask))
     metis['pupil_masks'].change_mask(pp_mask)
     #metis['psf'].update(pupil_mask=pp_mask) # needed due to shortcoming in ScopeSim: https://irdb.readthedocs.io/en/latest/METIS/docs/example_notebooks/demos/demo_metis_wcu_psfs.html
     #wcu.set_ppmask(pp_mask)
 
+    cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": obs_filter})
+    metis = sim.OpticalTrain(cmd)
+
     print('Setting observing filter: ' + str(obs_filter))
     metis["filter_wheel"].change_filter(obs_filter)
+
+    # reset (to avoid bug where a different filter is put in)
+    cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": obs_filter})
+    metis = sim.OpticalTrain(cmd)
 
     if nd_filter is not None:
         print('Setting ND filter: ' + str(nd_filter))
@@ -110,6 +151,7 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     print('Opening WCU BB aperture...')
 
     metis.observe()
+    ipdb.set_trace()
     # Get perfect PSF - no detector noise
     #hdul_perfect = metis.image_planes[0].hdu
 
@@ -297,7 +339,7 @@ def main():
     ndit = 1 # don't modify this; useless
     exptime = 1
     generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, ndit=ndit, exptime=exptime)
-    '''
+
 
     fp_mask = "grid_lm"
     obs_filter = "HCI_L_short"
@@ -305,6 +347,23 @@ def main():
     ndit = 1 # don't modify this; useless
     exptime = 1
     generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, ndit=ndit, exptime=exptime)
+
+
+    fp_mask = "grid_lm"
+    obs_filter = "HCI_L_long"
+    nd_filter = "ND_OD1"
+    ndit = 1 # don't modify this; useless
+    exptime = 1
+    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, ndit=ndit, exptime=exptime)
+    '''
+
+    fp_mask = "grid_lm"
+    obs_filter = "Mp"
+    nd_filter = None
+    ndit = 1 # don't modify this; useless
+    exptime = 10
+    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, ndit=ndit, exptime=exptime)
+
 
     '''
     for fp_mask in lm_fpmasks_list:
