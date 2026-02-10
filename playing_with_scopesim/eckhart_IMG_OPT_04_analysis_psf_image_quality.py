@@ -315,6 +315,7 @@ def fit_airy_psf(cookie_cut_out_sci, obs_filter, x_center_pix_gaussian_best_fit_
     fig.colorbar(im0, cax=cax0)
 
     # Airy PSF
+    #ipdb.set_trace(context=10)
     im1 = axs[1].imshow(airy_psf, origin='lower', cmap='gray_r',
                        norm=LogNorm(vmin=np.maximum(np.nanmin(airy_psf[airy_psf > 0]), 1e-3),
                                     vmax=np.nanmax(airy_psf)))
@@ -912,10 +913,6 @@ def fit_simmed_psfs(cookie_cut_out_sci, plot_string, obs_filter, fp_mask, pp_mas
     # Get perfect, background-subtracted PSF - no detector noise
     psf_perfect = sci - background
 
-    print('FIX THIS PART FIRST')
-    logging.info('!!! --- ARTIFICIALLY SUBTRACTING OFF A BACKGROUND RESIDUAL; FIX LATER --- !!')
-    psf_perfect -= np.nanmedian(psf_perfect)
-
     # Oversample the background-subtracted PSF to match the cookie_cut_out_sci oversampling
     psf_perfect_oversamp = zoom(psf_perfect, fac_oversamp, order=3)
 
@@ -1009,11 +1006,10 @@ def strehl_psfs(file_name,
     # return the locations and other data for each PSF
 
     grid_frame = fits.open(file_name)
+    ipdb.set_trace(context=10)
     grid_data = grid_frame[1].data
     grid_header = grid_frame[1].header
 
-    logging.info('!!! --- ARTIFICIALLY SUBTRACTING OFF A BACKGROUND RESIDUAL; FIX LATER --- !!')
-    grid_data -= np.nanmedian(grid_data)
 
     # read in coordinate guesses
     with open(config_coords_guesses_file_name, "r") as f:
@@ -1326,13 +1322,23 @@ def main():
 
     # Strehl analysis configurations
     strehl_configs = [
-        {"filter_name": "Br_alpha",     "fit_simmed_psf": True,  "fit_annular_aperture_fixed": True},
-        {"filter_name": "Br_alpha_ref", "fit_simmed_psf": True,  "fit_annular_aperture_fixed": True},
-        {"filter_name": "Lp",           "fit_simmed_psf": True,  "fit_annular_aperture_fixed": True},
-        {"filter_name": "H2O-ice",      "fit_simmed_psf": False, "fit_annular_aperture_fixed": False},
-        {"filter_name": "PAH_3.3",      "fit_simmed_psf": False, "fit_annular_aperture_fixed": False},
-        {"filter_name": "PAH_3.3_ref",  "fit_simmed_psf": False, "fit_annular_aperture_fixed": False},
-        {"filter_name": "short-L",      "fit_simmed_psf": False, "fit_annular_aperture_fixed": False},
+        {"filter_name": "Br_alpha",     "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_Br_alpha_clocking_angle_0.fits"},
+        {"filter_name": "Br_alpha_ref", "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_Br_alpha_ref_clocking_angle_0.fits"},
+        {"filter_name": "Lp",           "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_Lp_clocking_angle_0.fits"},
+        {"filter_name": "H2O-ice",      "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_H2O-ice_clocking_angle_0.fits"},
+        {"filter_name": "PAH_3.3",      "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_PAH_3.3_clocking_angle_0.fits"},
+        {"filter_name": "PAH_3.3_ref",  "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_PAH_3.3_ref_clocking_angle_0.fits"},
+        {"filter_name": "short-L",      "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_short-L_clocking_angle_0.fits"},
+        {"filter_name": "IB_4.05",      "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_IB_4.05_clocking_angle_0.fits"},
+        {"filter_name": "HCI_L_short",  "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_HCI_L_short_clocking_angle_0.fits"},
+        {"filter_name": "HCI_L_long",   "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_HCI_L_long_clocking_angle_0.fits"},
+        {"filter_name": "Mp",           "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_Mp_clocking_angle_0.fits"},
+        {"filter_name": "CO_1-0_ice",   "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_CO_1-0_ice_clocking_angle_0.fits"},
+        {"filter_name": "CO_ref",       "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_CO_ref_clocking_angle_0.fits"},
+        {"filter_name": "HCI_M",        "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_HCI_M_clocking_angle_0.fits"},
+        {"filter_name": "L_spec",       "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_L_spec_clocking_angle_0.fits"},
+        {"filter_name": "M_spec",       "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_M_spec_clocking_angle_0.fits"},
+
     ]
 
     fp_mask = 'grid_lm'
@@ -1340,15 +1346,13 @@ def main():
     clocking_angle = 0
 
     for config in strehl_configs:
-        file_name = (stem + 'IMG_04_sample_input_data/strehl/'
-                     f'IMG_OPT_04_wcu_focal_mask_{fp_mask}_pupil_mask_{pp_mask}'
-                     f'_filter_{config["filter_name"]}_clocking_angle_{clocking_angle}.fits')
-        strehl_psfs(file_name,
+        ipdb.set_trace()
+        strehl_psfs(config["file_name"],
                     fp_mask=fp_mask,
                     pp_mask=pp_mask,
                     filter_name=config["filter_name"],
                     fit_simmed_psf=config["fit_simmed_psf"],
-                    fit_annular_aperture_free=True,
+                    fit_annular_aperture_free=config["fit_annular_aperture_free"],
                     fit_annular_aperture_fixed=config["fit_annular_aperture_fixed"],
                     psfs_subset=1,
                     config_coords_guesses_file_name=config_coords_guesses_file_name,

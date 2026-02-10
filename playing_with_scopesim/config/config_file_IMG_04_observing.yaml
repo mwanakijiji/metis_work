@@ -1,6 +1,6 @@
 observing_filters_lm:
-  Lp: 3.82e-6
   short-L: 3.29e-6
+  Lp: 3.82e-6
   L_spec: 3.56e-6
   Mp: 4.76e-6
   M_spec: 4.87e-6
@@ -11,6 +11,11 @@ observing_filters_lm:
   CO_1-0_ice: 4.66e-6
   CO_ref: 4.94e-6
   H2O-ice: 3.09e-6
+  IB_4.05: 4.04e-6
+  HCI_L_short: 3.62e-6
+  HCI_L_long: 3.80e-6
+  HCI_M: 4.95e-6
+
 
 pixel_scales:
   img_lm: 5.47
