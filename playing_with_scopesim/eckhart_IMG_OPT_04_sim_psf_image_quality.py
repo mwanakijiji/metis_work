@@ -86,6 +86,7 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
 
     #########################################################
     # BACKGROUND
+
     wcu.set_bb_aperture(value = 0.0)
     metis.observe()
 
@@ -248,123 +249,40 @@ def main():
     # just one mask for now (Open)
     pp_mask = metis['pupil_masks'].meta['current_mask'] # PP mask
 
-    '''
-    # example of alternate way of permutating LM filters and masks:
-    obs_counter = 1
-    for filt, mask in itertools.product(filter_list_img_lm, wcu_fp2_masks_lm):
-        obs_name = f"obs{obs_counter}"
-        dict_config[obs_name] = {
-            'mode': 'wcu_img_lm',
-            'filter': filt,
-            'fpmask': mask,
-            'ndit': 10,
-            'dit': 1.
-        }
-        obs_counter += 1
-    '''
-
     # LM filters
     # dict_keys(['open', 'Lp', 'short-L', 'L_spec', 'Mp', 'M_spec', 'Br_alpha', 'Br_alpha_ref', 'PAH_3.3', 'PAH_3.3_ref', 'CO_1-0_ice', 'CO_ref', 'H2O-ice', 'IB_4.05', 'HCI_L_short', 'HCI_L_long', 'HCI_M'])
+    lm_obs_configs = [
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Br_alpha",     "nd_filter": None,      "dit": 1, "ndit": 10, "exptime": 0.1, "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Br_alpha_ref", "nd_filter": "ND_OD1",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Lp",           "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 0.5, "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "H2O-ice",      "nd_filter": None,      "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "short-L",      "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "PAH_3.3",      "nd_filter": "ND_OD1",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "PAH_3.3_ref",  "nd_filter": "ND_OD1",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "IB_4.05",      "nd_filter": "ND_OD1",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "HCI_L_short",  "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "HCI_L_long",   "nd_filter": "ND_OD1",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Mp",           "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "CO_1-0_ice",   "nd_filter": "ND_OD1",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "CO_ref",       "nd_filter": "ND_OD1",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "HCI_M",        "nd_filter": "ND_OD1",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "L_spec",       "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "M_spec",       "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
+    ]
 
-    # LM band
-
-    '''
-    fp_mask = "grid_lm"
-    obs_filter = "Br_alpha"
-    nd_filter = None
-    dit, ndit = 1, 10 # don't modify this for now
-    exptime = 0.1
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
-    
-    fp_mask = "grid_lm"
-    obs_filter = "Br_alpha_ref"
-    nd_filter = "ND_OD1"
-    dit, ndit = 1, 10 # don't modify this for now
-    exptime = 1
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
-
-    fp_mask = "grid_lm"
-    obs_filter = "Lp"
-    nd_filter = "ND_OD2"
-    dit, ndit = 1, 10 # don't modify this for now
-    exptime = 0.5
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
-
-
-    fp_mask = "grid_lm"
-    obs_filter = "H2O-ice"
-    nd_filter = None
-    dit, ndit = 1, 10 # don't modify this for now
-    exptime = 1
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
-
-    ipdb.set_trace()
-
-    fp_mask = "grid_lm"
-    obs_filter = "short-L"
-    nd_filter = "ND_OD2"
-    dit, ndit = 1, 10 # don't modify this for now
-    exptime = 1
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
-
-
-    fp_mask = "grid_lm"
-    obs_filter = "PAH_3.3"
-    nd_filter = "ND_OD1"
-    dit, ndit = 1, 10 # don't modify this for now
-    exptime = 1
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
-
-    fp_mask = "grid_lm"
-    obs_filter = "PAH_3.3_ref"
-    nd_filter = "ND_OD1"
-    dit, ndit = 1, 10 # don't modify this for now
-    exptime = 1
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
- 
-
-    fp_mask = "grid_lm"
-    obs_filter = "IB_4.05"
-    nd_filter = "ND_OD1"
-    dit, ndit = 1, 10 # don't modify this for now
-    exptime = 1
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
-
-
-    fp_mask = "grid_lm"
-    obs_filter = "HCI_L_short"
-    nd_filter = "ND_OD2"
-    dit, ndit = 1, 10 # don't modify this for now
-    exptime = 1
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
-
-
-    fp_mask = "grid_lm"
-    obs_filter = "HCI_L_long"
-    nd_filter = "ND_OD1"
-    dit, ndit = 1, 10 # don't modify this for now
-    exptime = 1
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
-    '''
-
-    fp_mask = "grid_lm"
-    obs_filter = "Mp"
-    nd_filter = "ND_OD3"
-    dit, ndit = 1, 10 # don't modify this for now
-    exptime = 1
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime, use_exp_time_only=True)
-
-
-    '''
-    for fp_mask in lm_fpmasks_list:
-        for obs_filter in lm_filters_list:
-            generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, ndit=None, exptime=None)
-
-    # N band
-    for fp_mask in n_fpmasks_list:
-        for obs_filter in n_filters_list:
-            generate_psf_image_quality_data(fp_mask, pp_mask, obs_filter, obs_mode='wcu_img_n', angle_array=angle_array)
-    '''
+    for config in lm_obs_configs:
+        generate_psf_image_quality_data(
+            fp_mask=config["fp_mask"],
+            pp_mask=config["pp_mask"],
+            nd_filter=config["nd_filter"],
+            obs_filter=config["obs_filter"],
+            obs_mode=config["obs_mode"],
+            angle_array=angle_array,
+            dit=config["dit"],
+            ndit=config["ndit"],
+            exptime=config["exptime"],
+        )
+        exit()
 
 
 if __name__ == "__main__":
