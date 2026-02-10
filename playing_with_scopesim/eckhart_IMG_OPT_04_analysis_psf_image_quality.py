@@ -1289,7 +1289,7 @@ def main():
 
     # config file containing the observing parameters
     observing_config_file = stem + 'config/config_file_IMG_04_observing.yaml'
-   # config file containing guesses for the PSF coordinates
+    # config file containing guesses for the PSF coordinates
     config_coords_guesses_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
     
     with open(observing_config_file, "r") as config_file:
@@ -1324,152 +1324,36 @@ def main():
     # pp mask choices
     # 'APP-LMS', 'APP-LM', 'CLS-LMS', 'CLS-LM', 'CLS-N', 'PPS-LMS', 'PPS-LM', 'PPS-N', 'PPS-CFO2', 'RLS-LMS', 'RLS-LM', 'SPM-LMS', 'SPM-LM', 'SPM-N', 'open'
 
-    # file of sample data
-    '''
-    file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_Br_alpha_clocking_angle_0.fits'
-    # Pass both the filter name (key) and wavelength (value) as separate parameters
-    filter_name = 'Br_alpha'
-    strehl_psfs(file_name, 
-                fp_mask='grid_lm',
-                pp_mask='open', 
-                filter_name=filter_name, 
-                fit_simmed_psf=True, 
-                fit_annular_aperture_free=True,
-                fit_annular_aperture_fixed=True,
-                psfs_subset=1, 
-                config_coords_guesses_file_name=config_coords_guesses_file_name, 
-                config_observing=observing_config)
-    '''
-    ipdb.set_trace()
+    # Strehl analysis configurations
+    strehl_configs = [
+        {"filter_name": "Br_alpha",     "fit_simmed_psf": True,  "fit_annular_aperture_fixed": True},
+        {"filter_name": "Br_alpha_ref", "fit_simmed_psf": True,  "fit_annular_aperture_fixed": True},
+        {"filter_name": "Lp",           "fit_simmed_psf": True,  "fit_annular_aperture_fixed": True},
+        {"filter_name": "H2O-ice",      "fit_simmed_psf": False, "fit_annular_aperture_fixed": False},
+        {"filter_name": "PAH_3.3",      "fit_simmed_psf": False, "fit_annular_aperture_fixed": False},
+        {"filter_name": "PAH_3.3_ref",  "fit_simmed_psf": False, "fit_annular_aperture_fixed": False},
+        {"filter_name": "short-L",      "fit_simmed_psf": False, "fit_annular_aperture_fixed": False},
+    ]
 
-    # rinse and repeat
-    file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_Br_alpha_ref_clocking_angle_0.fits'
-    filter_name = 'Br_alpha_ref'
-    strehl_psfs(file_name, 
-                fp_mask='grid_lm',
-                pp_mask='open', 
-                filter_name=filter_name, 
-                fit_simmed_psf=True, 
-                fit_annular_aperture_free=True,
-                fit_annular_aperture_fixed=True,
-                psfs_subset=1, 
-                config_coords_guesses_file_name=config_coords_guesses_file_name, 
-                config_observing=observing_config)
+    fp_mask = 'grid_lm'
+    pp_mask = 'open'
+    clocking_angle = 0
 
-    ipdb.set_trace()
+    for config in strehl_configs:
+        file_name = (stem + 'IMG_04_sample_input_data/strehl/'
+                     f'IMG_OPT_04_wcu_focal_mask_{fp_mask}_pupil_mask_{pp_mask}'
+                     f'_filter_{config["filter_name"]}_clocking_angle_{clocking_angle}.fits')
+        strehl_psfs(file_name,
+                    fp_mask=fp_mask,
+                    pp_mask=pp_mask,
+                    filter_name=config["filter_name"],
+                    fit_simmed_psf=config["fit_simmed_psf"],
+                    fit_annular_aperture_free=True,
+                    fit_annular_aperture_fixed=config["fit_annular_aperture_fixed"],
+                    psfs_subset=1,
+                    config_coords_guesses_file_name=config_coords_guesses_file_name,
+                    config_observing=observing_config)
 
-    # rinse and repeat
-    file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_Lp_clocking_angle_0.fits'
-    filter_name = 'Lp'
-    strehl_psfs(file_name, 
-                fp_mask='grid_lm',
-                pp_mask='open', 
-                filter_name=filter_name, 
-                fit_simmed_psf=True, 
-                fit_annular_aperture_free=True,
-                fit_annular_aperture_fixed=True,
-                psfs_subset=1, 
-                config_coords_guesses_file_name=config_coords_guesses_file_name, 
-                config_observing=observing_config)
-
-    ipdb.set_trace()
-
-    # rinse and repeat
-    file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_H2O-ice_clocking_angle_0.fits'
-    filter_name = 'H2O-ice'
-    strehl_psfs(file_name, 
-                fp_mask='grid_lm',
-                pp_mask='open', 
-                filter_name=filter_name, 
-                fit_simmed_psf=False, 
-                fit_annular_aperture_free=True,
-                fit_annular_aperture_fixed=False,
-                psfs_subset=1, 
-                config_coords_guesses_file_name=config_coords_guesses_file_name, 
-                config_observing=observing_config)
-
-    ipdb.set_trace()
-
-    #config_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
-    #strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_coords_guesses_file_name)
-
-    # rinse and repeat
-    #file_name = stem + 'strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_CO_1-0_ice_clocking_angle_0.fits'
-    #filter_name = 'CO_1-0_ice'
-    #config_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
-    #strehl_psfs(file_name, fp_mask='grid_lm', pp_mask='open', filter_name=filter_name, wavel=observing_filters_lm[filter_name], pixel_scale_mas=pixel_scales['img_lm'], fit_simmed_psf=False, fit_analytical_psf=True, psfs_subset=1, config_file_name=config_file_name)
-
-    # rinse and repeat
-    '''
-    file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_H2O-ice_clocking_angle_0.fits'
-    filter_name = 'H2O-ice'
-    strehl_psfs(file_name, 
-                fp_mask='grid_lm',
-                pp_mask='open', 
-                filter_name=filter_name, 
-                fit_simmed_psf=False, 
-                fit_annular_aperture_free=True,
-                fit_annular_aperture_fixed=False,
-                psfs_subset=1, 
-                config_coords_guesses_file_name=config_coords_guesses_file_name, 
-                config_observing=observing_config)
-
-   # rinse and repeat
-    file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_Lp_clocking_angle_0.fits'
-    filter_name = 'Lp'
-    strehl_psfs(file_name, 
-                fp_mask='grid_lm',
-                pp_mask='open', 
-                filter_name=filter_name, 
-                fit_simmed_psf=False, 
-                fit_annular_aperture_free=True,
-                fit_annular_aperture_fixed=False,
-                psfs_subset=1, 
-                config_coords_guesses_file_name=config_coords_guesses_file_name, 
-                config_observing=observing_config)
-
-    # rinse and repeat
-    file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_PAH_3.3_clocking_angle_0.fits'
-    filter_name = 'PAH_3.3'
-    strehl_psfs(file_name, 
-                fp_mask='grid_lm',
-                pp_mask='open', 
-                filter_name=filter_name, 
-                fit_simmed_psf=False, 
-                fit_annular_aperture_free=True,
-                fit_annular_aperture_fixed=False,
-                psfs_subset=1, 
-                config_coords_guesses_file_name=config_coords_guesses_file_name, 
-                config_observing=observing_config)
-
-    # rinse and repeat
-    file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_PAH_3.3_ref_clocking_angle_0.fits'
-    filter_name = 'PAH_3.3_ref'
-    strehl_psfs(file_name, 
-                fp_mask='grid_lm',
-                pp_mask='open', 
-                filter_name=filter_name, 
-                fit_simmed_psf=False, 
-                fit_annular_aperture_free=True,
-                fit_annular_aperture_fixed=False,
-                psfs_subset=1, 
-                config_coords_guesses_file_name=config_coords_guesses_file_name, 
-                config_observing=observing_config)
-
-    # rinse and repeat
-    file_name = stem + 'IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_grid_lm_pupil_mask_open_filter_short-L_clocking_angle_0.fits'
-    filter_name = 'short-L'
-    strehl_psfs(file_name, 
-                fp_mask='grid_lm',
-                pp_mask='open', 
-                filter_name=filter_name, 
-                fit_simmed_psf=False, 
-                fit_annular_aperture_free=True,
-                fit_annular_aperture_fixed=False,
-                psfs_subset=1, 
-                config_coords_guesses_file_name=config_coords_guesses_file_name, 
-                config_observing=observing_config)
-    '''
 
 
 if __name__ == "__main__":

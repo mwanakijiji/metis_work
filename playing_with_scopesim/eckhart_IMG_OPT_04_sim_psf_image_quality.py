@@ -271,6 +271,10 @@ def main():
     ]
 
     for config in lm_obs_configs:
+        
+        # below line is kludge for testing just one combo
+        #config = {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Mp",           "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True}
+
         generate_psf_image_quality_data(
             fp_mask=config["fp_mask"],
             pp_mask=config["pp_mask"],
