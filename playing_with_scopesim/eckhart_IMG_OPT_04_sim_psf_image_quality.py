@@ -47,7 +47,7 @@ sim.link_irdb("../../../")
 # simulate observations with METIS (comment this out if packages already exist)
 #sim.download_packages(["METIS", "ELT", "Armazones"])
 
-def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode, angle_array, ndit=1, exptime=0.01):
+def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode, angle_array, dit=1, ndit=1, exptime=0.01, use_exp_time_only=True):
     '''
     Generate simulated data for the IMG-OPT-04 PSF image quality test
     
@@ -58,6 +58,10 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     - obs_filter: observing filter
     - obs_mode: observing mode
     - angle_array: array of clocking angles
+    - dit: dit time
+    - ndit: number of dithered exposures
+    - exptime: exposure time
+    - use_exp_time_only: if True, only use the exposure time to set the exposure time; if False, use the exposure time and ndit to set the exposure time
 
     OUTPUTS:
     - None; writes out files
@@ -65,84 +69,40 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
 
     # set up instrument
     cmd = None # reset
-    cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": obs_filter, "!WCU.current_fpmask": "grid_lm", "!WCU.current_ppmask": "Open"})
-    metis = sim.OpticalTrain(cmd)
-
-    wcu = metis['wcu_source']
-
-    print('! ----- GET THIS THING FIXED FIRST, WHERE PSFS IN SOME FILTERS DO NOW SHOW UP ----- !')
-
-    bb_temp = 1000 * u.K
-    NDIT = ndit
-    EXPTIME = exptime
-
-    
-
-    print('Setting FP mask: ' + str(fp_mask))
-    wcu.set_fpmask(fp_mask)
-
-    #cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": obs_filter})
-    #metis = sim.OpticalTrain(cmd)
-
-    ########## START DEBUGGING HERE ##########
-
-    ipdb.set_trace()
-    cmd = None # reset
-    cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": "Mp", "!WCU.current_fpmask": "grid_lm", "!WCU.current_ppmask": "Open"})
-    metis = sim.OpticalTrain(cmd)
-
-    wcu = metis['wcu_source']
-
-    bb_temp = 1000 * u.K
-    NDIT = 1
-    EXPTIME = 10
-
-    wcu.set_temperature(bb_temp=bb_temp)
-    wcu.set_bb_aperture(value = 1.0)
-
-    metis.observe()
-    outhdul = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
-
-    test_array = outhdul[1].data - np.median(outhdul[1].data)
-    hdu = fits.PrimaryHDU(test_array)
-    hdulist = fits.HDUList([hdu])
-    hdulist.writeto('junk.fits', overwrite=True)
-    ipdb.set_trace()
-
-    ########## END DEBUGGING HERE ##########
-
-    print('Setting PP mask: ' + str(pp_mask))
-    metis['pupil_masks'].change_mask(pp_mask)
-    #metis['psf'].update(pupil_mask=pp_mask) # needed due to shortcoming in ScopeSim: https://irdb.readthedocs.io/en/latest/METIS/docs/example_notebooks/demos/demo_metis_wcu_psfs.html
-    #wcu.set_ppmask(pp_mask)
-
-    cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": obs_filter})
-    metis = sim.OpticalTrain(cmd)
-
-    print('Setting observing filter: ' + str(obs_filter))
-    metis["filter_wheel"].change_filter(obs_filter)
-
-    # reset (to avoid bug where a different filter is put in)
-    cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": obs_filter})
-    metis = sim.OpticalTrain(cmd)
-
     if nd_filter is not None:
-        print('Setting ND filter: ' + str(nd_filter))
-        metis['nd_filter_wheel'].change_filter(nd_filter)
+        cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": obs_filter, "!WCU.current_fpmask": fp_mask, "!OBS.pupil_mask": pp_mask, "!OBS.nd_filter_name": nd_filter})
+    else:
+        cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": obs_filter, "!WCU.current_fpmask": fp_mask, "!OBS.pupil_mask": pp_mask})
+
+    metis = sim.OpticalTrain(cmd)
+
+    wcu = metis['wcu_source']
+
+    bb_temp = 1000 * u.K
 
     metis.effects.pprint_all()
 
     print('Closing WCU BB aperture first to get a background ...')
-    # background
+
+    #########################################################
+    # BACKGROUND
     wcu.set_bb_aperture(value = 0.0)
     metis.observe()
-    outhdul_off = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
+
+    if use_exp_time_only:
+        # Method 1 for setting exposure times: exptime alone
+        outhdul_off = metis.readout(exptime = exptime)[0]
+    else:
+        # Method 2 for setting exposure times: use ndit and dit together
+        outhdul_off = metis.readout(ndit = ndit, dit = dit)[0]
+
     background = outhdul_off[1].data
 
     print('Re-opening WCU BB aperture to get a PSF ...')
     wcu.set_bb_aperture(value = 1.0) # open BB source
 
-    #metis["filter_wheel"].change_filter(obs_filter)
+    #########################################################
+    # SCIENCE FRAME
 
     print('--------------------------------')
     print('Current Observing filter:', obs_filter)
@@ -151,18 +111,23 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     print('Opening WCU BB aperture...')
 
     metis.observe()
-    ipdb.set_trace()
     # Get perfect PSF - no detector noise
     #hdul_perfect = metis.image_planes[0].hdu
 
-    # rotate (if angle != 0)
-    #import ipdb; ipdb.set_trace()
+    # loop over rotation angles
     for angle in angle_array:
 
-        outhdul = metis.readout(ndit = NDIT, exptime = EXPTIME)[0]
+        if use_exp_time_only:
+            # Method 1 for setting exposure times: exptime alone
+            outhdul = metis.readout(exptime = exptime)[0]
+        else:
+            # Method 2 for setting exposure times: use ndit and dit together
+            outhdul = metis.readout(ndit = ndit, dit = dit)[0]
+
 
         # background-subtract
-        bckgd_subted = outhdul[1].data - background
+        raw_sci_readout = outhdul[1].data
+        bckgd_subted = raw_sci_readout - background
 
         print('Rotating by ' + str(angle) + ' degrees')
         sci_rotated = ndimage.rotate(outhdul[1].data, angle, order=3, reshape=False)
@@ -223,17 +188,42 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
         print('Saved PNG of bckgd-subtracted histogram to ' + file_name_plot_bckgd_subtracted_histogram)
 
 
-        # save to FITS file, with filter and other info in the header
-        file_name = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_clocking_angle_' + str(angle) + '.fits'
-        outhdul[0].header['FILTER'] = (obs_filter, 'Observing filter')
-        outhdul[0].header['WCU_FP'] = (fp_mask, 'WCU focal plane mask')
-        outhdul[0].header['WCU_PP'] = (pp_mask, 'WCU pupil plane mask')
-        outhdul[0].header['BB_TEMP'] = (bb_temp.value, 'BB temperature')
-        outhdul[0].header['NDIT'] = (NDIT, 'Number of dithered exposures')
-        outhdul[0].header['EXPTIME'] = (EXPTIME, 'Exposure time')
+        # save background-subtracted to FITS file, with filter and other info in the header
+        # Make a new FITS file (let's call it file_name_write_all_layers) with the same primary header as outhdul,
+        # but with: 
+        #  [0] header, 
+        #  [1] background-subtracted image (bckgd_subted_rotated), 
+        #  [2] raw_sci_readout, 
+        #  [3] background_rotated
+
+ 
+        #hdul_new.writeto(file_name_write_all_layers, overwrite=True)
+
+        file_name_write = 'IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_clocking_angle_' + str(angle) + '.fits'
+
+        # Copy the primary header
+        primary_hdu = fits.PrimaryHDU(header=outhdul[0].header)
+        # Add background-subtracted readout as first extension
+        hdu_bckgd_subted = fits.ImageHDU(data=bckgd_subted_rotated, name='BCKGD_SUBTED')
+        # Add raw science readout as second extension
+        hdu_raw_readout = fits.ImageHDU(data=raw_sci_readout, name='RAW_READOUT')
+        # Add background as third extension
+        hdu_background = fits.ImageHDU(data=background_rotated, name='BACKGROUND')
+        hdul_new = fits.HDUList([primary_hdu, hdu_bckgd_subted, hdu_raw_readout, hdu_background])
+
+        # add some stuff to the header, some of which may be redundant
+        hdul_new[0].header['FILTER'] = (obs_filter, 'Observing filter')
+        hdul_new[0].header['WCU_FP'] = (fp_mask, 'WCU focal plane mask')
+        hdul_new[0].header['WCU_PP'] = (pp_mask, 'WCU pupil plane mask')
+        hdul_new[0].header['BB_TEMP'] = (bb_temp.value, 'BB temperature')
+        if ndit is not None:
+            hdul_new[0].header['NDIT'] = (ndit, 'Number of dithered exposures')
+            hdul_new[0].header['DIT'] = (dit, 'Det integration time')
+        else:
+            hdul_new[0].header['EXPTIME'] = (exptime, 'Exposure time')
         
-        outhdul.writeto(file_name, overwrite=True)
-        print('Saved readout without aberrations to ' + file_name)
+        hdul_new.writeto(file_name_write, overwrite=True)
+        print('Saved background-subtracted readout without aberrations to ' + file_name_write)
 
 
 def main():
@@ -282,87 +272,87 @@ def main():
     fp_mask = "grid_lm"
     obs_filter = "Br_alpha"
     nd_filter = None
-    ndit = 1 # don't modify this; useless
+    dit, ndit = 1, 10 # don't modify this for now
     exptime = 0.1
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, ndit=ndit, exptime=exptime)
+    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
     
     fp_mask = "grid_lm"
     obs_filter = "Br_alpha_ref"
     nd_filter = "ND_OD1"
-    ndit = 1 # don't modify this; useless
+    dit, ndit = 1, 10 # don't modify this for now
     exptime = 1
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, ndit=ndit, exptime=exptime)
+    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
 
     fp_mask = "grid_lm"
     obs_filter = "Lp"
     nd_filter = "ND_OD2"
-    ndit = 1 # don't modify this; useless
+    dit, ndit = 1, 10 # don't modify this for now
     exptime = 0.5
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, ndit=ndit, exptime=exptime)
+    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
 
 
     fp_mask = "grid_lm"
     obs_filter = "H2O-ice"
     nd_filter = None
-    ndit = 1 # don't modify this; useless
+    dit, ndit = 1, 10 # don't modify this for now
     exptime = 1
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, ndit=ndit, exptime=exptime)
+    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
 
     ipdb.set_trace()
 
     fp_mask = "grid_lm"
     obs_filter = "short-L"
     nd_filter = "ND_OD2"
-    ndit = 1 # don't modify this; useless
+    dit, ndit = 1, 10 # don't modify this for now
     exptime = 1
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, ndit=ndit, exptime=exptime)
+    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
 
 
     fp_mask = "grid_lm"
     obs_filter = "PAH_3.3"
     nd_filter = "ND_OD1"
-    ndit = 1 # don't modify this; useless
+    dit, ndit = 1, 10 # don't modify this for now
     exptime = 1
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, ndit=ndit, exptime=exptime)
+    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
 
     fp_mask = "grid_lm"
     obs_filter = "PAH_3.3_ref"
     nd_filter = "ND_OD1"
-    ndit = 1 # don't modify this; useless
+    dit, ndit = 1, 10 # don't modify this for now
     exptime = 1
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, ndit=ndit, exptime=exptime)
+    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
  
 
     fp_mask = "grid_lm"
     obs_filter = "IB_4.05"
     nd_filter = "ND_OD1"
-    ndit = 1 # don't modify this; useless
+    dit, ndit = 1, 10 # don't modify this for now
     exptime = 1
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, ndit=ndit, exptime=exptime)
+    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
 
 
     fp_mask = "grid_lm"
     obs_filter = "HCI_L_short"
     nd_filter = "ND_OD2"
-    ndit = 1 # don't modify this; useless
+    dit, ndit = 1, 10 # don't modify this for now
     exptime = 1
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, ndit=ndit, exptime=exptime)
+    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
 
 
     fp_mask = "grid_lm"
     obs_filter = "HCI_L_long"
     nd_filter = "ND_OD1"
-    ndit = 1 # don't modify this; useless
+    dit, ndit = 1, 10 # don't modify this for now
     exptime = 1
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, ndit=ndit, exptime=exptime)
+    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime)
     '''
 
     fp_mask = "grid_lm"
     obs_filter = "Mp"
-    nd_filter = None
-    ndit = 1 # don't modify this; useless
-    exptime = 10
-    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, ndit=ndit, exptime=exptime)
+    nd_filter = "ND_OD3"
+    dit, ndit = 1, 10 # don't modify this for now
+    exptime = 1
+    generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode='wcu_img_lm', angle_array=angle_array, dit=dit, ndit=ndit, exptime=exptime, use_exp_time_only=True)
 
 
     '''
