@@ -126,6 +126,7 @@ def debug_mwe(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode, exptime=0.01):
     print('Raw science readout:', np.median(raw_sci_readout))
     print('Background:', np.median(background))
     print('Bckgd-subtracted readout:', np.median(bckgd_subted))
+    print('--------------------------------')
 
     plt.clf()
     plt.imshow(raw_sci_readout, origin='lower')
@@ -150,7 +151,7 @@ def debug_mwe(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode, exptime=0.01):
 
 
 
-def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode, angle_array, dit=1, ndit=1, exptime=0.01, use_exp_time_only=True):
+def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode, angle_array, dit=1, ndit=1, exptime=0.01, use_exp_time_only=False):
     '''
     Generate simulated data for the IMG-OPT-04 PSF image quality test
     
@@ -164,7 +165,7 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     - dit: dit time
     - ndit: number of dithered exposures
     - exptime: exposure time
-    - use_exp_time_only: if True, only use the exposure time to set the exposure time; if False, use the exposure time and ndit to set the exposure time
+    - use_exp_time_only: if True, only use the exposure time to set the exposure time; but this will be broken down into dit and ndit to avoid saturation, so integration parameters may change accordingly
 
     OUTPUTS:
     - None; writes out files
@@ -192,7 +193,6 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     wcu.set_bb_aperture(value = 0.0)
     metis.observe()
 
-    print('Before background readout:', metis.cmds.get("!OBS.filter_name"), metis.cmds.get("!WCU.current_fpmask"), metis.cmds.get("!OBS.pupil_mask"), metis.cmds.get("!OBS.nd_filter_name"))
     metis.effects.pprint_all()
 
     if use_exp_time_only:
@@ -201,6 +201,11 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     else:
         # Method 2 for setting exposure times: use ndit and dit together
         outhdul_off = metis.readout(ndit = ndit, dit = dit, reset=False)[0]
+
+    print('Background readout:', metis.cmds.get("!OBS.filter_name"), metis.cmds.get("!WCU.current_fpmask"), metis.cmds.get("!OBS.pupil_mask"), metis.cmds.get("!OBS.nd_filter_name"))
+    print('NDIT:', metis.cmds["!OBS.ndit"])
+    print('DIT:', metis.cmds["!OBS.dit"])
+
 
     background = outhdul_off[1].data
 
@@ -223,7 +228,7 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     # Get perfect PSF - no detector noise
     #hdul_perfect = metis.image_planes[0].hdu
 
-    print('Before science readout:', metis.cmds.get("!OBS.filter_name"), metis.cmds.get("!WCU.current_fpmask"), metis.cmds.get("!OBS.pupil_mask"), metis.cmds.get("!OBS.nd_filter_name"))
+    
     metis.effects.pprint_all()
 
     if use_exp_time_only:
@@ -232,14 +237,13 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     else:
         # Method 2 for setting exposure times: use ndit and dit together
         outhdul_on = metis.readout(ndit = ndit, dit = dit, reset=False)[0]
+    print('Science readout:', metis.cmds.get("!OBS.filter_name"), metis.cmds.get("!WCU.current_fpmask"), metis.cmds.get("!OBS.pupil_mask"), metis.cmds.get("!OBS.nd_filter_name"))
+    print('NDIT:', metis.cmds["!OBS.ndit"])
+    print('DIT:', metis.cmds["!OBS.dit"])
 
     # background-subtract
     raw_sci_readout = outhdul_on[1].data
     bckgd_subted = raw_sci_readout - background
-
-    
-    
-
     
     ## BEGIN CHECK
     file_name_write = 'IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '.fits'
@@ -409,25 +413,26 @@ def main():
     # LM filters
     # dict_keys(['open', 'Lp', 'short-L', 'L_spec', 'Mp', 'M_spec', 'Br_alpha', 'Br_alpha_ref', 'PAH_3.3', 'PAH_3.3_ref', 'CO_1-0_ice', 'CO_ref', 'H2O-ice', 'IB_4.05', 'HCI_L_short', 'HCI_L_long', 'HCI_M'])
     lm_obs_configs = [
-        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Br_alpha",     "nd_filter": None,      "dit": 1, "ndit": 10, "exptime": 0.1, "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
-        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Br_alpha_ref", "nd_filter": "ND_OD1",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
-        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Lp",           "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 0.5, "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
-        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "H2O-ice",      "nd_filter": None,      "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
-        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "short-L",      "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
-        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "PAH_3.3",      "nd_filter": "ND_OD1",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
-        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "PAH_3.3_ref",  "nd_filter": "ND_OD1",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
-        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "IB_4.05",      "nd_filter": "ND_OD1",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
-        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "HCI_L_short",  "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
-        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "HCI_L_long",   "nd_filter": "ND_OD1",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
-        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Mp",           "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
-        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "CO_1-0_ice",   "nd_filter": "ND_OD1",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
-        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "CO_ref",       "nd_filter": "ND_OD1",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
-        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "HCI_M",        "nd_filter": "ND_OD1",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
-        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "L_spec",       "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
-        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "M_spec",       "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Br_alpha",     "nd_filter": None,      "dit": 0.04, "ndit": 2, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Br_alpha_ref", "nd_filter": "ND_OD1",  "dit": 0.2, "ndit": 5, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Lp",           "nd_filter": "ND_OD2",  "dit": float(1/8), "ndit": 3, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "H2O-ice",      "nd_filter": "ND_OD1",      "dit": 0.04, "ndit": 1, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False}, 
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "short-L",      "nd_filter": "ND_OD2",  "dit": 0.25, "ndit": 4, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "PAH_3.3",      "nd_filter": "ND_OD1",  "dit": float(1/8), "ndit": 7, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "PAH_3.3_ref",  "nd_filter": "ND_OD1",  "dit": float(1/8), "ndit": 8, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "IB_4.05",      "nd_filter": "ND_OD1",  "dit": float(1/12), "ndit": 12, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "HCI_L_short",  "nd_filter": "ND_OD2",  "dit": float(1/3), "ndit": 3, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "HCI_L_long",   "nd_filter": "ND_OD1",  "dit": 0.04, "ndit": 25, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Mp",           "nd_filter": "ND_OD2",  "dit": 0.2, "ndit": 5, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "CO_1-0_ice",   "nd_filter": "ND_OD1",  "dit": float(1/21), "ndit": 21, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "CO_ref",       "nd_filter": "ND_OD1",  "dit": float(1/21), "ndit": 21, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "HCI_M",        "nd_filter": "ND_OD1",  "dit": float(1/22), "ndit": 22, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "L_spec",       "nd_filter": "ND_OD2",  "dit": float(1/11), "ndit": 11, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "M_spec",       "nd_filter": "ND_OD2",  "dit": float(1/7), "ndit": 7, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
     ]
 
     # debug
+    '''
     ipdb.set_trace()
     for config in lm_obs_configs:
         #_ = debug_mwe(fp_mask = "grid_lm", pp_mask = "Open", nd_filter = None, obs_filter = "Br_alpha", obs_mode = "wcu_img_lm", exptime = 0.1)
@@ -437,6 +442,7 @@ def main():
         exit()
         #ipdb.set_trace()
     ipdb.set_trace()
+    '''
 
     for config in lm_obs_configs:
 
@@ -454,8 +460,6 @@ def main():
             ndit=config["ndit"],
             exptime=config["exptime"],
         )
-        ipdb.set_trace()
-        #exit()
 
 
 if __name__ == "__main__":
