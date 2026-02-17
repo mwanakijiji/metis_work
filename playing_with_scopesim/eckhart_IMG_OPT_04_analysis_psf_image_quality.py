@@ -1346,7 +1346,7 @@ def main():
     clocking_angle = 0
 
     for config in strehl_configs:
-        ipdb.set_trace()
+
         strehl_psfs(config["file_name"],
                     fp_mask=fp_mask,
                     pp_mask=pp_mask,

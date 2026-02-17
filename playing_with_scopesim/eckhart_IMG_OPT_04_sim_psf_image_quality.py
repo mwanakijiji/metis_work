@@ -37,6 +37,9 @@ from scipy import ndimage
 
 import time
 import ipdb
+import datetime
+import os
+import logging
 
 import scopesim as sim
 sim.bug_report()
@@ -86,7 +89,7 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     #########################################################
     # BACKGROUND
 
-    print('Closing WCU BB aperture first to get a background ...')
+    logging.info('Closing WCU BB aperture first to get a background ...')
     wcu.set_bb_aperture(value = 0.0)
     metis.observe()
 
@@ -99,9 +102,9 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
         # Method 2 for setting exposure times: use ndit and dit together
         outhdul_off = metis.readout(ndit = ndit, dit = dit, reset=False)[0]
 
-    print('Background readout:', metis.cmds.get("!OBS.filter_name"), metis.cmds.get("!WCU.current_fpmask"), metis.cmds.get("!OBS.pupil_mask"), metis.cmds.get("!OBS.nd_filter_name"))
-    print('NDIT:', metis.cmds["!OBS.ndit"])
-    print('DIT:', metis.cmds["!OBS.dit"])
+    logging.info('Background readout:', metis.cmds.get("!OBS.filter_name"), metis.cmds.get("!WCU.current_fpmask"), metis.cmds.get("!OBS.pupil_mask"), metis.cmds.get("!OBS.nd_filter_name"))
+    logging.info('NDIT:', metis.cmds["!OBS.ndit"])
+    logging.info('DIT:', metis.cmds["!OBS.dit"])
 
 
     background = outhdul_off[1].data
@@ -109,18 +112,18 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     #########################################################
     # SCIENCE FRAME
 
-    print('Re-opening WCU BB aperture to get a PSF ...')
+    logging.info('Re-opening WCU BB aperture to get a PSF ...')
     wcu.set_bb_aperture(value = 1.0) # open BB source
     metis.observe()
 
     #cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": obs_filter, "!WCU.current_fpmask": fp_mask, "!OBS.pupil_mask": pp_mask, "!OBS.nd_filter_name": nd_filter})
     #metis = sim.OpticalTrain(cmd)
 
-    print('--------------------------------')
-    print('Current Observing filter:', obs_filter)
-    print('Current WCU FP mask:', wcu.fpmask)
-    print('Current WCU PP mask:', pp_mask)
-    print('Opening WCU BB aperture...')
+    logging.info('--------------------------------')
+    logging.info('Current Observing filter:', obs_filter)
+    logging.info('Current WCU FP mask:', wcu.fpmask)
+    logging.info('Current WCU PP mask:', pp_mask)
+    logging.info('Opening WCU BB aperture...')
 
     # Get perfect PSF - no detector noise
     #hdul_perfect = metis.image_planes[0].hdu
@@ -134,9 +137,9 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     else:
         # Method 2 for setting exposure times: use ndit and dit together
         outhdul_on = metis.readout(ndit = ndit, dit = dit, reset=False)[0]
-    print('Science readout:', metis.cmds.get("!OBS.filter_name"), metis.cmds.get("!WCU.current_fpmask"), metis.cmds.get("!OBS.pupil_mask"), metis.cmds.get("!OBS.nd_filter_name"))
-    print('NDIT:', metis.cmds["!OBS.ndit"])
-    print('DIT:', metis.cmds["!OBS.dit"])
+    logging.info('Science readout:', metis.cmds.get("!OBS.filter_name"), metis.cmds.get("!WCU.current_fpmask"), metis.cmds.get("!OBS.pupil_mask"), metis.cmds.get("!OBS.nd_filter_name"))
+    logging.info('NDIT:', metis.cmds["!OBS.ndit"])
+    logging.info('DIT:', metis.cmds["!OBS.dit"])
 
     # background-subtract
     raw_sci_readout = outhdul_on[1].data
@@ -168,14 +171,14 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
         hdul_new[0].header['EXPTIME'] = (exptime, 'Exposure time')
     
     hdul_new.writeto(file_name_write, overwrite=True)
-    print('Saved background-subtracted readout without aberrations to ' + file_name_write)
+    logging.info('Saved background-subtracted readout without aberrations to ' + file_name_write)
 
-    print('--------------------------------')
-    print('Medians:')
-    print('--------------------------------')
-    print('Raw science readout:', np.median(raw_sci_readout))
-    print('Background:', np.median(background))
-    print('Bckgd-subtracted readout:', np.median(bckgd_subted))
+    logging.info('--------------------------------')
+    logging.info('Medians:')
+    logging.info('--------------------------------')
+    logging.info('Raw science readout:', np.median(raw_sci_readout))
+    logging.info('Background:', np.median(background))
+    logging.info('Bckgd-subtracted readout:', np.median(bckgd_subted))
 
     ## END CHECK
     #exit()
@@ -187,7 +190,7 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
 
         ipdb.set_trace()
 
-        print('Rotating by ' + str(angle) + ' degrees')
+        logging.info('Rotating by ' + str(angle) + ' degrees')
         sci_rotated = ndimage.rotate(outhdul_on[1].data, angle, order=3, reshape=False)
         background_rotated = ndimage.rotate(background, angle, order=3, reshape=False)
         bckgd_subted_rotated = ndimage.rotate(bckgd_subted, angle, order=3, reshape=False)
@@ -206,7 +209,7 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
         plt.savefig(file_name_plot_raw_readout)
         #plt.show()
         plt.close()
-        print('Saved PNG of raw readout to ' + file_name_plot_raw_readout)
+        logging.info('Saved PNG of raw readout to ' + file_name_plot_raw_readout)
 
         plt.clf()
         zscale = ZScaleInterval()
@@ -219,7 +222,7 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
         plt.savefig(file_name_plot_background)
         #plt.show()
         plt.close()
-        print('Saved PNG of background to ' + file_name_plot_background)
+        logging.info('Saved PNG of background to ' + file_name_plot_background)
 
         # detector
         plt.clf()
@@ -233,7 +236,7 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
         plt.savefig(file_name_plot_bckgd_subtracted_readout)
         #plt.show()
         plt.close()
-        print('Saved PNG of bckgd-subtracted readout to ' + file_name_plot_bckgd_subtracted_readout)
+        logging.info('Saved PNG of bckgd-subtracted readout to ' + file_name_plot_bckgd_subtracted_readout)
 
         # histogram
         plt.clf()
@@ -244,7 +247,7 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
         plt.savefig(file_name_plot_bckgd_subtracted_histogram) 
         #plt.show()
         plt.close()
-        print('Saved PNG of bckgd-subtracted histogram to ' + file_name_plot_bckgd_subtracted_histogram)
+        logging.info('Saved PNG of bckgd-subtracted histogram to ' + file_name_plot_bckgd_subtracted_histogram)
 
 
         # save background-subtracted to FITS file, with filter and other info in the header
@@ -282,11 +285,34 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
             hdul_new[0].header['EXPTIME'] = (exptime, 'Exposure time')
         
         hdul_new.writeto(file_name_write, overwrite=True)
-        print('Saved background-subtracted readout without aberrations to ' + file_name_write)
+        logging.info('Saved background-subtracted readout without aberrations to ' + file_name_write)
     '''
 
 
 def main():
+
+    stem = '/podman-share/metis_work/playing_with_scopesim/'
+
+    now = datetime.datetime.now()
+    log_dir = stem + 'IMG_04_logs/'
+    log_file_name = log_dir + 'log_IMG_04_simulation_psf_image_quality_' + now.strftime('%Y-%m-%d_%H-%M-%S') + '.txt'
+
+    # Ensure log directory exists and force config in case handlers already set
+    os.makedirs(log_dir, exist_ok=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file_name),
+            logging.StreamHandler()
+        ],
+        force=True
+    )
+
+    logging.info(f'Log file created at {now.strftime("%Y-%m-%d %H:%M:%S")}')
+    logging.info(f'Log file name: {log_file_name}')
+    logging.info(f'Log file directory: {stem + "IMG_04_logs/"}')
+    logging.info(f'Log file directory: {stem + "IMG_04_logs/"}')
 
     # initialize instrument here just to obtain filter lists: LM band
     '''
