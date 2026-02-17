@@ -38,7 +38,9 @@ from scipy import ndimage
 import time
 import ipdb
 import datetime
+import io
 import os
+import sys
 import logging
 
 import scopesim as sim
@@ -49,6 +51,22 @@ sim.link_irdb("../../../")
 
 # simulate observations with METIS (comment this out if packages already exist)
 #sim.download_packages(["METIS", "ELT", "Armazones"])
+
+
+def log_effects_pprint(effects, msg="Effects"):
+    """Capture pprint_all() output and write each line to the log."""
+    buffer = io.StringIO()
+    old_stdout = sys.stdout
+    try:
+        sys.stdout = buffer
+        effects.pprint_all()
+        output = buffer.getvalue()
+    finally:
+        sys.stdout = old_stdout
+    logging.info('--------------------------------')
+    logging.info(msg)
+    for line in output.rstrip().splitlines():
+        logging.info(line)
 
 
 def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode, angle_array, dit=1, ndit=1, exptime=0.01, use_exp_time_only=False):
@@ -84,7 +102,7 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
 
     bb_temp = 1000 * u.K
 
-    metis.effects.pprint_all()
+    log_effects_pprint(metis.effects, msg="Optical train effects (initial)")
 
     #########################################################
     # BACKGROUND
@@ -93,7 +111,7 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     wcu.set_bb_aperture(value = 0.0)
     metis.observe()
 
-    metis.effects.pprint_all()
+    log_effects_pprint(metis.effects, msg="Optical train effects (background)")
 
     if use_exp_time_only:
         # Method 1 for setting exposure times: exptime alone
@@ -102,10 +120,32 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
         # Method 2 for setting exposure times: use ndit and dit together
         outhdul_off = metis.readout(ndit = ndit, dit = dit, reset=False)[0]
 
-    logging.info('Background readout:', metis.cmds.get("!OBS.filter_name"), metis.cmds.get("!WCU.current_fpmask"), metis.cmds.get("!OBS.pupil_mask"), metis.cmds.get("!OBS.nd_filter_name"))
-    logging.info('NDIT:', metis.cmds["!OBS.ndit"])
-    logging.info('DIT:', metis.cmds["!OBS.dit"])
+    logging.info('--------------------------------')
+    logging.info('Background readout:')
+    logging.info('OBS filter: ' + str(metis.cmds.get("!OBS.filter_name")))
+    logging.info('WCU FP mask: ' + str(metis.cmds.get("!WCU.current_fpmask")))
+    logging.info('OBS PP mask: ' + str(metis.cmds.get("!OBS.pupil_mask")))
+    logging.info('OBS ND filter: ' + str(metis.cmds.get("!OBS.nd_filter_name")))
+    logging.info('NDIT :' + str(metis.cmds["!OBS.ndit"]))
+    logging.info('DIT :' + str(metis.cmds["!OBS.dit"]))
 
+    # sanity check that user inputs really are the same as what the instrument is using
+    def sanity_check_user_inputs(metis, obs_filter, fp_mask, pp_mask):
+        if metis.cmds.get("!OBS.filter_name") != obs_filter:
+            logging.error('! ------- OBS filter: ' + str(metis.cmds.get("!OBS.filter_name")) + ' does not match user input: ' + str(obs_filter))
+            exit()
+        if metis.cmds.get("!WCU.current_fpmask") != fp_mask:
+            logging.error('! ------- WCU FP mask: ' + str(metis.cmds.get("!WCU.current_fpmask")) + ' does not match user input: ' + str(fp_mask))
+            exit()
+        if metis.cmds.get("!OBS.pupil_mask") != pp_mask:
+            logging.error('! ------- OBS PP mask: ' + str(metis.cmds.get("!OBS.pupil_mask")) + ' does not match user input: ' + str(pp_mask))
+            exit()
+        else:
+            logging.info('User filter inputs match instrument inputs')
+        return
+
+    # check for background-taking
+    sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask, pp_mask=pp_mask)
 
     background = outhdul_off[1].data
 
@@ -119,17 +159,13 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     #cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": obs_filter, "!WCU.current_fpmask": fp_mask, "!OBS.pupil_mask": pp_mask, "!OBS.nd_filter_name": nd_filter})
     #metis = sim.OpticalTrain(cmd)
 
-    logging.info('--------------------------------')
-    logging.info('Current Observing filter:', obs_filter)
-    logging.info('Current WCU FP mask:', wcu.fpmask)
-    logging.info('Current WCU PP mask:', pp_mask)
     logging.info('Opening WCU BB aperture...')
 
     # Get perfect PSF - no detector noise
     #hdul_perfect = metis.image_planes[0].hdu
 
-    
-    metis.effects.pprint_all()
+    ipdb.set_trace()
+    log_effects_pprint(metis.effects, msg="Optical train effects (science)")
 
     if use_exp_time_only:
         # Method 1 for setting exposure times: exptime alone
@@ -137,9 +173,17 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     else:
         # Method 2 for setting exposure times: use ndit and dit together
         outhdul_on = metis.readout(ndit = ndit, dit = dit, reset=False)[0]
-    logging.info('Science readout:', metis.cmds.get("!OBS.filter_name"), metis.cmds.get("!WCU.current_fpmask"), metis.cmds.get("!OBS.pupil_mask"), metis.cmds.get("!OBS.nd_filter_name"))
-    logging.info('NDIT:', metis.cmds["!OBS.ndit"])
-    logging.info('DIT:', metis.cmds["!OBS.dit"])
+    logging.info('--------------------------------')
+    logging.info('Science readout:')
+    logging.info('OBS filter: ' + str(metis.cmds.get("!OBS.filter_name")))
+    logging.info('WCU FP mask: ' + str(metis.cmds.get("!WCU.current_fpmask")))
+    logging.info('OBS PP mask: ' + str(metis.cmds.get("!OBS.pupil_mask")))
+    logging.info('OBS ND filter: ' + str(metis.cmds.get("!OBS.nd_filter_name")))
+    logging.info('NDIT:' + str(metis.cmds["!OBS.ndit"]))
+    logging.info('DIT:' + str(metis.cmds["!OBS.dit"]))
+
+    # check for science-taking
+    sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask, pp_mask=pp_mask)
 
     # background-subtract
     raw_sci_readout = outhdul_on[1].data
@@ -174,11 +218,9 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     logging.info('Saved background-subtracted readout without aberrations to ' + file_name_write)
 
     logging.info('--------------------------------')
-    logging.info('Medians:')
-    logging.info('--------------------------------')
-    logging.info('Raw science readout:', np.median(raw_sci_readout))
-    logging.info('Background:', np.median(background))
-    logging.info('Bckgd-subtracted readout:', np.median(bckgd_subted))
+    logging.info(f'Median of raw science readout: {np.median(raw_sci_readout):.4f}')
+    logging.info(f'Median of background: {np.median(background):.4f}')
+    logging.info(f'Median of background-subtracted readout: {np.median(bckgd_subted):.4f}')
 
     ## END CHECK
     #exit()
