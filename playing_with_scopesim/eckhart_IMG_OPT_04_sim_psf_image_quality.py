@@ -53,13 +53,25 @@ sim.link_irdb("../../../")
 #sim.download_packages(["METIS", "ELT", "Armazones"])
 
 
-def log_effects_pprint(effects, msg="Effects"):
-    """Capture pprint_all() output and write each line to the log."""
+def pipe_2_log(callable_func, msg="Output"):
+    '''
+    Capture stdout from any ScopeSim callable and write each line to the log.
+
+    INPUTS:
+    - callable_func: callable (no args) that prints to stdout when invoked
+    - msg: string header to add to the log
+
+    OUTPUTS:
+    - None; writes out to log
+
+    Example:
+        pipe_2_log(lambda m=metis: m.effects.pprint_all(), msg="Optical train effects")
+    '''
     buffer = io.StringIO()
     old_stdout = sys.stdout
     try:
         sys.stdout = buffer
-        effects.pprint_all()
+        callable_func()
         output = buffer.getvalue()
     finally:
         sys.stdout = old_stdout
@@ -102,16 +114,17 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
 
     bb_temp = 1000 * u.K
 
-    log_effects_pprint(metis.effects, msg="Optical train effects (initial)")
+    pipe_2_log(lambda m=metis: m.effects.pprint_all(), msg="Optical train effects (initial)")
 
     #########################################################
     # BACKGROUND
 
     logging.info('Closing WCU BB aperture first to get a background ...')
     wcu.set_bb_aperture(value = 0.0)
+    
     metis.observe()
 
-    log_effects_pprint(metis.effects, msg="Optical train effects (background)")
+    pipe_2_log(lambda m=metis: m.effects.pprint_all(), msg="Optical train effects (background)")
 
     if use_exp_time_only:
         # Method 1 for setting exposure times: exptime alone
@@ -126,8 +139,10 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     logging.info('WCU FP mask: ' + str(metis.cmds.get("!WCU.current_fpmask")))
     logging.info('OBS PP mask: ' + str(metis.cmds.get("!OBS.pupil_mask")))
     logging.info('OBS ND filter: ' + str(metis.cmds.get("!OBS.nd_filter_name")))
-    logging.info('NDIT :' + str(metis.cmds["!OBS.ndit"]))
-    logging.info('DIT :' + str(metis.cmds["!OBS.dit"]))
+    logging.info('NDIT: ' + str(metis.cmds["!OBS.ndit"]))
+    logging.info('DIT: ' + str(metis.cmds["!OBS.dit"]))
+    logging.info('WCU source state:')
+    pipe_2_log(lambda m=metis: metis["wcu_source"].info(), msg="Optical train effects (background)")
 
     # sanity check that user inputs really are the same as what the instrument is using
     def sanity_check_user_inputs(metis, obs_filter, fp_mask, pp_mask):
@@ -154,18 +169,19 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
 
     logging.info('Re-opening WCU BB aperture to get a PSF ...')
     wcu.set_bb_aperture(value = 1.0) # open BB source
+    ipdb.set_trace()
     metis.observe()
-
-    #cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": obs_filter, "!WCU.current_fpmask": fp_mask, "!OBS.pupil_mask": pp_mask, "!OBS.nd_filter_name": nd_filter})
-    #metis = sim.OpticalTrain(cmd)
-
-    logging.info('Opening WCU BB aperture...')
+    # print the ingredients of the PSF generation
+    # pipe_2_log(lambda m=metis: [print(f"{k}: {v}") for k, v in vars(m["psf"]).items()], msg="PSF ingredients") # this prints EVERYTHING
+    logging.info('PSF model wavel range: ' + str(vars(metis['psf'])['_waveset']))
+    logging.info('PSF model kernel shape: ' + str(vars(metis['psf'])['kernel'].shape))
+    pipe_2_log(lambda m=metis: str(vars(m['psf'])['_waveset']), msg="PSF model wavel range")
 
     # Get perfect PSF - no detector noise
     #hdul_perfect = metis.image_planes[0].hdu
 
     ipdb.set_trace()
-    log_effects_pprint(metis.effects, msg="Optical train effects (science)")
+    pipe_2_log(lambda m=metis: m.effects.pprint_all(), msg="Optical train effects (science)")
 
     if use_exp_time_only:
         # Method 1 for setting exposure times: exptime alone
@@ -181,6 +197,8 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     logging.info('OBS ND filter: ' + str(metis.cmds.get("!OBS.nd_filter_name")))
     logging.info('NDIT:' + str(metis.cmds["!OBS.ndit"]))
     logging.info('DIT:' + str(metis.cmds["!OBS.dit"]))
+    logging.info('WCU source state:')
+    pipe_2_log(lambda m=metis: metis["wcu_source"].info(), msg="Optical train effects (background)")
 
     # check for science-taking
     sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask, pp_mask=pp_mask)
