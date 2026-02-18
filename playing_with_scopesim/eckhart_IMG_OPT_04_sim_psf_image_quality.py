@@ -169,18 +169,19 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
 
     logging.info('Re-opening WCU BB aperture to get a PSF ...')
     wcu.set_bb_aperture(value = 1.0) # open BB source
-    ipdb.set_trace()
+    #ipdb.set_trace()
     metis.observe()
     # print the ingredients of the PSF generation
     # pipe_2_log(lambda m=metis: [print(f"{k}: {v}") for k, v in vars(m["psf"]).items()], msg="PSF ingredients") # this prints EVERYTHING
     logging.info('PSF model wavel range: ' + str(vars(metis['psf'])['_waveset']))
     logging.info('PSF model kernel shape: ' + str(vars(metis['psf'])['kernel'].shape))
+    logging.info('PSF model kernel file name: ' + str(vars(metis['psf'])['meta']['filename']))
     pipe_2_log(lambda m=metis: str(vars(m['psf'])['_waveset']), msg="PSF model wavel range")
 
     # Get perfect PSF - no detector noise
     #hdul_perfect = metis.image_planes[0].hdu
 
-    ipdb.set_trace()
+    #ipdb.set_trace()
     pipe_2_log(lambda m=metis: m.effects.pprint_all(), msg="Optical train effects (science)")
 
     if use_exp_time_only:
