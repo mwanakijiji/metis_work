@@ -1,4 +1,5 @@
-observing_filters_lm:
+# central weighted wavelength only; can lead to inaccuracies
+monochromatic_observing_filters_lm:
   short-L: 3.29e-6
   Lp: 3.82e-6
   L_spec: 3.56e-6
@@ -15,6 +16,26 @@ observing_filters_lm:
   HCI_L_short: 3.62e-6
   HCI_L_long: 3.80e-6
   HCI_M: 4.95e-6
+
+# file names of actual filter curves
+## ## TODO: MAKE THIS MORE ELEGANT LATER, WITH A SINGLE STEM
+polychromatic_observing_filters_lm:
+  short-L: '/Users/eckhartspalding/Desktop/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_short-L.dat'
+  Lp: '/Users/eckhartspalding/Desktop/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_Lp.dat'
+  L_spec: '/Users/eckhartspalding/Desktop/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_L_spec.dat'
+  Mp: '/Users/eckhartspalding/Desktop/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_Mp.dat'
+  M_spec: '/Users/eckhartspalding/Desktop/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_M_spec.dat'
+  Br_alpha: '/Users/eckhartspalding/Desktop/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_Br_alpha.dat'
+  Br_alpha_ref: '/Users/eckhartspalding/Desktop/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_Br_alpha_ref.dat'
+  PAH_3.3: '/Users/eckhartspalding/Desktop/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_PAH_3.3.dat'
+  PAH_3.3_ref: '/Users/eckhartspalding/Desktop/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_PAH_3.3_ref.dat'
+  CO_1-0_ice: '/Users/eckhartspalding/Desktop/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_CO_1-0_ice.dat'
+  CO_ref: '/Users/eckhartspalding/Desktop/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_CO_ref.dat'
+  H2O-ice: '/Users/eckhartspalding/Desktop/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_H2O-ice.dat'
+  IB_4.05: '/Users/eckhartspalding/Desktop/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_IB_4.05.dat'
+  HCI_L_short: '/Users/eckhartspalding/Desktop/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_HCI_L_short.dat'
+  HCI_L_long: '/Users/eckhartspalding/Desktop/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_HCI_L_long.dat'
+  HCI_M: '/Users/eckhartspalding/Desktop/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_HCI_M.dat'
 
 
 pixel_scales:
