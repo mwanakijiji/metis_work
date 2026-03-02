@@ -60,7 +60,6 @@ def intensity_annular_aperture(r_rad_array, wavel, D_aperture, D_obscuration, am
     - I_r_array: 2D array of intensity on the detector
     '''
 
-
     nu_ = np.pi * r_rad_array * D_aperture / wavel # unitless
 
     eps_ = D_obscuration / D_aperture # unitless
@@ -85,10 +84,24 @@ def gaussian_2d(xy_mesh, amplitude, xo, yo, sigma_x_pix, sigma_y_pix, theta):
     return g.ravel()
 
 
-def strehl_from_annular_aperture_fixed(cookie_cut_out_sci, filter_name, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, config_observing, fac_oversamp):
+def strehl_from_annular_aperture_fixed(cookie_cut_out_sci, filter_name, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, config_observing, fac_oversamp, polychromatic=True):
     '''
     Calculate the Strehl ratio from an annular aperture.
+
+    INPUTS:
+    cookie_cut_out_sci: the empirical PSF
+    filter_name: the name of the observing filter
+    plot_string: the string to add to the plot file name
+    x_center_final_cookie_oversamp: the x-center of the PSF (i.e., no more centroiding will be done here); in coordinates of the cookie cut-out
+    y_center_final_cookie_oversamp: the y-center of the PSF; in coordinates of the cookie cut-out
+    config_observing: the config object containing the observing parameters
+    fac_oversamp: the oversampling factor
+    polychromatic: whether to use a polychromatic PSF; if true, read in a filter curve; if false, use a single wavelength set in a config file
+
+    OUTPUTS:
+    strehl_results: a dictionary containing the Strehl ratios from the different methods
     '''
+
     logging.info('--------------------------------')
     logging.info('Calculating Strehl from annular aperture, with fixed aperture radii')
 
@@ -119,20 +132,30 @@ def strehl_from_annular_aperture_fixed(cookie_cut_out_sci, filter_name, plot_str
     valid_mask = mask_valid.copy()
 
     # generate a fixed model PSF (output in 1D, for vestigial reasons)
-    intensity_1d_full_1d = model_for_fit_fixed(r_rad_1d, 
-                                                D_aperture=config_observing['D_aperture']['full'], 
-                                                D_obscuration=config_observing['D_aperture']['D_obscuration'], 
-                                                ampl=1, 
-                                                baseline_shape=baseline_shape, 
-                                                valid_mask=valid_mask, 
-                                                wavel=config_observing['observing_filters_lm'][filter_name])
+    if polychromatic:
+        intensity_1d_full_1d = model_for_fit_fixed(r_rad_1d, 
+                                                    D_aperture=config_observing['D_aperture']['full'], 
+                                                    D_obscuration=config_observing['D_aperture']['D_obscuration'], 
+                                                    ampl=1, 
+                                                    baseline_shape=baseline_shape, 
+                                                    valid_mask=valid_mask, 
+                                                    filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name])
+    else: # monochromatic
+        intensity_1d_full_1d = model_for_fit_fixed(r_rad_1d, 
+                                                    D_aperture=config_observing['D_aperture']['full'], 
+                                                    D_obscuration=config_observing['D_aperture']['D_obscuration'], 
+                                                    ampl=1, 
+                                                    baseline_shape=baseline_shape, 
+                                                    valid_mask=valid_mask, 
+                                                    wavel=config_observing['monochromatic_observing_filters_lm'][filter_name])
     model_annular_2d_full = intensity_1d_full_1d.reshape(baseline_shape)
 
     # normalize the model PSF to the empirical PSF, so that they have the same total power
     model_annular_2d_full_norm = (model_annular_2d_full / np.sum(model_annular_2d_full)) * np.sum(cookie_cut_out_sci)
 
     # make mask corresponding to first dark ring for an Airy (but not annular) aperture, so as to see how much power is in the central region
-    dark_ring_loc_rad = 1.22 * (config_observing['observing_filters_lm'][filter_name] / config_observing['D_aperture']['full'])
+    # note this is just the first dark Airy ring for a monochromatic PSF, but this should be good enough for the polychromatic case as well
+    dark_ring_loc_rad = 1.22 * (config_observing['monochromatic_observing_filters_lm'][filter_name] / config_observing['D_aperture']['full'])
     mask_central = r_rad_2d < dark_ring_loc_rad
 
     # strehl given the max values of the normalized model and empirical PSF
@@ -221,9 +244,40 @@ def strehl_from_annular_aperture_fixed(cookie_cut_out_sci, filter_name, plot_str
 # Define a wrapper function for curve_fit
 # curve_fit expects: func(x, *params) where x is the independent variable
 # and params are the parameters to fit
-def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shape, valid_mask, wavel):
+def _filter_curve_from_filter_file(filter_file):
+    '''
+    Reads in a filter curve and returns a DataFrame with a decimation to sample that curve
+
+    INPUTS:
+    filter_file: the absolutepath to the filter curve file
+
+    OUTPUTS:
+    decimated_df: a DataFrame with a decimation to sample that curve
+    '''
+
+    df_filter = pd.read_csv(
+        filter_file,
+        skiprows=13,
+        sep='\s+',
+        names=["wavel_um", "trans"]
+    )
+
+    # find region where transmission is greater than 0.2 of the maximum transmission
+    max_trans = df_filter["trans"].max()
+    mask_trans_gt_05_max = df_filter["trans"] > 0.2 * max_trans
+    df_filter = df_filter[mask_trans_gt_05_max]
+
+    # choose N evenly-spaced rows from df_filter (as a smaller DataFrame)
+    N_slices = 5
+    slice_idx = np.linspace(0, len(df_filter) - 1, N_slices, dtype=int)
+    decimated_df = df_filter.iloc[slice_idx].reset_index(drop=True)
+    
+    return decimated_df
+
+
+def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shape, valid_mask, *, wavel=None, filter_file=None):
     """
-    Fixed wrapper function for intensity_annular_aperture to use with curve_fit.
+    Wrapper function for intensity_annular_aperture to use with curve_fit.
     
     Parameters:
     - r_rad_1d: 1D array of radial distances (masked, only valid points)
@@ -233,23 +287,49 @@ def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shap
     - baseline_shape: tuple, shape of the 2D array (fixed, not optimized)
     - valid_mask: boolean array, mask for valid data points (fixed, not optimized)
     - fac_oversamp: oversampling factor
+    - wavel: wavelength (meters); for monochromatic PSFs
+    - filter_file: filter curve file to make polychromatic PSFs; for more realistic PSFs
     
     Returns:
     - 1D array of intensity values (masked, same length as input)
     """
+
     # Reconstruct the full 2D array by inserting masked values back into their original positions
     r_rad_2d_full = np.full(baseline_shape, np.nan).flatten()
     r_rad_2d_full[valid_mask] = r_rad_1d
     r_rad_2d = r_rad_2d_full.reshape(baseline_shape)
-    
-    # Calculate intensity using the model function
-    intensity_2d = intensity_annular_aperture(
-        r_rad_array=r_rad_2d, 
-        wavel=wavel, 
-        D_aperture=D_aperture, 
-        D_obscuration=D_obscuration, 
-        ampl=ampl
-    )
+
+    # read in the filter curve    
+    if wavel: # monochromatic PSF
+        intensity_2d = intensity_annular_aperture(
+            r_rad_array=r_rad_2d, 
+            wavel=wavel, 
+            D_aperture=D_aperture, 
+            D_obscuration=D_obscuration, 
+            ampl=ampl
+        )
+    else: # polychromatic; requires a filter curve
+        decimated_filter_curve_df = _filter_curve_from_filter_file(filter_file)
+        intensity_2d = np.zeros_like(r_rad_2d) # init
+        for idx, row in decimated_filter_curve_df.iterrows():
+
+            wavel_um = row['wavel_um'] * 1e-6
+            trans = row['trans']
+
+            # make a PSF for this wavelength and multiply by the transmission before adding
+            intensity_2d += trans * intensity_annular_aperture(
+                r_rad_array=r_rad_2d, 
+                wavel=wavel_um, 
+                D_aperture=D_aperture, 
+                D_obscuration=D_obscuration, 
+                ampl=ampl
+            )
+            # debug: save as FITS file
+            #fits.writeto(f'junk.fits', intensity_2d, overwrite=True)
+        # renormalize to the desired amplitude
+        intensity_2d = ampl * intensity_2d / np.nanmax(intensity_2d) 
+
+    ipdb.set_trace()
     
     # Flatten and apply the same mask to return only valid points
     intensity_1d_full = intensity_2d.flatten()
@@ -452,7 +532,16 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
     size = cookie_cut_out_sci.shape[0] 
     baseline_shape = (size, size)
     model_wrapper = lambda r_rad_1d, D_aperture, D_obscuration, ampl: \
-        model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shape, valid_mask, config_observing['observing_filters_lm'][filter_name])
+        model_for_fit_fixed(
+            r_rad_1d,
+            D_aperture,
+            D_obscuration,
+            ampl,
+            baseline_shape,
+            valid_mask,
+            #wavel=config_observing['observing_filters_lm'][filter_name],
+            filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name]
+        )
 
     # Set bounds for parameters: [D_aperture, D_obscuration, ampl]
     # D_aperture: between 1 and 50
@@ -463,6 +552,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
     
     # Perform the fit with the fixed function
     # Note: 'trf' method supports bounds, 'lm' does not
+ 
     popt, pcov = curve_fit(
         model_wrapper,
         r_rad_1d,
@@ -486,7 +576,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
     # Print results
     logging.info('--------------------------------')
     logging.info("Fixed observing parameters, annular aperture:")
-    logging.info(f"filter: {filter_name}, λ={config_observing['observing_filters_lm'][filter_name]*1e6:.2f}μm, ps={config_observing['pixel_scales']['img_lm']:.2f}mas", )
+    logging.info(f"filter: {filter_name}, λ={config_observing['monochromatic_observing_filters_lm'][filter_name]*1e6:.2f}μm, ps={config_observing['pixel_scales']['img_lm']:.2f}mas", )
     logging.info('--------------------------------')
     logging.info("Best-fit parameters, annular aperture:")
     logging.info(f"D_aperture = {D_aperture_fit:.2f} ± {D_aperture_err:.2f} meters")
@@ -505,8 +595,26 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
     r_rad_1d = r_rad_2d.flatten()
     r_rad_1d_masked = r_rad_1d[valid_mask]
     
-    initial_guess_model_1d = model_for_fit_fixed(r_rad_1d_masked, initial_guess[0], initial_guess[1], initial_guess[2], baseline_shape, valid_mask, config_observing['observing_filters_lm'][filter_name])
-    best_fit_model_1d = model_for_fit_fixed(r_rad_1d_masked, D_aperture_fit, D_obscuration_fit, ampl_fit, baseline_shape, valid_mask, config_observing['observing_filters_lm'][filter_name])
+    initial_guess_model_1d = model_for_fit_fixed(
+        r_rad_1d_masked,
+        initial_guess[0],
+        initial_guess[1],
+        initial_guess[2],
+        baseline_shape,
+        valid_mask,
+        #wavel=config_observing['observing_filters_lm'][filter_name],
+        filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name]
+    )
+    best_fit_model_1d = model_for_fit_fixed(
+        r_rad_1d_masked,
+        D_aperture_fit,
+        D_obscuration_fit,
+        ampl_fit,
+        baseline_shape,
+        valid_mask,
+        #wavel=config_observing['observing_filters_lm'][filter_name],
+        filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name]
+    )
     
     # Reshape to 2D (though these are already 1D masked arrays, we need to reconstruct the full 2D)
     # Actually, model_for_fit_fixed returns masked 1D, so we need to reconstruct the full 2D array
@@ -564,38 +672,51 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
     zscale = ZScaleInterval()
     vmin, vmax = zscale.get_limits(test_empirical_2d)
 
-    fig, axs = plt.subplots(1, 5, figsize=(20, 5))
-    for ax in axs:
+    fig, axs = plt.subplots(3, 2, figsize=(20, 15), constrained_layout=True,
+                            gridspec_kw={'width_ratios': [1, 1], 'height_ratios': [1, 1, 1]})
+    for ax in axs.flat:
         ax.set_box_aspect(1)
 
     # Panel 1: Empirical data
-    im0 = axs[0].imshow(test_empirical_2d, vmin=vmin, vmax=vmax)
-    axs[0].set_title("Empirical")
+    im0 = axs[0,0].imshow(test_empirical_2d, vmin=vmin, vmax=vmax)
+    axs[0,0].set_title("Empirical")
 
     # Panel 2: Best fit
-    im1 = axs[1].imshow(best_fit_model_2d, vmin=vmin, vmax=vmax)
-    axs[1].set_title("Best fit")
+    im1 = axs[0,1].imshow(best_fit_model_2d, vmin=vmin, vmax=vmax)
+    axs[0,1].set_title("Best fit")
 
     # Panel 3: Cross-section between empirical and best-fit PSF
     center_y, center_x = np.array(test_empirical_2d.shape) // 2
     cross_empirical = test_empirical_2d[center_y, :]
     cross_best_fit = best_fit_model_2d[center_y, :]
-    axs[2].plot(cross_empirical, label="Empirical")
-    axs[2].plot(cross_best_fit, label="Best fit")
-    axs[2].set_title("Cross-section")
-    axs[2].legend()
+    axs[1,0].plot(cross_empirical, label="Empirical")
+    axs[1,0].plot(cross_best_fit, label="Best fit")
+    axs[1,0].set_title("Cross-section")
+    axs[1,0].legend()
+
+    # Panel 3: Cross-section between empirical and best-fit PSF
+    axs[1,1].plot(cross_empirical, label="Empirical")
+    axs[1,1].plot(cross_best_fit, label="Best fit")
+    axs[1,1].set_yscale('log')
+    axs[1,1].set_title("Cross-section")
+    axs[1,1].legend()
 
     # Panel 3: Initial guess
-    im2 = axs[3].imshow(initial_guess_model_2d, vmin=vmin, vmax=vmax)
-    axs[3].set_title("Initial guess")
+    im2 = axs[2,0].imshow(initial_guess_model_2d, vmin=vmin, vmax=vmax)
+    axs[2,0].set_title("Initial guess")
 
     # Panel 4: Residuals
-    im2 = axs[4].imshow(test_empirical_2d - best_fit_model_2d, vmin=vmin, vmax=vmax)
-    axs[4].set_title("Empirical - Best fit")
+    residuals = test_empirical_2d - best_fit_model_2d
+    im2 = axs[2,1].imshow(residuals, vmin=vmin, vmax=vmax)
+    axs[2,1].set_title("Empirical - Best fit")
+
+    ipdb.set_trace()
+    # degbug: write FITS file
+    fits.writeto(f'junk_resids.fits', residuals, overwrite=True)
 
 
     plt.suptitle(
-        f"Filter: {filter_name}, λ={config_observing['observing_filters_lm'][filter_name]*1e6:.2f}μm, pix={config_observing['pixel_scales']['img_lm']:.2f}mas, \n"
+        f"Filter: {filter_name}, λ={config_observing['monochromatic_observing_filters_lm'][filter_name]*1e6:.2f}μm, pix={config_observing['pixel_scales']['img_lm']:.2f}mas, \n"
         f"Best fits: D_aper={D_aperture_fit:.2f}±{D_aperture_err:.2f}m, "
         f'D_obsc={D_obscuration_fit:.2f}±{D_obscuration_err:.2f}m, '
         f'Amp={ampl_fit:.2f}±{ampl_err:.2f}',
@@ -605,6 +726,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
 
     # Add one colorbar for all
     fig.colorbar(im0, ax=axs, orientation='vertical', fraction=0.04, pad=0.04).set_label('Color scale is the same')
+
 
     file_name_plot = f'figs_dump/free_ann_ap_best_fit_{plot_string}.png'
     plt.savefig(file_name_plot)
@@ -646,7 +768,7 @@ def mtf_arrays(array_empirical, array_model, config_observing, fac_oversamp, siz
     fx = np.fft.fftshift(np.fft.fftfreq(n_fft, d=rad_per_pix))
     fx_grid, fy_grid = np.meshgrid(fx, fy)
     f_r = np.sqrt(fx_grid**2 + fy_grid**2)
-    cutoff_freq = config_observing["D_aperture"]["full"] / config_observing["observing_filters_lm"][filter_name] ## ## TODO: IS THIS RIGHT?
+    cutoff_freq = config_observing["D_aperture"]["full"] / config_observing["monochromatic_observing_filters_lm"][filter_name] ## ## TODO: IS THIS RIGHT?
     mtf_cutoff_mask = f_r <= cutoff_freq
     #ipdb.set_trace()
     fft_model_power_cutoff = fft_model_power * mtf_cutoff_mask
@@ -1053,7 +1175,7 @@ def strehl_psfs(file_name,
     #fyi_plot_centroiding(grid_data_oversamp, coords_centroided_all_oversamp, title_string="PSF first guesses", zscale=False)
 
     # make a cut-out of each psf and make a best-fit 2D Gaussian
-    raw_cutout_size = 20 * oversample_factor
+    raw_cutout_size = 60 * oversample_factor
     logging.info(f'Raw PSF cutout size: {raw_cutout_size}')
     num_coord = 0
 
@@ -1137,6 +1259,7 @@ def strehl_psfs(file_name,
         y_center_pix_gaussian_best_fit_oversamp_fullarray = y_center_pix_gaussian_best_fit_oversamp + idx_y_start
 
         # make a best fit based on Airy function
+        '''
         if fit_airy_psf:
             # return dict of Strehl ratio
             strehl_airy = fit_airy_psf(cookie_cut_out_sci_oversamp, 
@@ -1146,6 +1269,7 @@ def strehl_psfs(file_name,
                                         fac_oversamp=oversample_factor,
                                         config_observing=config_observing,
                                         plot_string=f'num_coord_{num_coord}_fpmask_{fp_mask}_ppmask_{pp_mask}_filter_{filter_name}')
+        '''
 
 
         # find FWHM of empirical 
@@ -1178,7 +1302,8 @@ def strehl_psfs(file_name,
                                             x_center_final_cookie_oversamp=x_center_pix_gaussian_best_fit_oversamp, 
                                             y_center_final_cookie_oversamp=y_center_pix_gaussian_best_fit_oversamp, 
                                             config_observing=config_observing,
-                                            fac_oversamp=oversample_factor)
+                                            fac_oversamp=oversample_factor, 
+                                            polychromatic=True)
 
         # fit an analytical PSF: free parameters are D_aperture, D_obscuration, and ampl
         if fit_annular_aperture_free:
@@ -1260,6 +1385,7 @@ def strehl_psfs(file_name,
 def main():
 
     stem = '/podman-share/metis_work/playing_with_scopesim/'
+
 
     
     now = datetime.datetime.now()

@@ -44,13 +44,15 @@ import sys
 import logging
 
 import scopesim as sim
-sim.bug_report()
 
 # Edit this path if you have a custom install directory, otherwise comment it out. [For ReadTheDocs only]
 sim.link_irdb("../../../")
 
 # simulate observations with METIS (comment this out if packages already exist)
 #sim.download_packages(["METIS", "ELT", "Armazones"])
+
+# print versions of things
+sim.bug_report()
 
 
 def pipe_2_log(callable_func, msg="Output"):
@@ -111,6 +113,8 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     metis = sim.OpticalTrain(cmd)
 
     wcu = metis['wcu_source']
+
+    ipdb.set_trace()
 
     bb_temp = 1000 * u.K
 
@@ -393,6 +397,8 @@ def main():
     # clocking angles for the PSF
     #angle_array = [0, 45, 60]
     angle_array = [0]
+
+    ipdb.set_trace()
 
     # LM filters
     # dict_keys(['open', 'Lp', 'short-L', 'L_spec', 'Mp', 'M_spec', 'Br_alpha', 'Br_alpha_ref', 'PAH_3.3', 'PAH_3.3_ref', 'CO_1-0_ice', 'CO_ref', 'H2O-ice', 'IB_4.05', 'HCI_L_short', 'HCI_L_long', 'HCI_M'])
