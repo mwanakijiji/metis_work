@@ -257,10 +257,12 @@ def _filter_curve_from_filter_file(filter_file):
 
     df_filter = pd.read_csv(
         filter_file,
-        skiprows=13,
-        sep='\s+',
-        names=["wavel_um", "trans"]
-    )
+        comment='#',
+        sep='\s+'
+        )
+
+    # rename columns to wavel_um and trans
+    df_filter.rename(columns={"wavelength": "wavel_um", "transmission": "trans"}, inplace=True)
 
     # find region where transmission is greater than 0.2 of the maximum transmission
     max_trans = df_filter["trans"].max()
@@ -301,6 +303,7 @@ def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shap
 
     # read in the filter curve    
     if wavel: # monochromatic PSF
+        logging.info(f'Making a monochromatic PSF for wavelength: {wavel} um')
         intensity_2d = intensity_annular_aperture(
             r_rad_array=r_rad_2d, 
             wavel=wavel, 
@@ -309,6 +312,7 @@ def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shap
             ampl=ampl
         )
     else: # polychromatic; requires a filter curve
+        logging.info(f'Making a polychromatic PSF for filter file: {filter_file}')
         decimated_filter_curve_df = _filter_curve_from_filter_file(filter_file)
         intensity_2d = np.zeros_like(r_rad_2d) # init
         for idx, row in decimated_filter_curve_df.iterrows():
@@ -328,8 +332,6 @@ def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shap
             #fits.writeto(f'junk.fits', intensity_2d, overwrite=True)
         # renormalize to the desired amplitude
         intensity_2d = ampl * intensity_2d / np.nanmax(intensity_2d) 
-
-    ipdb.set_trace()
     
     # Flatten and apply the same mask to return only valid points
     intensity_1d_full = intensity_2d.flatten()
@@ -710,9 +712,8 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
     im2 = axs[2,1].imshow(residuals, vmin=vmin, vmax=vmax)
     axs[2,1].set_title("Empirical - Best fit")
 
-    ipdb.set_trace()
     # degbug: write FITS file
-    fits.writeto(f'junk_resids.fits', residuals, overwrite=True)
+    #fits.writeto(f'junk_resids.fits', residuals, overwrite=True)
 
 
     plt.suptitle(
@@ -1175,7 +1176,7 @@ def strehl_psfs(file_name,
     #fyi_plot_centroiding(grid_data_oversamp, coords_centroided_all_oversamp, title_string="PSF first guesses", zscale=False)
 
     # make a cut-out of each psf and make a best-fit 2D Gaussian
-    raw_cutout_size = 60 * oversample_factor
+    raw_cutout_size = 20 * oversample_factor
     logging.info(f'Raw PSF cutout size: {raw_cutout_size}')
     num_coord = 0
 
@@ -1235,7 +1236,6 @@ def strehl_psfs(file_name,
         plt.savefig(f"figs_dump/{plot_filename}", bbox_inches="tight")
         plt.close()
         logging.info(f"Saved {plot_filename} to figs_dump/")
-        #ipdb.set_trace()
 
         # Adjust the centroid coordinate for the cut-out: subtract the cutout starting indices to get cutout-relative coordinates
         coords_guess_this_cutout = np.array([
@@ -1379,7 +1379,7 @@ def strehl_psfs(file_name,
     plt.close()
 
 
-    return
+    return #strehl_results_all
 
 
 def main():
@@ -1412,7 +1412,8 @@ def main():
     # config file containing the observing parameters
     observing_config_file = stem + 'config/config_file_IMG_04_observing.yaml'
     # config file containing guesses for the PSF coordinates
-    config_coords_guesses_file_name = stem + 'config/config_file_IMG_04_coords.yaml'
+    #config_coords_guesses_file_name = stem + 'config/config_file_IMG_04_coords.yaml' # for ScopeSim 10 coords
+    config_coords_guesses_file_name = stem + 'config/config_file_IMG_04_coords_ver11.yaml' # coords for LM grid in ScopeSim 11
     
     with open(observing_config_file, "r") as config_file:
         observing_config = yaml.safe_load(config_file)
@@ -1448,7 +1449,8 @@ def main():
 
     # Strehl analysis configurations
     strehl_configs = [
-        {"filter_name": "Br_alpha",     "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_Br_alpha.fits"},
+        {"filter_name": "Br_alpha",     "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha_noiseless.fits"},
+        {"filter_name": "Br_alpha",     "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits"},
         {"filter_name": "Br_alpha_ref", "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_Br_alpha_ref.fits"},
         {"filter_name": "Lp",           "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_Lp.fits"},
         {"filter_name": "H2O-ice",      "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_H2O-ice.fits"},
