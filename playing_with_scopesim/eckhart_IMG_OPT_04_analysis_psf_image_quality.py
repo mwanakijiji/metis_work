@@ -13,7 +13,7 @@ from modules.backbone import strehl_psfs
 def main():
 
     print("About to break...", flush=True)
-    ipdb.set_trace()
+    #ipdb.set_trace()
 
     stem = '/podman-share/metis_work/playing_with_scopesim/'
     # config file with the observing parameters
@@ -59,7 +59,7 @@ def main():
         data_states.append(merged)
 
     # loop over each data state
-    ipdb.set_trace()
+    #ipdb.set_trace()
     for state in data_states[0:1]:
         strehl_psfs(
             state["file_name"],
@@ -72,7 +72,7 @@ def main():
             psfs_subset=state["psfs_subset"],
             config_coords_guesses_file_name=state["config_coords_guesses_file_name"],
             config_observing=observing_config,
-            fit_method="curve_fit",
+            fit_method="curve_fit"
         )
 
 

@@ -281,7 +281,7 @@ def fit_airy_psf(cookie_cut_out_sci, obs_filter, x_center_pix_gaussian_best_fit_
     return strehl_results
 
 
-def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, config_observing, fit_method='amoeba'):
+def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, config_observing, fit_method):
     '''
     Fit a 2D analytical PSF to a given frame.
 
@@ -333,7 +333,8 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
 
     # Initial parameter guesses
     # [D_aperture, D_obscuration, ampl]
-    initial_guess = [36., 12., 3500.] 
+    #initial_guess = [36., 12., 7e5]
+    initial_guess = [36., 12., 1e5]  
 
     # Create a wrapper function that binds the fixed parameters (baseline_shape and valid_mask)
     # This ensures curve_fit only optimizes D_aperture, D_obscuration, and ampl
@@ -352,15 +353,14 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
         )
 
     # Set bounds for parameters: [D_aperture, D_obscuration, ampl]
-    # D_aperture: between 1 and 50
-    # D_obscuration: no bounds (use -inf to +inf, but should be positive and < D_aperture)
-    # ampl: no bounds (use -inf to +inf, but should be positive)
-    lower_bounds = [1.0, 0.0, 0.0]  # D_aperture >= 1, D_obscuration >= 0, ampl >= 0
-    upper_bounds = [50.0, np.inf, np.inf]  # D_aperture <= 50, no upper bounds for others
+    lower_bounds = [25., 2.0, 10.0]
+    upper_bounds = [60.0, 20., 1e6]
+    
 
-    ipdb.set_trace()
+    ipdb.set_trace(context=10)
     if fit_method == 'amoeba':
         # Use Nelder-Mead simplex (amoeba) - objective is sum of squared residuals
+        logging.info('Fitting PSF with amoeba algorithm')
         def chi_sq(params):
             model = model_wrapper(r_rad_1d, params[0], params[1], params[2])
             return np.sum((model - test_empirical_1d) ** 2)
@@ -368,8 +368,8 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
         popt, fopt = amoeba_minimize(
             chi_sq,
             initial_guess,
-            delta=[2.0, 1.0, 500.0],  # step sizes for D_aperture, D_obscuration, ampl
-            ftol=1e-6,
+            delta=[0.01, 0.01, 500.0],  # step sizes for D_aperture, D_obscuration, ampl
+            ftol=1e-8,
             nmax=50000,
             bounds=(lower_bounds, upper_bounds),
         )
@@ -377,6 +377,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
         logging.info(f"Fit method: amoeba (Nelder-Mead), chi_sq = {fopt:.2f}")
     elif fit_method == 'curve_fit':
         # Perform the fit with curve_fit (Trust Region Reflective)
+        logging.info('Fitting PSF with curve_fit algorithm')
         popt, pcov = curve_fit(
             model_wrapper,
             r_rad_1d,
@@ -390,8 +391,6 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
     D_aperture_fit = popt[0]
     D_obscuration_fit = popt[1]
     ampl_fit = popt[2]
-
-    ipdb.set_trace()
 
     # Calculate parameter uncertainties from covariance matrix (curve_fit only)
     if pcov is not None:

@@ -1,6 +1,6 @@
 import logging
 import yaml
-
+import ipdb
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
@@ -212,7 +212,6 @@ def strehl_psfs(file_name,
 
         # strehl from an analytical PSF with fixed parameters: D_aperture, D_obscuration, and ampl
         if fit_annular_aperture_fixed:
-            ipdb.set_trace()
             logging.info(f'Calculating Strehl from annular aperture {num_coord} of {num_psfs_to_process}')
             # return dict of Strehl ratios found with different methods
             strehl_annular_aperture_fixed = strehl_from_annular_aperture_fixed(cookie_cut_out_sci_oversamp, 
@@ -233,7 +232,7 @@ def strehl_psfs(file_name,
                                             x_center_final_cookie_oversamp=x_center_pix_gaussian_best_fit_oversamp, 
                                             y_center_final_cookie_oversamp=y_center_pix_gaussian_best_fit_oversamp, 
                                             config_observing=config_observing,
-                                            fac_oversamp=oversample_factor,
+                                            fac_oversamp=oversample_factor, 
                                             fit_method=fit_method)
 
 

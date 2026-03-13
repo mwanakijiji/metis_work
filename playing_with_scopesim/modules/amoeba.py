@@ -300,6 +300,7 @@ def amotry(p, y, psum, ihi, ndim, fac):
 			p[ihi][j]=ptry[j]
 	return ytry
 
+'''
 #creating point table as starting point in the system
 point = create_random_table(n)
 ndim = len(point)
@@ -393,6 +394,6 @@ while(True):
 		print_result(y, p, ndim, ilo)
 
 	it += 1
-
+'''
 
 
