@@ -64,21 +64,25 @@ def strehl_from_annular_aperture_fixed(cookie_cut_out_sci, filter_name, plot_str
 
     # generate a fixed model PSF (output in 1D, for vestigial reasons)
     if polychromatic:
+        filter_file = config_observing['polychromatic_observing_filters_lm'][filter_name]
+        logging.info(f'Making a polychromatic PSF for filter file: {filter_file}')
         intensity_1d_full_1d = model_for_fit_fixed(r_rad_1d, 
                                                     D_aperture=config_observing['D_aperture']['full'], 
                                                     D_obscuration=config_observing['D_aperture']['D_obscuration'], 
                                                     ampl=1, 
                                                     baseline_shape=baseline_shape, 
                                                     valid_mask=valid_mask, 
-                                                    filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name])
+                                                    filter_file=filter_file)
     else: # monochromatic
+        wavel_mono = config_observing['monochromatic_observing_filters_lm'][filter_name]
+        logging.info(f'Making a monochromatic PSF for wavelength: {wavel_mono} um')
         intensity_1d_full_1d = model_for_fit_fixed(r_rad_1d, 
                                                     D_aperture=config_observing['D_aperture']['full'], 
                                                     D_obscuration=config_observing['D_aperture']['D_obscuration'], 
                                                     ampl=1, 
                                                     baseline_shape=baseline_shape, 
                                                     valid_mask=valid_mask, 
-                                                    wavel=config_observing['monochromatic_observing_filters_lm'][filter_name])
+                                                    wavel=wavel_mono)
     model_annular_2d_full = intensity_1d_full_1d.reshape(baseline_shape)
 
     # normalize the model PSF to the empirical PSF, so that they have the same total power
@@ -386,10 +390,10 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
 
     # Check if covariance matrix has infs
     if np.any(np.isinf(pcov)):
-        logging.warning("\nWARNING: Covariance matrix contains infinities!")
+        logging.warning("WARNING: Covariance matrix contains infinities!")
         logging.warning("This usually means the fit didn't converge properly.")
     else:
-        logging.info("\nCovariance matrix is finite - fit converged successfully!")
+        logging.info("Covariance matrix is finite - fit MAY have converged successfully")
 
     # generate the best-fit model based on the fit parameters
     # Note: r_rad_2d needs to be flattened and masked for model_for_fit_fixed

@@ -53,7 +53,7 @@ def strehl_psfs(file_name,
     # read in coordinate guesses
     with open(config_coords_guesses_file_name, "r") as f:
         coords_config = yaml.safe_load(f)
-    coords_entries = coords_config.get("coordinates", [])
+    coords_entries = coords_config.get("psf_coordinate_guesses", [])
     coords_guesses_all = np.array([(entry["y"], entry["x"]) for entry in coords_entries])
     coords_guesses_y_all = coords_guesses_all[:, 0]
     coords_guesses_x_all = coords_guesses_all[:, 1]

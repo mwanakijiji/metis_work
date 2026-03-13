@@ -1,7 +1,6 @@
 import io
 import logging
 import sys
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -13,6 +12,50 @@ from scipy.special import j1
 from scipy.optimize import curve_fit
 from skimage import measure
 import scopesim as sim
+import yaml
+
+import ipdb
+
+def load_config_and_pipe(config_file_choice, print_one_line=False):
+    '''
+    Load a config file and print its contents to the log
+
+    INPUTS:
+    config_file_choice: the path to the config file
+    print_one_line: whether to print everything on one line in the log
+
+    OUTPUTS:
+    config_this: the config dictionary
+    '''
+
+    with open(config_file_choice, "r") as config_file:
+
+        logging.info('--------------------------------')
+        config_this = yaml.safe_load(config_file)
+
+        logging.info(f'Loading config file: {config_file_choice}')
+
+        # print stuff to log
+        if print_one_line:
+            # print everything on one line
+            logging.info(f'Config data: {config_this}')
+        else:
+            # print in more readable format
+            logging.info("Config data:")
+            ipdb.set_trace()
+            for key, value in config_this.items():
+                if isinstance(value, (list, tuple, dict)):
+                    logging.info(f"\t{key}:")
+                    if isinstance(value, dict):
+                        for subkey, subval in value.items():
+                            logging.info(f"\t  {subkey}: {subval}")
+                    else:  # It's a list or tuple
+                        for item in value:
+                            logging.info(f"\t  {item}")
+                else:
+                    logging.info(f"\t{key}: {value}")
+
+    return config_this
 
 
 def pipe_2_log(callable_func, msg="Output"):
@@ -153,7 +196,6 @@ def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shap
 
     # read in the filter curve    
     if wavel: # monochromatic PSF
-        logging.info(f'Making a monochromatic PSF for wavelength: {wavel} um')
         intensity_2d = intensity_annular_aperture(
             r_rad_array=r_rad_2d, 
             wavel=wavel, 
@@ -162,7 +204,6 @@ def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shap
             ampl=ampl
         )
     else: # polychromatic; requires a filter curve
-        logging.info(f'Making a polychromatic PSF for filter file: {filter_file}')
         decimated_filter_curve_df = _filter_curve_from_filter_file(filter_file)
         intensity_2d = np.zeros_like(r_rad_2d) # init
         for idx, row in decimated_filter_curve_df.iterrows():
