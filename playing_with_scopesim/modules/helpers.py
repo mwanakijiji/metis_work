@@ -42,7 +42,6 @@ def load_config_and_pipe(config_file_choice, print_one_line=False):
         else:
             # print in more readable format
             logging.info("Config data:")
-            ipdb.set_trace()
             for key, value in config_this.items():
                 if isinstance(value, (list, tuple, dict)):
                     logging.info(f"\t{key}:")

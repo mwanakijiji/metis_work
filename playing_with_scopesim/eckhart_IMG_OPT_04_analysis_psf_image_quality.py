@@ -4,6 +4,7 @@ import os
 import datetime
 import logging
 import yaml
+import ipdb
 
 from modules.helpers import load_config_and_pipe
 from modules.backbone import strehl_psfs
@@ -11,12 +12,14 @@ from modules.backbone import strehl_psfs
 
 def main():
 
+    print("About to break...", flush=True)
+    ipdb.set_trace()
+
     stem = '/podman-share/metis_work/playing_with_scopesim/'
-    # config file containing the observing parameters
+    # config file with the observing parameters
     observing_config_file = stem + 'config/config_file_IMG_04_observing.yaml'
-    # config file containing guesses for the PSF coordinates
-    #config_coords_guesses_file_name = stem + 'config/config_file_IMG_04_coords.yaml' # for ScopeSim 10 coords
-    config_coords_guesses_file_name = stem + 'config/config_file_IMG_04_coords_ver11.yaml' # coords for LM grid in ScopeSim 11
+    # config file with the data states (i.e., how to analyze each PSF)
+    data_states_config_file = stem + 'config/config_file_IMG_04_strehl_runs.yaml'
 
     now = datetime.datetime.now()
 
@@ -37,51 +40,40 @@ def main():
     logging.info(f'Log file name: {log_file_name}')
     logging.info(f'Log file directory: {stem + "IMG_04_logs/"}')
 
-    # read in config files
+    # read in main config file
     observing_config = load_config_and_pipe(config_file_choice=observing_config_file, print_one_line=False)
-    config_coords_guesses = load_config_and_pipe(config_file_choice=config_coords_guesses_file_name, print_one_line=False)
 
-    # pp mask choices
-    # 'APP-LMS', 'APP-LM', 'CLS-LMS', 'CLS-LM', 'CLS-N', 'PPS-LMS', 'PPS-LM', 'PPS-N', 'PPS-CFO2', 'RLS-LMS', 'RLS-LM', 'SPM-LMS', 'SPM-LM', 'SPM-N', 'open'
+    # load data states (defaults + per-run overrides)
+    data_states_config = load_config_and_pipe(config_file_choice=data_states_config_file, print_one_line=False)
+    defaults = data_states_config.get("defaults", {})
+    runs = data_states_config.get("runs", [])
 
-    # Strehl analysis configurations
-    data_states = [
-        {"filter_name": "Br_alpha",     "fit_simmed_psf": True,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha_noiseless.fits"},
-        {"filter_name": "Br_alpha",     "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits"},
-        {"filter_name": "Br_alpha_ref", "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_Br_alpha_ref.fits"},
-        {"filter_name": "Lp",           "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_Lp.fits"},
-        {"filter_name": "H2O-ice",      "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_H2O-ice.fits"},
-        {"filter_name": "PAH_3.3",      "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_PAH_3.3.fits"},
-        {"filter_name": "PAH_3.3_ref",  "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_PAH_3.3_ref.fits"},
-        {"filter_name": "short-L",      "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_short-L.fits"},
-        {"filter_name": "IB_4.05",      "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_IB_4.05.fits"},
-        {"filter_name": "HCI_L_short",  "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_HCI_L_short.fits"},
-        {"filter_name": "HCI_L_long",   "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_HCI_L_long.fits"},
-        {"filter_name": "Mp",           "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_Mp.fits"},
-        {"filter_name": "CO_1-0_ice",   "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_CO_1-0_ice.fits"},
-        {"filter_name": "CO_ref",       "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_CO_ref.fits"},
-        {"filter_name": "HCI_M",        "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_HCI_M.fits"},
-        {"filter_name": "L_spec",       "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_L_spec.fits"},
-        {"filter_name": "M_spec",       "fit_simmed_psf": False,  "fit_annular_aperture_free": True, "fit_annular_aperture_fixed": True, "file_name": stem + "IMG_04_sample_input_data/strehl/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_M_spec.fits"},
+    # merge config data state defaults with per-run overrides
+    data_states = []
+    for entry in runs:
+        merged = {**defaults, **entry}
+        # Prepend stem to relative file paths
+        fname = merged["file_name"]
+        if not fname.startswith("/"):
+            merged["file_name"] = stem + fname
+        data_states.append(merged)
 
-    ]
-
-    fp_mask = 'grid_lm'
-    pp_mask = 'open'
-    clocking_angle = 0
-
-    for _state in data_states[0:1]:
-
-        strehl_psfs(_state["file_name"],
-                    fp_mask=fp_mask,
-                    pp_mask=pp_mask,
-                    filter_name=_state["filter_name"],
-                    fit_simmed_psf=_state["fit_simmed_psf"],
-                    fit_annular_aperture_free=_state["fit_annular_aperture_free"],
-                    fit_annular_aperture_fixed=_state["fit_annular_aperture_fixed"],
-                    psfs_subset=1,
-                    config_coords_guesses_file_name=config_coords_guesses_file_name,
-                    config_observing=observing_config)
+    # loop over each data state
+    ipdb.set_trace()
+    for state in data_states[0:1]:
+        strehl_psfs(
+            state["file_name"],
+            fp_mask=state["fp_mask"],
+            pp_mask=state["pp_mask"],
+            filter_name=state["filter_name"],
+            fit_simmed_psf=state["fit_simmed_psf"],
+            fit_annular_aperture_free=state["fit_annular_aperture_free"],
+            fit_annular_aperture_fixed=state["fit_annular_aperture_fixed"],
+            psfs_subset=state["psfs_subset"],
+            config_coords_guesses_file_name=state["config_coords_guesses_file_name"],
+            config_observing=observing_config,
+            fit_method="curve_fit",
+        )
 
 
 

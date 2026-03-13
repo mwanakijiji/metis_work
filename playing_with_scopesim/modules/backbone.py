@@ -7,7 +7,7 @@ from astropy.io import fits
 from scipy.ndimage import zoom
 from photutils.centroids import centroid_sources, centroid_2dg
 
-from .helpers import fit_gaussian_psf, fit_simmed_psfs
+from .helpers import fit_gaussian_psf, fit_simmed_psfs, load_config_and_pipe
 from .strehl_fcns import strehl_from_annular_aperture_fixed, fit_annular_aperture_free_parameters
 
 
@@ -20,7 +20,8 @@ def strehl_psfs(file_name,
                 fit_annular_aperture_fixed=False, 
                 psfs_subset='all', 
                 config_coords_guesses_file_name=None, 
-                config_observing=None):
+                config_observing=None,
+                fit_method='curve_fit'):
     '''
     Find the Strehl ratio of a grid of PSFs
     
@@ -51,9 +52,8 @@ def strehl_psfs(file_name,
 
 
     # read in coordinate guesses
-    with open(config_coords_guesses_file_name, "r") as f:
-        coords_config = yaml.safe_load(f)
-    coords_entries = coords_config.get("psf_coordinate_guesses", [])
+    config_coords_guesses_config = load_config_and_pipe(config_file_choice=config_coords_guesses_file_name, print_one_line=False)
+    coords_entries = config_coords_guesses_config.get("psf_coordinate_guesses", [])
     coords_guesses_all = np.array([(entry["y"], entry["x"]) for entry in coords_entries])
     coords_guesses_y_all = coords_guesses_all[:, 0]
     coords_guesses_x_all = coords_guesses_all[:, 1]
@@ -212,6 +212,7 @@ def strehl_psfs(file_name,
 
         # strehl from an analytical PSF with fixed parameters: D_aperture, D_obscuration, and ampl
         if fit_annular_aperture_fixed:
+            ipdb.set_trace()
             logging.info(f'Calculating Strehl from annular aperture {num_coord} of {num_psfs_to_process}')
             # return dict of Strehl ratios found with different methods
             strehl_annular_aperture_fixed = strehl_from_annular_aperture_fixed(cookie_cut_out_sci_oversamp, 
@@ -232,7 +233,8 @@ def strehl_psfs(file_name,
                                             x_center_final_cookie_oversamp=x_center_pix_gaussian_best_fit_oversamp, 
                                             y_center_final_cookie_oversamp=y_center_pix_gaussian_best_fit_oversamp, 
                                             config_observing=config_observing,
-                                            fac_oversamp=oversample_factor)
+                                            fac_oversamp=oversample_factor,
+                                            fit_method=fit_method)
 
 
         # resample back to the original size

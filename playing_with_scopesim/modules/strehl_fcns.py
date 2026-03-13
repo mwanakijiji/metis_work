@@ -7,7 +7,9 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from astropy.modeling.models import AiryDisk2D
 from astropy.visualization import ZScaleInterval
 from scipy.optimize import curve_fit
+import ipdb
 
+from .amoeba import amoeba_minimize
 from .helpers import (
     angle_from_center_2d,
     model_for_fit_fixed,
@@ -279,7 +281,7 @@ def fit_airy_psf(cookie_cut_out_sci, obs_filter, x_center_pix_gaussian_best_fit_
     return strehl_results
 
 
-def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, config_observing):
+def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, config_observing, fit_method='amoeba'):
     '''
     Fit a 2D analytical PSF to a given frame.
 
@@ -291,6 +293,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
     y_center_final_cookie_oversamp: final y-center of the PSF; in coordinates of the cookie cut-out
     fac_oversamp: oversampling factor
     config_observing: config object containing the observing parameters
+    fit_method: 'curve_fit' (default) or 'amoeba' - optimizer to use for finding best fit
 
     OUTPUTS:
     '''
@@ -354,29 +357,50 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
     # ampl: no bounds (use -inf to +inf, but should be positive)
     lower_bounds = [1.0, 0.0, 0.0]  # D_aperture >= 1, D_obscuration >= 0, ampl >= 0
     upper_bounds = [50.0, np.inf, np.inf]  # D_aperture <= 50, no upper bounds for others
-    
-    # Perform the fit with the fixed function
-    # Note: 'trf' method supports bounds, 'lm' does not
- 
-    popt, pcov = curve_fit(
-        model_wrapper,
-        r_rad_1d,
-        test_empirical_1d,
-        p0=initial_guess,
-        bounds=(lower_bounds, upper_bounds),
-        method='trf'  # Trust Region Reflective algorithm supports bounds
-    )
+
+    ipdb.set_trace()
+    if fit_method == 'amoeba':
+        # Use Nelder-Mead simplex (amoeba) - objective is sum of squared residuals
+        def chi_sq(params):
+            model = model_wrapper(r_rad_1d, params[0], params[1], params[2])
+            return np.sum((model - test_empirical_1d) ** 2)
+
+        popt, fopt = amoeba_minimize(
+            chi_sq,
+            initial_guess,
+            delta=[2.0, 1.0, 500.0],  # step sizes for D_aperture, D_obscuration, ampl
+            ftol=1e-6,
+            nmax=50000,
+            bounds=(lower_bounds, upper_bounds),
+        )
+        pcov = None  # amoeba does not provide covariance
+        logging.info(f"Fit method: amoeba (Nelder-Mead), chi_sq = {fopt:.2f}")
+    elif fit_method == 'curve_fit':
+        # Perform the fit with curve_fit (Trust Region Reflective)
+        popt, pcov = curve_fit(
+            model_wrapper,
+            r_rad_1d,
+            test_empirical_1d,
+            p0=initial_guess,
+            bounds=(lower_bounds, upper_bounds),
+            method='trf'  # Trust Region Reflective algorithm supports bounds
+        )
 
     # Extract best-fit parameters and uncertainties
     D_aperture_fit = popt[0]
     D_obscuration_fit = popt[1]
     ampl_fit = popt[2]
 
-    # Calculate parameter uncertainties from covariance matrix
-    param_errors = np.sqrt(np.diag(pcov))
-    D_aperture_err = param_errors[0]
-    D_obscuration_err = param_errors[1]
-    ampl_err = param_errors[2]
+    ipdb.set_trace()
+
+    # Calculate parameter uncertainties from covariance matrix (curve_fit only)
+    if pcov is not None:
+        param_errors = np.sqrt(np.diag(pcov))
+        D_aperture_err = param_errors[0]
+        D_obscuration_err = param_errors[1]
+        ampl_err = param_errors[2]
+    else:
+        D_aperture_err = D_obscuration_err = ampl_err = np.nan
 
     # Print results
     logging.info('--------------------------------')
@@ -388,12 +412,13 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
     logging.info(f"D_obscuration = {D_obscuration_fit:.2f} ± {D_obscuration_err:.2f} meters")
     logging.info(f"ampl = {ampl_fit:.2f} ± {ampl_err:.2f}")
 
-    # Check if covariance matrix has infs
-    if np.any(np.isinf(pcov)):
-        logging.warning("WARNING: Covariance matrix contains infinities!")
-        logging.warning("This usually means the fit didn't converge properly.")
-    else:
-        logging.info("Covariance matrix is finite - fit MAY have converged successfully")
+    # Check if covariance matrix has infs (curve_fit only)
+    if pcov is not None:
+        if np.any(np.isinf(pcov)):
+            logging.warning("WARNING: Covariance matrix contains infinities!")
+            logging.warning("This usually means the fit didn't converge properly.")
+        else:
+            logging.info("Covariance matrix is finite - fit MAY have converged successfully")
 
     # generate the best-fit model based on the fit parameters
     # Note: r_rad_2d needs to be flattened and masked for model_for_fit_fixed
