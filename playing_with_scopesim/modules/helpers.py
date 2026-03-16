@@ -13,6 +13,7 @@ from scipy.optimize import curve_fit
 from skimage import measure
 import scopesim as sim
 import yaml
+from scipy.signal import convolve2d
 
 import ipdb
 
@@ -94,7 +95,7 @@ def jinc(x):
     return y
 
 
-def intensity_annular_aperture(r_rad_array, wavel, D_aperture, D_obscuration, ampl=1):
+def intensity_annular_aperture(r_rad_array, wavel, D_aperture, D_obscuration, ampl=1, pinhole_size=None):
     '''
     Calculate the intensity through an aperture with a central obscuration
     Ref. 'E-REP-MPIA-1203 0-1 xx-10-2024', Sec. 4.4
@@ -115,6 +116,18 @@ def intensity_annular_aperture(r_rad_array, wavel, D_aperture, D_obscuration, am
     
     # see Eqn. 43 in 'E-REP-MPIA-1203 0-1 xx-10-2024'
     I_r = (1/(1-eps_**2)**2) * ( (2*jinc(nu_)) - eps_**2 * (2*jinc(nu_*eps_)) ) ** 2
+
+    # convolve with a pinhole, if we're using one of finite size
+    if pinhole_size is not None:
+        # pixel scale in radians (same units as r_rad_array)
+        rad_per_pix = r_rad_array[0, 1] - r_rad_array[0, 0] ## ## TODO: MAKE THIS MORE ELEGANT
+        # fractional pixels: linear ramp at boundary so edge pixels get value in (0, 1)
+        pinhole_array = np.clip(
+            (pinhole_size - r_rad_array + rad_per_pix / 4) / rad_per_pix,
+            0, 1
+        )
+        # convolve with the pinhole array
+        I_r = convolve2d(I_r, pinhole_array, mode='same')
 
     # normalize to the amplitude
     I_r = ampl * I_r / np.nanmax(I_r)
@@ -169,7 +182,7 @@ def _filter_curve_from_filter_file(filter_file):
     return decimated_df
 
 
-def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shape, valid_mask, *, wavel=None, filter_file=None):
+def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shape, valid_mask, *, wavel=None, filter_file=None, pinhole_size=None, fac_oversamp=1):
     """
     Wrapper function for intensity_annular_aperture to use with curve_fit.
     
@@ -183,6 +196,7 @@ def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shap
     - fac_oversamp: oversampling factor
     - wavel: wavelength (meters); for monochromatic PSFs
     - filter_file: filter curve file to make polychromatic PSFs; for more realistic PSFs
+    - pinhole_size: size of the pinhole in pixels (if None, the analytical expression for the PSF alone is used; this is equivalent to a pinhole delta function)
     
     Returns:
     - 1D array of intensity values (masked, same length as input)
@@ -200,9 +214,11 @@ def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shap
             wavel=wavel, 
             D_aperture=D_aperture, 
             D_obscuration=D_obscuration, 
-            ampl=ampl
+            ampl=ampl, 
+            pinhole_size=pinhole_size
         )
     else: # polychromatic; requires a filter curve
+        ipdb.set_trace()
         decimated_filter_curve_df = _filter_curve_from_filter_file(filter_file)
         intensity_2d = np.zeros_like(r_rad_2d) # init
         for idx, row in decimated_filter_curve_df.iterrows():
@@ -216,7 +232,8 @@ def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shap
                 wavel=wavel_um, 
                 D_aperture=D_aperture, 
                 D_obscuration=D_obscuration, 
-                ampl=ampl
+                ampl=ampl, 
+                pinhole_size=pinhole_size
             )
             # debug: save as FITS file
             #fits.writeto(f'junk.fits', intensity_2d, overwrite=True)
@@ -231,6 +248,7 @@ def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shap
 def angle_from_center_2d(array_passed_in, y_center, x_center, pixel_scale_mas, fac_oversamp, units='radians'):
     '''
     Create a 2D array of distances from the center in radians or arcseconds
+    N.b. the input array is already assumed to be oversampled; the fac_oversamp here just is for rescaling the pixel values
 
     array_passed_in: the array to create the 2D array of distances from the center in arcseconds from
     y_center: the y-center of the array

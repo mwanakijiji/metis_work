@@ -281,7 +281,7 @@ def fit_airy_psf(cookie_cut_out_sci, obs_filter, x_center_pix_gaussian_best_fit_
     return strehl_results
 
 
-def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, config_observing, fit_method, pinhole_size=None):
+def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, config_observing, fit_method):
     '''
     Fit a 2D analytical PSF to a given frame.
 
@@ -334,13 +334,15 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
 
     # Initial parameter guesses
     # [D_aperture, D_obscuration, ampl]
-    #initial_guess = [36., 12., 7e5]
-    initial_guess = [36., 12., 1e5]  
+    initial_guess = [36., 12., 7e5]
+    #initial_guess = [36., 12., 1e5]  
 
     # Create a wrapper function that binds the fixed parameters (baseline_shape and valid_mask)
     # This ensures curve_fit only optimizes D_aperture, D_obscuration, and ampl
     size = cookie_cut_out_sci.shape[0] 
     baseline_shape = (size, size)
+    pinhole_size = 1e-8  # units radians (fixed, not a fit parameter)
+    #pinhole_size = None
     model_wrapper = lambda r_rad_1d, D_aperture, D_obscuration, ampl: \
         model_for_fit_fixed(
             r_rad_1d,
@@ -349,16 +351,15 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
             ampl,
             baseline_shape,
             valid_mask,
-            #wavel=config_observing['observing_filters_lm'][filter_name],
-            filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name]
-        )
+            filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
+            pinhole_size=pinhole_size
+            )
 
     # Set bounds for parameters: [D_aperture, D_obscuration, ampl]
     lower_bounds = [25., 2.0, 10.0]
     upper_bounds = [60.0, 20., 1e6]
     
 
-    ipdb.set_trace(context=10)
     if fit_method == 'amoeba':
         # Use Nelder-Mead simplex (amoeba) - objective is sum of squared residuals
         logging.info('Fitting PSF with amoeba algorithm')
@@ -432,8 +433,9 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
         initial_guess[2],
         baseline_shape,
         valid_mask,
-        #wavel=config_observing['observing_filters_lm'][filter_name],
-        filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name]
+        filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
+        pinhole_size=pinhole_size,
+        fac_oversamp=fac_oversamp
     )
     best_fit_model_1d = model_for_fit_fixed(
         r_rad_1d_masked,
@@ -442,8 +444,9 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
         ampl_fit,
         baseline_shape,
         valid_mask,
-        #wavel=config_observing['observing_filters_lm'][filter_name],
-        filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name]
+        filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
+        pinhole_size=pinhole_size,
+        fac_oversamp=fac_oversamp
     )
     
     # Reshape to 2D (though these are already 1D masked arrays, we need to reconstruct the full 2D)

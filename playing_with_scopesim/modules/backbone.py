@@ -68,7 +68,7 @@ def strehl_psfs(file_name,
     '''
 
     # oversample the image to find centroids, FWHM
-    oversample_factor = 4
+    oversample_factor = 3 # try to keep odd to facilitate centering
     logging.info(f'PSF oversampling factor: {oversample_factor}')
     # Step 1: Oversample the PSFs by a factor of 4 using bicubic interpolation
     grid_data_oversamp = zoom(grid_data, oversample_factor, order=3)
