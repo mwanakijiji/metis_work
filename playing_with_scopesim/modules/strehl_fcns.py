@@ -281,7 +281,7 @@ def fit_airy_psf(cookie_cut_out_sci, obs_filter, x_center_pix_gaussian_best_fit_
     return strehl_results
 
 
-def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, config_observing, fit_method):
+def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, config_observing, fit_method, pinhole_size=None):
     '''
     Fit a 2D analytical PSF to a given frame.
 
@@ -294,6 +294,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_s
     fac_oversamp: oversampling factor
     config_observing: config object containing the observing parameters
     fit_method: 'curve_fit' (default) or 'amoeba' - optimizer to use for finding best fit
+    pinhole_size: size of the pinhole in pixels (if None, the analytical expression for the PSF alone is used; this is equivalent to a pinhole delta function)
 
     OUTPUTS:
     '''

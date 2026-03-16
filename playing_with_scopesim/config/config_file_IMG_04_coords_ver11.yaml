@@ -1,4 +1,4 @@
-coordinates:
+psf_coordinate_guesses:
   - id: 1
     x: 243
     y: 1804
