@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
 from scipy.ndimage import zoom
+import copy
 from photutils.centroids import centroid_sources, centroid_2dg
 
 from .helpers import fit_gaussian_psf, fit_simmed_psfs, load_config_and_pipe
@@ -50,6 +51,8 @@ def strehl_psfs(file_name,
     grid_data = grid_frame[1].data
     grid_header = grid_frame[1].header
 
+    # keep copy of the original, pre-oversampling
+    grid_data_original = copy.deepcopy(grid_data)
 
     # read in coordinate guesses
     config_coords_guesses_config = load_config_and_pipe(config_file_choice=config_coords_guesses_file_name, print_one_line=False)
@@ -202,6 +205,7 @@ def strehl_psfs(file_name,
             logging.info(f'Fitting ScopeSim PSF {num_coord} of {num_psfs_to_process}')
             # return 2D array of ScopeSim best-fit
             best_fit_cutout_oversamp = fit_simmed_psfs(cookie_cut_out_sci_oversamp, 
+                                            data_empirical_original=grid_data_original,
                                             plot_string=f'num_coord_{num_coord}_fpmask_{fp_mask}_ppmask_{pp_mask}_filter_{filter_name}', 
                                             obs_filter=filter_name,
                                             fp_mask=fp_mask,
@@ -215,6 +219,7 @@ def strehl_psfs(file_name,
             logging.info(f'Calculating Strehl from annular aperture {num_coord} of {num_psfs_to_process}')
             # return dict of Strehl ratios found with different methods
             strehl_annular_aperture_fixed = strehl_from_annular_aperture_fixed(cookie_cut_out_sci_oversamp, 
+                                            data_empirical_original=grid_data_original,
                                             filter_name=filter_name,
                                             plot_string=f'num_coord_{num_coord}_fpmask_{fp_mask}_ppmask_{pp_mask}_filter_{filter_name}', 
                                             x_center_final_cookie_oversamp=x_center_pix_gaussian_best_fit_oversamp, 
@@ -227,6 +232,7 @@ def strehl_psfs(file_name,
         if fit_annular_aperture_free:
             logging.info(f'Fitting analytical PSF {num_coord} of {num_psfs_to_process}')
             strehl_annular_aperture_free = fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, 
+                                            data_empirical_original=grid_data_original,
                                             filter_name=filter_name,
                                             plot_string=f'num_coord_{num_coord}_fpmask_{fp_mask}_ppmask_{pp_mask}_filter_{filter_name}', 
                                             x_center_final_cookie_oversamp=x_center_pix_gaussian_best_fit_oversamp, 

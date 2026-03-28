@@ -17,12 +17,13 @@ from .helpers import (
 )
 
 
-def strehl_from_annular_aperture_fixed(cookie_cut_out_sci, filter_name, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, config_observing, fac_oversamp, polychromatic=True):
+def strehl_from_annular_aperture_fixed(cookie_cut_out_sci, data_empirical_original, filter_name, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, config_observing, fac_oversamp, polychromatic=True):
     '''
     Calculate the Strehl ratio from an annular aperture.
 
     INPUTS:
     cookie_cut_out_sci: the empirical PSF
+    data_empirical_original: the original empirical data
     filter_name: the name of the observing filter
     plot_string: the string to add to the plot file name
     x_center_final_cookie_oversamp: the x-center of the PSF (i.e., no more centroiding will be done here); in coordinates of the cookie cut-out
@@ -179,12 +180,13 @@ def strehl_from_annular_aperture_fixed(cookie_cut_out_sci, filter_name, plot_str
     return strehl_results
 
 
-def fit_airy_psf(cookie_cut_out_sci, obs_filter, x_center_pix_gaussian_best_fit_oversamp, y_center_pix_gaussian_best_fit_oversamp, fac_oversamp, config_observing, plot_string=None):
+def fit_airy_psf(cookie_cut_out_sci, data_empirical_original, obs_filter, x_center_pix_gaussian_best_fit_oversamp, y_center_pix_gaussian_best_fit_oversamp, fac_oversamp, config_observing, plot_string=None):
     '''
     Generate an Airy PSF with the same total power as the empirical PSF, then compare the peak fluxes.  
 
     INPUTS:
     cookie_cut_out_sci: the empirical PSF
+    data_empirical_original: the original empirical data
     obs_filter: the observing filter
     x_center_pix_gaussian_best_fit_oversamp: the x-center of the Gaussian-best-fit PSF
     y_center_pix_gaussian_best_fit_oversamp: the y-center of the Gaussian-best-fit PSF
@@ -281,12 +283,13 @@ def fit_airy_psf(cookie_cut_out_sci, obs_filter, x_center_pix_gaussian_best_fit_
     return strehl_results
 
 
-def fit_annular_aperture_free_parameters(cookie_cut_out_sci, filter_name, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, config_observing, fit_method):
+def fit_annular_aperture_free_parameters(cookie_cut_out_sci, data_empirical_original, filter_name, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, config_observing, fit_method):
     '''
     Fit a 2D analytical PSF to a given frame.
 
     INPUTS:
     cookie_cut_out_sci: 2D array of the cookie cut our from the full science frame
+    data_empirical_original: the original empirical data
     filter_name: name of the observing filter
     plot_string: string to add to the plot file name
     x_center_final_cookie_oversamp: final x-center of the PSF (i.e., no more centroiding will be done here); in coordinates of the cookie cut-out

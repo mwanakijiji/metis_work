@@ -508,12 +508,13 @@ def fit_gaussian_psf(cookie_cut_out_sci, obs_filter, fp_mask, pp_mask, coords_gu
     return x_center_pix_oversamp_cutout, y_center_pix_oversamp_cutout, fwhm_x_pix, fwhm_y_pix, amplitude_counts, gaussian_based_strehl
 
 
-def fit_simmed_psfs(cookie_cut_out_sci, plot_string, obs_filter, fp_mask, pp_mask, x_center_final_oversamp, y_center_final_oversamp, fac_oversamp):
+def fit_simmed_psfs(cookie_cut_out_sci, data_empirical_original, plot_string, obs_filter, fp_mask, pp_mask, x_center_final_oversamp, y_center_final_oversamp, fac_oversamp):
     '''
     Find FWHM of a PSF using a perfect PSF from ScopeSim
     
     INPUTS:
     cookie_cut_out_sci: 2D array of the science frame
+    data_empirical_original: 2D array of the original empirical data
     plot_string: string to add to the plot file name
     obs_filter: observing filter (string)
     fp_mask: focal plane mask (string)
