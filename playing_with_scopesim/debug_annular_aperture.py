@@ -28,7 +28,7 @@ cookie_cut_out_sci_original = np.ones((101, 101))
 baseline_shape_original = cookie_cut_out_sci_original.shape
 
 # upsample
-fac_oversamp = 1
+fac_oversamp = 3
 cookie_cut_out_sci_oversamp = zoom(cookie_cut_out_sci_original, fac_oversamp, order=3)
 baseline_shape_oversamp = cookie_cut_out_sci_oversamp.shape
 
@@ -46,6 +46,7 @@ ampl = 1
 
 # ersatz mask
 valid_mask = np.ones(cookie_cut_out_sci_original.shape, dtype=bool)
+valid_mask_oversamp = np.ones(cookie_cut_out_sci_oversamp.shape, dtype=bool)
 
 # read in all the data states (one filter curve for each file)
 stem = '/podman-share/metis_work/playing_with_scopesim/'
@@ -57,8 +58,12 @@ observing_config_file = stem + 'config/config_file_IMG_04_observing.yaml'
 observing_config = load_config_and_pipe(config_file_choice=observing_config_file, print_one_line=False)
 
 
-# make simulated data (no oversampling)
-for state in data_states_config['runs']:
+# make simulated data (no oversampling), then fit with a model
+for state in data_states_config['runs'][0:1]:
+
+    #########################################################
+    # START SIMULATION OF 'EMPIRICAL' DATA 
+    #########################################################
 
     filter_name = state['filter_name']
     filter_file = observing_config['polychromatic_observing_filters_lm'][filter_name]
@@ -77,6 +82,9 @@ for state in data_states_config['runs']:
 
     r_rad_1d_original = r_rad_2d_original.flatten()
     valid_mask_1d = valid_mask.flatten()
+    valid_mask_1d_oversamp = valid_mask_oversamp.flatten()
+
+
 
     data_empirical_1d_original = model_for_fit_fixed(
                 r_rad_1d_original,
@@ -85,11 +93,12 @@ for state in data_states_config['runs']:
                 ampl,
                 shape_original_2d=baseline_shape_original,
                 shape_oversampled_2d=baseline_shape_oversamp,
-                valid_mask=valid_mask_1d,
+                valid_mask=valid_mask_1d_oversamp,
                 fac_oversamp=fac_oversamp,
                 #wavel=config_observing['observing_filters_lm'][filter_name],
                 filter_file=filter_file
             )
+    ipdb.set_trace()
 
     data_empirical_2d_original = data_empirical_1d_original.reshape(baseline_shape_original)
     data_empirical_2d_original_noconv_nonoise = np.copy(data_empirical_2d_original)
@@ -102,7 +111,7 @@ for state in data_states_config['runs']:
         rad_per_pix = (config_observing['pixel_scales']['img_lm'] / 1000.0) / 206265.0 / fac_oversamp
         # fractional pixels: linear ramp at boundary so edge pixels get value in (0, 1)
         pinhole_array = np.clip(
-            (pinhole_size - r_rad_2d_original + rad_per_pix / 2) / rad_per_pix,
+            (pinhole_size - r_rad_2d_original),
             0, 1
         )
         # convolve with the empirical data pre-noise
@@ -123,8 +132,8 @@ for state in data_states_config['runs']:
     for ax in axs:
         ax.set_box_aspect(1)
 
-    # Empirical
-    
+
+    # plot 'empirical' data
     zscale = ZScaleInterval()
     vmin, vmax = zscale.get_limits(data_empirical_2d_conv_norm)
     im0 = axs[0].imshow(data_empirical_2d_original_noconv_nonoise, origin='lower', cmap='gray_r', vmin=vmin, vmax=vmax)
@@ -163,33 +172,40 @@ for state in data_states_config['runs']:
     plt.tight_layout()
     plt.show()
 
+
     #########################################################
-    # fit it
-    model_wrapper = lambda r_rad_1d, D_aperture, D_obscuration, ampl: \
-            model_for_fit_fixed(
-                r_rad_1d,
-                D_aperture,
-                D_obscuration,
-                ampl,
-                baseline_shape,
-                valid_mask_1d,
-                #wavel=config_observing['observing_filters_lm'][filter_name],
-                filter_file=filter_file
-            )
+    # START FITTING DATA
+    #########################################################
+    data_empirical_1d_fit = data_empirical_2d_conv_norm.flatten()
+    model_wrapper = lambda r_rad_1d, D_aperture, D_obscuration, ampl: model_for_fit_fixed(
+        r_rad_1d,
+        D_aperture,
+        D_obscuration,
+        ampl,
+        baseline_shape_original,
+        baseline_shape_oversamp,
+        valid_mask_1d_oversamp,
+        fac_oversamp,
+        filter_file=filter_file,
+        pinhole_size=pinhole_size,
+    )
 
     lower_bounds = [25., 2.0, 1e-3]
     upper_bounds = [60.0, 20., 1e3]
     initial_guess = [30, 15, 2]
     popt, pcov = curve_fit(
         model_wrapper,
-        r_rad_1d,
-        data_empirical_1d,
+        r_rad_1d_original,
+        data_empirical_1d_fit,
         p0=initial_guess,
         bounds=(lower_bounds, upper_bounds),
         method='trf'  # Trust Region Reflective algorithm supports bounds
     )
 
-    best_fit_2d = model_wrapper(r_rad_1d, popt[0], popt[1], popt[2]).reshape(baseline_shape)
+    best_fit_2d = model_wrapper(
+        r_rad_1d_original, popt[0], popt[1], popt[2]
+    ).reshape(baseline_shape_original)
+    data_empirical_2d = data_empirical_2d_conv_norm
     residuals = data_empirical_2d - best_fit_2d
 
     # plot the empirical, best-fit, residuals, and cross-sections (2x3 layout)

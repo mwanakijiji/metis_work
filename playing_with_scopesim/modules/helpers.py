@@ -123,10 +123,17 @@ def intensity_annular_aperture(r_rad_array, wavel, D_aperture, D_obscuration, am
         # pixel scale in radians (same units as r_rad_array)
         rad_per_pix = r_rad_array[0, 1] - r_rad_array[0, 0] ## ## TODO: MAKE THIS MORE ELEGANT
         # fractional pixels: linear ramp at boundary so edge pixels get value in (0, 1)
+        # make pinhole where r_rad_array is less than pinhole_size
+        pinhole_array = np.clip(
+            (pinhole_size - r_rad_array),
+            0, 1
+        )
+        '''
         pinhole_array = np.clip(
             (pinhole_size - r_rad_array + rad_per_pix / 4) / rad_per_pix,
             0, 1
         )
+        '''
         # convolve with the pinhole array
         I_r = convolve2d(I_r, pinhole_array, mode='same')
 
@@ -213,6 +220,7 @@ def model_for_fit_fixed(r_rad_1d_original, D_aperture, D_obscuration, ampl, shap
     r_rad_2d_oversamp = zoom(r_rad_2d_original, (zoom_y, zoom_x), order=3)
     r_rad_1d_oversamp = r_rad_2d_oversamp.flatten()
     # Mask to include only valid points
+
     r_rad_1d_oversamp = r_rad_1d_oversamp[valid_mask]
     r_rad_2d_oversamp = r_rad_1d_oversamp.reshape(shape_oversampled_2d)
     # Reconstruct the full 2D array by inserting masked values back into their original positions
