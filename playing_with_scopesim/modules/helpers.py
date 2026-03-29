@@ -190,15 +190,18 @@ def _filter_curve_from_filter_file(filter_file):
     return decimated_df
 
 
-def model_for_fit_fixed(r_rad_1d_original, D_aperture, D_obscuration, ampl, shape_original_2d, shape_oversampled_2d, valid_mask, fac_oversamp, *, wavel=None, filter_file=None, pinhole_size=None, ):
+def model_for_fit_fixed(r_rad_1d_original, D_aperture, D_obscuration, ampl, centroid_yx_original, shape_original_2d, fac_oversamp, *, wavel=None, filter_file=None, pinhole_size=None, ):
     """
     Wrapper function for intensity_annular_aperture to use with curve_fit.
+
+    Takes in a 1D array of radial distances, upsamples them, makes a model array of intensity values, then downsamples them again
     
     Parameters:
     - r_rad_1d_oversamp: 1D array of radial distances within cookie cut-out
     - D_aperture: aperture diameter (meters)
     - D_obscuration: obscuration diameter (meters)
     - ampl: amplitude
+    - centroid_yx_original: tuple, centroid of the original shape
     - shape_oversamp: tuple, shape of the 2D array (fixed, not optimized)
     - valid_mask: boolean array, mask for valid data points (fixed, not optimized)
     - fac_oversamp: oversampling factor
@@ -210,26 +213,27 @@ def model_for_fit_fixed(r_rad_1d_original, D_aperture, D_obscuration, ampl, shap
     - 1D array of intensity values (masked, same length as input)
     """
 
-    # resample the original r_rad to the oversampled shape
-    # Resample r_rad_1d_original to oversampled shape using zoom
-    # r_rad_1d_original is 1D (flattened original shape), need to reshape first
+    # r_rad_1d_original is 1D (flattened original shape), need to reshape to 2D first
     r_rad_2d_original = r_rad_1d_original.reshape(shape_original_2d)
-    # Determine zoom factors for y and x
-    zoom_y = shape_oversampled_2d[0] / shape_original_2d[0]
-    zoom_x = shape_oversampled_2d[1] / shape_original_2d[1]
-    r_rad_2d_oversamp = zoom(r_rad_2d_original, (zoom_y, zoom_x), order=3)
+
+    # oversample
+    r_rad_2d_oversamp = zoom(r_rad_2d_original, (fac_oversamp, fac_oversamp), order=3)
+    centroid_yx_oversamp = (centroid_yx_original[0] * fac_oversamp, centroid_yx_original[1] * fac_oversamp) # center on the oversampled array
+
+    # flatten again
     r_rad_1d_oversamp = r_rad_2d_oversamp.flatten()
+
     # Mask to include only valid points
 
-    r_rad_1d_oversamp = r_rad_1d_oversamp[valid_mask]
-    r_rad_2d_oversamp = r_rad_1d_oversamp.reshape(shape_oversampled_2d)
+    #r_rad_1d_oversamp = r_rad_1d_oversamp[valid_mask]
+    #r_rad_2d_oversamp = r_rad_1d_oversamp.reshape(shape_oversampled_2d)
     # Reconstruct the full 2D array by inserting masked values back into their original positions
 
     #r_rad_2d_full = np.full(shape_oversamp, np.nan).flatten()
     #r_rad_2d_full[valid_mask] = r_rad_1d_oversamp
     #r_rad_2d = r_rad_2d_full.reshape(shape_oversamp)
 
-    # generate model intensities 
+    # generate model intensities on oversampled array
     if wavel: # monochromatic PSF
         intensity_2d = intensity_annular_aperture(
             r_rad_array=r_rad_2d_oversamp, 
@@ -262,14 +266,14 @@ def model_for_fit_fixed(r_rad_1d_original, D_aperture, D_obscuration, ampl, shap
         intensity_2d = ampl * intensity_2d / np.nanmax(intensity_2d) 
 
     # Flatten and apply the same mask to return only valid points
-    intensity_1d_full = intensity_2d.flatten()
-    intensity_1d_full_masked = intensity_1d_full[valid_mask]
+    #intensity_1d_full = intensity_2d.flatten()
+    #intensity_1d_full_masked = intensity_1d_full[valid_mask]
 
     # reshape to 2D
-    intensity_2d_masked = intensity_1d_full_masked.reshape(shape_oversampled_2d)
+    #intensity_2d_masked = intensity_1d_full_masked.reshape(shape_oversampled_2d)
 
     # rebin to the original shape
-    intensity_2d_model_original_scale = block_reduce(intensity_2d_masked, block_size=(fac_oversamp, fac_oversamp), func=np.mean)
+    intensity_2d_model_original_scale = block_reduce(intensity_2d, block_size=(fac_oversamp, fac_oversamp), func=np.mean)
 
     # flatten
     intensity_1d_model_original_scale = intensity_2d_model_original_scale.flatten()
