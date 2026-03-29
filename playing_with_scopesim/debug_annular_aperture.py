@@ -13,6 +13,7 @@ from astropy.visualization import ZScaleInterval
 
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
+from scipy.ndimage import zoom
 
 from modules.helpers import load_config_and_pipe
 from modules.amoeba import amoeba_minimize
@@ -23,16 +24,28 @@ from modules.helpers import (
 )
 
 # simulate a PSF using an analytical expression
-cookie_cut_out_sci = np.ones((101, 101))
+cookie_cut_out_sci_original = np.ones((101, 101))
+baseline_shape_original = cookie_cut_out_sci_original.shape
+
+# upsample
 fac_oversamp = 1
-y_center_final_cookie_oversamp = 50
-x_center_final_cookie_oversamp = 50
+cookie_cut_out_sci_oversamp = zoom(cookie_cut_out_sci_original, fac_oversamp, order=3)
+baseline_shape_oversamp = cookie_cut_out_sci_oversamp.shape
+
+# centers
+y_center_cookie_original = cookie_cut_out_sci_original.shape[0] // 2
+x_center_cookie_original = cookie_cut_out_sci_original.shape[1] // 2
+y_center_cookie_oversamp = cookie_cut_out_sci_oversamp.shape[0] // 2
+x_center_cookie_oversamp = cookie_cut_out_sci_oversamp.shape[1] // 2
+
+# set parameters
 config_observing = {'pixel_scales': {'img_lm': 5.47}}
 D_aperture = 35
 D_obscuration = 10
 ampl = 1
-baseline_shape = cookie_cut_out_sci.shape
-valid_mask = np.ones(cookie_cut_out_sci.shape, dtype=bool)
+
+# ersatz mask
+valid_mask = np.ones(cookie_cut_out_sci_original.shape, dtype=bool)
 
 # read in all the data states (one filter curve for each file)
 stem = '/podman-share/metis_work/playing_with_scopesim/'
@@ -44,7 +57,7 @@ observing_config_file = stem + 'config/config_file_IMG_04_observing.yaml'
 observing_config = load_config_and_pipe(config_file_choice=observing_config_file, print_one_line=False)
 
 
-# make simulated data
+# make simulated data (no oversampling)
 for state in data_states_config['runs']:
 
     filter_name = state['filter_name']
@@ -55,29 +68,32 @@ for state in data_states_config['runs']:
 
     pinhole_size = None
 
-    r_rad_2d = angle_from_center_2d(array_passed_in=cookie_cut_out_sci, 
-                            y_center=y_center_final_cookie_oversamp, 
-                            x_center=x_center_final_cookie_oversamp, 
+    r_rad_2d_original = angle_from_center_2d(array_passed_in=cookie_cut_out_sci_original, 
+                            y_center=y_center_cookie_original, 
+                            x_center=x_center_cookie_original, 
                             pixel_scale_mas=config_observing['pixel_scales']['img_lm'], 
                             fac_oversamp=fac_oversamp, 
                             units='radians')
 
-    r_rad_1d = r_rad_2d.flatten()
+    r_rad_1d_original = r_rad_2d_original.flatten()
     valid_mask_1d = valid_mask.flatten()
 
-    data_empirical_1d = model_for_fit_fixed(
-                r_rad_1d,
+    data_empirical_1d_original = model_for_fit_fixed(
+                r_rad_1d_original,
                 D_aperture,
                 D_obscuration,
                 ampl,
-                baseline_shape,
+                shape_original_2d=baseline_shape_original,
+                shape_oversampled_2d=baseline_shape_oversamp,
                 valid_mask=valid_mask_1d,
+                fac_oversamp=fac_oversamp,
                 #wavel=config_observing['observing_filters_lm'][filter_name],
                 filter_file=filter_file
             )
 
-    data_empirical_2d = data_empirical_1d.reshape(baseline_shape)
-    data_empirical_2d_noconv_nonoise = np.copy(data_empirical_2d)
+    data_empirical_2d_original = data_empirical_1d_original.reshape(baseline_shape_original)
+    data_empirical_2d_original_noconv_nonoise = np.copy(data_empirical_2d_original)
+    ipdb.set_trace()
 
     # make a pinhole, if we're using one of finite size
     pinhole_size = 3e-8  # units rad
@@ -86,19 +102,21 @@ for state in data_states_config['runs']:
         rad_per_pix = (config_observing['pixel_scales']['img_lm'] / 1000.0) / 206265.0 / fac_oversamp
         # fractional pixels: linear ramp at boundary so edge pixels get value in (0, 1)
         pinhole_array = np.clip(
-            (pinhole_size - r_rad_2d + rad_per_pix / 2) / rad_per_pix,
+            (pinhole_size - r_rad_2d_original + rad_per_pix / 2) / rad_per_pix,
             0, 1
         )
         # convolve with the empirical data pre-noise
-        data_empirical_2d = convolve2d(data_empirical_2d, pinhole_array, mode='same')
-        data_empirical_1d = data_empirical_2d.flatten()
+        data_empirical_2d_original_conv = convolve2d(data_empirical_2d_original, pinhole_array, mode='same')
+        data_empirical_1d_original_conv = data_empirical_2d_original_conv.flatten()
+    ipdb.set_trace()
 
     # renormalize
-    data_empirical_2d_norm = (data_empirical_2d / np.sum(data_empirical_2d)) * np.sum(data_empirical_2d_noconv_nonoise)
+    data_empirical_2d_conv_norm = (data_empirical_2d_original_conv / np.sum(data_empirical_2d_original_conv)) * np.sum(data_empirical_2d_original_noconv_nonoise)
     # add some noise
-    noise = np.random.normal(0, 0.002, data_empirical_1d.shape)
-    data_empirical_1d += noise
-    data_empirical_2d = data_empirical_1d.reshape(baseline_shape)
+    noise = np.random.normal(0, 0.002, data_empirical_2d_conv_norm.shape)
+    data_empirical_2d_conv_norm += noise
+    ipdb.set_trace()
+    #data_empirical_2d = data_empirical_1d.reshape(baseline_shape)
 
     # make subplots of the empirical, pinhole, convolved data, and cross-sections
     fig, axs = plt.subplots(1, 4, figsize=(20, 6))
@@ -108,8 +126,8 @@ for state in data_states_config['runs']:
     # Empirical
     
     zscale = ZScaleInterval()
-    vmin, vmax = zscale.get_limits(data_empirical_2d)
-    im0 = axs[0].imshow(data_empirical_2d_noconv_nonoise, origin='lower', cmap='gray_r', vmin=vmin, vmax=vmax)
+    vmin, vmax = zscale.get_limits(data_empirical_2d_conv_norm)
+    im0 = axs[0].imshow(data_empirical_2d_original_noconv_nonoise, origin='lower', cmap='gray_r', vmin=vmin, vmax=vmax)
     axs[0].set_title('Perfect PSF, no pinhole')
     plt.colorbar(im0, ax=axs[0], fraction=0.046, pad=0.04)
 
@@ -120,26 +138,28 @@ for state in data_states_config['runs']:
 
     # Convolved
     #vmin, vmax = zscale.get_limits(test)
-    im2 = axs[2].imshow(data_empirical_2d, origin='lower', cmap='gray_r', vmin=vmin, vmax=vmax)
+    im2 = axs[2].imshow(data_empirical_2d_conv_norm, origin='lower', cmap='gray_r', vmin=vmin, vmax=vmax)
     axs[2].set_title('Empirical\n(Convolved, renormalized, noise added)')
     plt.colorbar(im2, ax=axs[2], fraction=0.046, pad=0.04)
 
     # Cross-section
-    mid_row = data_empirical_2d.shape[0] // 2
-    x_pixels = np.arange(data_empirical_2d.shape[1])
-    line_empirical, = axs[3].plot(x_pixels, data_empirical_2d_noconv_nonoise[mid_row, :], label='Perfect, no pinhole')
-    line_convolved, = axs[3].plot(x_pixels, data_empirical_2d[mid_row, :], label='Convolved', linestyle='--')
+    mid_row = data_empirical_2d_original_noconv_nonoise.shape[0] // 2
+    x_pixels = np.arange(data_empirical_2d_original_noconv_nonoise.shape[1])
+    line_empirical, = axs[3].plot(x_pixels, data_empirical_2d_original_noconv_nonoise[mid_row, :], label='Perfect, no pinhole')
+    line_convolved, = axs[3].plot(x_pixels, data_empirical_2d_conv_norm[mid_row, :], label='Convolved', linestyle='--')
     axs[3].set_yscale('log')
     axs[3].set_xlabel('Pixel')
     axs[3].set_ylabel('Intensity')
     axs[3].set_title('Cross-section (center row)')
     axs[3].legend()
 
+    '''
     # Optionally, add a dummy colorbar for the 1D plot to be consistent (though not common)
     norm = Normalize(vmin=min(data_empirical_2d[mid_row, :].min(), data_empirical_2d_noconv_nonoise[mid_row, :].min()),
                     vmax=max(data_empirical_2d[mid_row, :].max(), data_empirical_2d_noconv_nonoise[mid_row, :].max()))
     sm = ScalarMappable(norm=norm, cmap='gray_r')
     plt.colorbar(sm, ax=axs[3], fraction=0.046, pad=0.04)
+    '''
     plt.tight_layout()
     plt.show()
 
