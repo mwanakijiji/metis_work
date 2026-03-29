@@ -218,7 +218,6 @@ def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shap
             pinhole_size=pinhole_size
         )
     else: # polychromatic; requires a filter curve
-        ipdb.set_trace()
         decimated_filter_curve_df = _filter_curve_from_filter_file(filter_file)
         intensity_2d = np.zeros_like(r_rad_2d) # init
         for idx, row in decimated_filter_curve_df.iterrows():

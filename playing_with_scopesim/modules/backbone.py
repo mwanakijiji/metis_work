@@ -1,14 +1,10 @@
 import logging
-import yaml
 import ipdb
 import numpy as np
 import matplotlib.pyplot as plt
-from astropy.io import fits
-from scipy.ndimage import zoom
-import copy
-from photutils.centroids import centroid_sources, centroid_2dg
 
 from .helpers import fit_gaussian_psf, fit_simmed_psfs, load_config_and_pipe
+from .psf_grid_prep import load_grid_data_from_fits, prepare_psf_grid
 from .strehl_fcns import strehl_from_annular_aperture_fixed, fit_annular_aperture_free_parameters
 
 
@@ -44,91 +40,50 @@ def strehl_psfs(file_name,
 
     #logging.info(f'Processing \n\tdata file: {file_name} \n\tfilter: {filter_name} \n\tconfig file: {config_file_name}')
 
-    # return the locations and other data for each PSF
+    oversample_factor = 3  # try to keep odd to facilitate centering
+    logging.info(f"PSF oversampling factor: {oversample_factor}")
 
-    grid_frame = fits.open(file_name)
-    #ipdb.set_trace(context=10)
-    grid_data = grid_frame[1].data
-    grid_header = grid_frame[1].header
+    config_coords_guesses_config = load_config_and_pipe(
+        config_file_choice=config_coords_guesses_file_name, print_one_line=False
+    )
+    grid_data, grid_header = load_grid_data_from_fits(file_name, hdu_index=1)
+    prep = prepare_psf_grid(
+        grid_data,
+        config_coords_guesses_config,
+        psfs_subset=psfs_subset,
+        oversample_factor=oversample_factor,
+        grid_header=grid_header,
+    )
 
-    # keep copy of the original, pre-oversampling
-    grid_data_original = copy.deepcopy(grid_data)
+    grid_data = prep.grid_data
+    grid_data_original = prep.grid_data_original
+    grid_data_oversamp = prep.grid_data_oversamp
+    x_pos_pix_oversamp = prep.x_pos_pix_oversamp
+    y_pos_pix_oversamp = prep.y_pos_pix_oversamp
+    coords_centroided_1st_pass_all_oversamp = prep.coords_centroided_1st_pass_all_oversamp
+    raw_cutout_size = prep.raw_cutout_size
+    num_psfs_to_process = prep.num_psfs_to_process
+    total_psfs = prep.total_psfs
+    canvas_grid_data = prep.canvas_grid_data
 
-    # read in coordinate guesses
-    config_coords_guesses_config = load_config_and_pipe(config_file_choice=config_coords_guesses_file_name, print_one_line=False)
-    coords_entries = config_coords_guesses_config.get("psf_coordinate_guesses", [])
-    coords_guesses_all = np.array([(entry["y"], entry["x"]) for entry in coords_entries])
-    coords_guesses_y_all = coords_guesses_all[:, 0]
-    coords_guesses_x_all = coords_guesses_all[:, 1]
-
-    #guesses_grid = np.array(())
-
-    # for debugging
-    '''
-    print('! ---------- debugging --------- !')
-    x_grid = np.array([3.0, 3.0, 3.1, 3.3])
-    y_grid = np.array([13.0, 13.0, 13.1, 13.3])
-    '''
-
-    # oversample the image to find centroids, FWHM
-    oversample_factor = 3 # try to keep odd to facilitate centering
-    logging.info(f'PSF oversampling factor: {oversample_factor}')
-    # Step 1: Oversample the PSFs by a factor of 4 using bicubic interpolation
-    grid_data_oversamp = zoom(grid_data, oversample_factor, order=3)
-    #psf_simmed_oversamp = zoom(psf_simmed, oversample_factor, order=3)
-    coords_guesses_x_all_oversamp = coords_guesses_x_all * oversample_factor
-    coords_guesses_y_all_oversamp = coords_guesses_y_all * oversample_factor
-    coords_guesses_all_oversamp = np.vstack((coords_guesses_y_all_oversamp, coords_guesses_x_all_oversamp)).T
-
-    # find the PSF centroids, first pass
-    logging.info('Finding PSF centroids, first pass')
-    x_pos_pix_oversamp, y_pos_pix_oversamp = centroid_sources(grid_data_oversamp, 
-                                    xpos=coords_guesses_x_all_oversamp, 
-                                    ypos=coords_guesses_y_all_oversamp, 
-                                    box_size=41,
-                                    centroid_func=centroid_2dg)
-
-    ## ## TODO: Make a FYI plot of this
-
-    # zip into one array
-    coords_centroided_all_oversamp = np.vstack((y_pos_pix_oversamp, x_pos_pix_oversamp)).T
-
-    # FYI
-    #fyi_plot_centroiding(grid_data_oversamp, coords_centroided_all_oversamp, title_string="PSF first guesses", zscale=False)
-
-    # make a cut-out of each psf and make a best-fit 2D Gaussian
-    raw_cutout_size = 20 * oversample_factor
-    logging.info(f'Raw PSF cutout size: {raw_cutout_size}')
-    num_coord = 0
-
-    #cookie_cut_out_best_fit_list = []
-    coord_x_array = np.zeros(len(y_pos_pix_oversamp))
-    coord_y_array = np.zeros(len(y_pos_pix_oversamp))
-    fwhm_x_pix_array = np.zeros(len(y_pos_pix_oversamp))
-    fwhm_y_pix_array = np.zeros(len(y_pos_pix_oversamp))
-    sigma_x_pix_array = np.zeros(len(y_pos_pix_oversamp))
-    sigma_y_pix_array = np.zeros(len(y_pos_pix_oversamp))
-    angle_theta_array = np.zeros(len(y_pos_pix_oversamp))
-    amplitude_counts_array = np.zeros(len(y_pos_pix_oversamp))
-    gaussian_based_strehl_array = np.zeros(len(y_pos_pix_oversamp))
-
-    # make a copy from which we will subtract the PSFs to see the residuals
-    canvas_grid_data = np.copy(grid_data)
-
-    # Determine how many PSFs to process based on psfs_subset parameter
-    total_psfs = len(y_pos_pix_oversamp)
-    logging.info(f'Total PSFs: {total_psfs}')
-    if psfs_subset == 'all':
-        num_psfs_to_process = total_psfs
-        logging.info(f'Processing all {total_psfs} PSFs')
+    logging.info("Finding PSF centroids, first pass (via prepare_psf_grid)")
+    logging.info(f"Raw PSF cutout size: {raw_cutout_size}")
+    logging.info(f"Total PSFs: {total_psfs}")
+    if psfs_subset == "all":
+        logging.info(f"Processing all {total_psfs} PSFs")
     elif isinstance(psfs_subset, int):
-        num_psfs_to_process = min(psfs_subset, total_psfs)  # Don't exceed available PSFs
-        logging.info(f'Processing {num_psfs_to_process} out of {total_psfs} PSFs')
-    else:
-        logging.error(f"psfs_subset must be 'all' or an integer, got {psfs_subset}")
-        raise ValueError(f"psfs_subset must be 'all' or an integer, got {psfs_subset}")
-    
+        logging.info(f"Processing {num_psfs_to_process} out of {total_psfs} PSFs")
     logging.info(f"Processing {num_psfs_to_process} out of {total_psfs} PSFs")
+
+    coord_x_array = np.zeros(total_psfs)
+    coord_y_array = np.zeros(total_psfs)
+    fwhm_x_pix_array = np.zeros(total_psfs)
+    fwhm_y_pix_array = np.zeros(total_psfs)
+    sigma_x_pix_array = np.zeros(total_psfs)
+    sigma_y_pix_array = np.zeros(total_psfs)
+    angle_theta_array = np.zeros(total_psfs)
+    amplitude_counts_array = np.zeros(total_psfs)
+    gaussian_based_strehl_array = np.zeros(total_psfs)
 
     # loop over each centroided PSF
     for num_coord in range(num_psfs_to_process):
@@ -160,8 +115,8 @@ def strehl_psfs(file_name,
 
         # Adjust the centroid coordinate for the cut-out: subtract the cutout starting indices to get cutout-relative coordinates
         coords_guess_this_cutout = np.array([
-            coords_centroided_all_oversamp[num_coord][0] - idx_y_start,
-            coords_centroided_all_oversamp[num_coord][1] - idx_x_start
+            coords_centroided_1st_pass_all_oversamp[num_coord][0] - idx_y_start,
+            coords_centroided_1st_pass_all_oversamp[num_coord][1] - idx_x_start
         ])
 
 

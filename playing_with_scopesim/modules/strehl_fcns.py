@@ -7,7 +7,9 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from astropy.modeling.models import AiryDisk2D
 from astropy.visualization import ZScaleInterval
 from scipy.optimize import curve_fit
+from scipy.ndimage import zoom
 import ipdb
+from skimage.measure import block_reduce
 
 from .amoeba import amoeba_minimize
 from .helpers import (
@@ -22,7 +24,7 @@ def strehl_from_annular_aperture_fixed(cookie_cut_out_sci, data_empirical_origin
     Calculate the Strehl ratio from an annular aperture.
 
     INPUTS:
-    cookie_cut_out_sci: the empirical PSF
+    cookie_cut_out_sci: the empirical PSF (oversampled)
     data_empirical_original: the original empirical data
     filter_name: the name of the observing filter
     plot_string: the string to add to the plot file name
@@ -323,13 +325,22 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, data_empirical_orig
 
     # Create a SINGLE mask for valid (non-NaN, finite) data points
     # Apply the SAME mask to both arrays to keep them aligned
-    mask = np.isfinite(test_empirical_1d_full) & np.isfinite(r_rad_1d_full)
+    mask_oversampled = np.isfinite(test_empirical_1d_full) & np.isfinite(r_rad_1d_full)
 
     # Apply the SAME mask to both arrays
-    r_rad_1d = r_rad_1d_full[mask]
-    test_empirical_1d = test_empirical_1d_full[mask]
+    r_rad_1d = r_rad_1d_full[mask_oversampled]
+    test_empirical_1d = test_empirical_1d_full[mask_oversampled]
 
-    valid_mask = mask.copy()
+    #ipdb.set_trace()
+    valid_mask_oversampled_1d = mask_oversampled.copy()
+    valid_mask_oversampled_2d = valid_mask_oversampled_1d.reshape(cookie_cut_out_sci.shape)
+    # np.mean on bool -> float array; NumPy rejects float masks as indices. Use max: valid if any pixel in block is valid.
+    mask_reduced_2d = block_reduce(
+        valid_mask_oversampled_2d, block_size=(fac_oversamp, fac_oversamp), func=np.max
+    ).astype(bool, copy=False)
+    valid_mask_original_shape = mask_reduced_2d.flatten()
+    # Native-resolution cookie shape (matches valid_mask length). NOT data_empirical_original.shape (full FITS).
+    original_shape = mask_reduced_2d.shape
 
     logging.info(f"Original data points: {len(r_rad_1d_full)}")
     logging.info(f"Valid data points after masking: {len(r_rad_1d)}")
@@ -337,13 +348,23 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, data_empirical_orig
 
     # Initial parameter guesses
     # [D_aperture, D_obscuration, ampl]
-    initial_guess = [36., 12., 7e5]
+    initial_guess = [36., 12., 1.2e6]
     #initial_guess = [36., 12., 1e5]  
 
     # Create a wrapper function that binds the fixed parameters (baseline_shape and valid_mask)
     # This ensures curve_fit only optimizes D_aperture, D_obscuration, and ampl
-    size = cookie_cut_out_sci.shape[0] 
+    size = cookie_cut_out_sci.shape[0]
     baseline_shape = (size, size)
+    test_empirical_2d_native = block_reduce(
+        test_empirical_2d, block_size=(fac_oversamp, fac_oversamp), func=np.mean
+    )
+    r_rad_2d_native = block_reduce(
+        r_rad_2d, block_size=(fac_oversamp, fac_oversamp), func=np.mean
+    )
+    test_empirical_1d_native_full = test_empirical_2d_native.flatten()
+    r_rad_1d_native_full = r_rad_2d_native.flatten()
+    r_fit = r_rad_1d_native_full[valid_mask_original_shape]
+    y_fit = test_empirical_1d_native_full[valid_mask_original_shape]
     pinhole_size = 1e-8  # units radians (fixed, not a fit parameter)
     #pinhole_size = None
     model_wrapper = lambda r_rad_1d, D_aperture, D_obscuration, ampl: \
@@ -352,23 +373,23 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, data_empirical_orig
             D_aperture,
             D_obscuration,
             ampl,
-            baseline_shape,
-            valid_mask,
+            original_shape,
+            valid_mask_original_shape,
             filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
             pinhole_size=pinhole_size
             )
 
     # Set bounds for parameters: [D_aperture, D_obscuration, ampl]
     lower_bounds = [25., 2.0, 10.0]
-    upper_bounds = [60.0, 20., 1e6]
+    upper_bounds = [60.0, 20., 2e6]
     
 
     if fit_method == 'amoeba':
         # Use Nelder-Mead simplex (amoeba) - objective is sum of squared residuals
         logging.info('Fitting PSF with amoeba algorithm')
         def chi_sq(params):
-            model = model_wrapper(r_rad_1d, params[0], params[1], params[2])
-            return np.sum((model - test_empirical_1d) ** 2)
+            model = model_wrapper(r_fit, params[0], params[1], params[2])
+            return np.sum((model - y_fit) ** 2)
 
         popt, fopt = amoeba_minimize(
             chi_sq,
@@ -381,12 +402,12 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, data_empirical_orig
         pcov = None  # amoeba does not provide covariance
         logging.info(f"Fit method: amoeba (Nelder-Mead), chi_sq = {fopt:.2f}")
     elif fit_method == 'curve_fit':
-        # Perform the fit with curve_fit (Trust Region Reflective)
+        # Perform the fit with curve_fit
         logging.info('Fitting PSF with curve_fit algorithm')
         popt, pcov = curve_fit(
             model_wrapper,
-            r_rad_1d,
-            test_empirical_1d,
+            r_fit,
+            y_fit,
             p0=initial_guess,
             bounds=(lower_bounds, upper_bounds),
             method='trf'  # Trust Region Reflective algorithm supports bounds
@@ -424,29 +445,25 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, data_empirical_orig
         else:
             logging.info("Covariance matrix is finite - fit MAY have converged successfully")
 
-    # generate the best-fit model based on the fit parameters
-    # Note: r_rad_2d needs to be flattened and masked for model_for_fit_fixed
-    r_rad_1d = r_rad_2d.flatten()
-    r_rad_1d_masked = r_rad_1d[valid_mask]
-    
+    # generate the best-fit model based on the fit parameters (same native masked r as the fit)
     initial_guess_model_1d = model_for_fit_fixed(
-        r_rad_1d_masked,
+        r_fit,
         initial_guess[0],
         initial_guess[1],
         initial_guess[2],
-        baseline_shape,
-        valid_mask,
+        original_shape,
+        valid_mask_original_shape,
         filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
         pinhole_size=pinhole_size,
         fac_oversamp=fac_oversamp
     )
     best_fit_model_1d = model_for_fit_fixed(
-        r_rad_1d_masked,
+        r_fit,
         D_aperture_fit,
         D_obscuration_fit,
         ampl_fit,
-        baseline_shape,
-        valid_mask,
+        original_shape,
+        valid_mask_original_shape,
         filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
         pinhole_size=pinhole_size,
         fac_oversamp=fac_oversamp
@@ -454,18 +471,23 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, data_empirical_orig
     
     # Reshape to 2D (though these are already 1D masked arrays, we need to reconstruct the full 2D)
     # Actually, model_for_fit_fixed returns masked 1D, so we need to reconstruct the full 2D array
-    initial_guess_model_2d_full = np.full(baseline_shape, np.nan).flatten()
-    initial_guess_model_2d_full[valid_mask] = initial_guess_model_1d
-    initial_guess_model_2d = initial_guess_model_2d_full.reshape(baseline_shape)
+    initial_guess_model_2d_full = np.full(original_shape, np.nan).flatten()
+    initial_guess_model_2d_full[valid_mask_original_shape] = initial_guess_model_1d
+    initial_guess_model_2d = initial_guess_model_2d_full.reshape(original_shape)
     
-    best_fit_model_2d_full = np.full(baseline_shape, np.nan).flatten()
-    best_fit_model_2d_full[valid_mask] = best_fit_model_1d
-    best_fit_model_2d = best_fit_model_2d_full.reshape(baseline_shape)
+    best_fit_model_2d_full = np.full(original_shape, np.nan).flatten()
+    best_fit_model_2d_full[valid_mask_original_shape] = best_fit_model_1d
+    best_fit_model_2d = best_fit_model_2d_full.reshape(original_shape)
+
+    # Upsample native-resolution models to oversampled cookie shape for MTF / plots vs empirical
+    zy = cookie_cut_out_sci.shape[0] / best_fit_model_2d.shape[0]
+    zx = cookie_cut_out_sci.shape[1] / best_fit_model_2d.shape[1]
+    best_fit_model_2d_oversamp = zoom(best_fit_model_2d, (zy, zx), order=3)
+    initial_guess_model_2d_oversamp = zoom(initial_guess_model_2d, (zy, zx), order=3)
 
     # Calculate chi-squared
-    # Both test_empirical_1d and best_fit_model_1d are already masked 1D arrays
-    chi_squared = np.sum((test_empirical_1d - best_fit_model_1d)**2 / (0.01**2))  # assuming noise std = 0.01
-    dof = len(test_empirical_1d) - 3  # degrees of freedom (data points - number of parameters)
+    chi_squared = np.sum((y_fit - best_fit_model_1d) ** 2 / (0.01**2))  # assuming noise std = 0.01
+    dof = len(y_fit) - 3  # degrees of freedom (data points - number of parameters)
     reduced_chi_squared = chi_squared / dof
 
     # best_fit_model_2d is already created above
@@ -476,7 +498,14 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, data_empirical_orig
 
     ############################################################
     # Find the Strehl from the MTF, like in fit_annular_aperture_fixed
-    fft_model_power_cutoff, fft_empirical_power_cutoff, cutoff_freq, fx, fy, n_fft = mtf_arrays(array_empirical=cookie_cut_out_sci, array_model=best_fit_model_2d, config_observing=config_observing, fac_oversamp=fac_oversamp, size=size, filter_name=filter_name)
+    fft_model_power_cutoff, fft_empirical_power_cutoff, cutoff_freq, fx, fy, n_fft = mtf_arrays(
+        array_empirical=cookie_cut_out_sci,
+        array_model=best_fit_model_2d_oversamp,
+        config_observing=config_observing,
+        fac_oversamp=fac_oversamp,
+        size=size,
+        filter_name=filter_name,
+    )
 
     # normalize the powers so that zero freq is equal
     fft_model_power_cutoff_norm = (
@@ -518,13 +547,13 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, data_empirical_orig
     axs[0,0].set_title("Empirical")
 
     # Panel 2: Best fit
-    im1 = axs[0,1].imshow(best_fit_model_2d, vmin=vmin, vmax=vmax)
+    im1 = axs[0,1].imshow(best_fit_model_2d_oversamp, vmin=vmin, vmax=vmax)
     axs[0,1].set_title("Best fit")
 
     # Panel 3: Cross-section between empirical and best-fit PSF
     center_y, center_x = np.array(test_empirical_2d.shape) // 2
     cross_empirical = test_empirical_2d[center_y, :]
-    cross_best_fit = best_fit_model_2d[center_y, :]
+    cross_best_fit = best_fit_model_2d_oversamp[center_y, :]
     axs[1,0].plot(cross_empirical, label="Empirical")
     axs[1,0].plot(cross_best_fit, label="Best fit")
     axs[1,0].set_title("Cross-section")
@@ -538,11 +567,11 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci, data_empirical_orig
     axs[1,1].legend()
 
     # Panel 3: Initial guess
-    im2 = axs[2,0].imshow(initial_guess_model_2d, vmin=vmin, vmax=vmax)
+    im2 = axs[2,0].imshow(initial_guess_model_2d_oversamp, vmin=vmin, vmax=vmax)
     axs[2,0].set_title("Initial guess")
 
     # Panel 4: Residuals
-    residuals = test_empirical_2d - best_fit_model_2d
+    residuals = test_empirical_2d - best_fit_model_2d_oversamp
     im2 = axs[2,1].imshow(residuals, vmin=vmin, vmax=vmax)
     axs[2,1].set_title("Empirical - Best fit")
 
