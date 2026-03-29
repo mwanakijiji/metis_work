@@ -182,16 +182,16 @@ def _filter_curve_from_filter_file(filter_file):
     return decimated_df
 
 
-def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shape, valid_mask, *, wavel=None, filter_file=None, pinhole_size=None, fac_oversamp=1):
+def model_for_fit_fixed(r_rad_1d_oversamp, D_aperture, D_obscuration, ampl, shape_oversamp, valid_mask, *, wavel=None, filter_file=None, pinhole_size=None, fac_oversamp=1):
     """
     Wrapper function for intensity_annular_aperture to use with curve_fit.
     
     Parameters:
-    - r_rad_1d: 1D array of radial distances (masked, only valid points)
+    - r_rad_1d: 1D array of radial distances within cookie cut-out (oversampled; asked, only valid points)
     - D_aperture: aperture diameter (meters)
     - D_obscuration: obscuration diameter (meters)
     - ampl: amplitude
-    - baseline_shape: tuple, shape of the 2D array (fixed, not optimized)
+    - shape_oversamp: tuple, shape of the 2D array (fixed, not optimized)
     - valid_mask: boolean array, mask for valid data points (fixed, not optimized)
     - fac_oversamp: oversampling factor
     - wavel: wavelength (meters); for monochromatic PSFs
@@ -203,9 +203,10 @@ def model_for_fit_fixed(r_rad_1d, D_aperture, D_obscuration, ampl, baseline_shap
     """
 
     # Reconstruct the full 2D array by inserting masked values back into their original positions
-    r_rad_2d_full = np.full(baseline_shape, np.nan).flatten()
-    r_rad_2d_full[valid_mask] = r_rad_1d
-    r_rad_2d = r_rad_2d_full.reshape(baseline_shape)
+
+    r_rad_2d_full = np.full(shape_oversamp, np.nan).flatten()
+    r_rad_2d_full[valid_mask] = r_rad_1d_oversamp
+    r_rad_2d = r_rad_2d_full.reshape(shape_oversamp)
 
     # read in the filter curve    
     if wavel: # monochromatic PSF
@@ -437,15 +438,17 @@ def fit_gaussian_psf(cookie_cut_out_sci, obs_filter, fp_mask, pp_mask, coords_gu
     fac_oversamp: oversampling factor
 
     OUTPUTS:
-    fwhm_y_pix: FWHM in y-direction
-    fwhm_x_pix: FWHM in x-direction
+    fwhm_y_pix_oversamp_cutout: FWHM in y-direction (oversampled)
+    fwhm_x_pix_oversamp_cutout: FWHM in x-direction (oversampled)
+    amplitude_counts_oversamp_cutout: amplitude of the Gaussian function in counts (oversampled)
+    gaussian_based_strehl: Strehl from the Gaussian best-fit
     '''
 
     logging.info('--------------------------------')
     logging.info('Calculating coordinates and Strehl from Gaussian best-fit')
 
     ## ## TO DO: ARE THE INDEXES RIGHT HERE?
-    cookie_cut_out_best_fit, x_center_pix_oversamp_cutout, y_center_pix_oversamp_cutout, fwhm_x_pix, fwhm_y_pix, sigma_x_pix, sigma_y_pix, angle_theta_deg, amplitude_counts = fit_gaussian(cookie_cut_out_sci, \
+    cookie_cut_out_best_fit, x_center_pix_oversamp_cutout, y_center_pix_oversamp_cutout, fwhm_x_pix_oversamp_cutout, fwhm_y_pix_oversamp_cutout, sigma_x_pix_oversamp_cutout, sigma_y_pix_oversamp_cutout, angle_theta_deg, amplitude_counts_oversamp_cutout = fit_gaussian(cookie_cut_out_sci, \
         center_guess = coords_guess)
     residuals = cookie_cut_out_sci - cookie_cut_out_best_fit
 
@@ -484,7 +487,7 @@ def fit_gaussian_psf(cookie_cut_out_sci, obs_filter, fp_mask, pp_mask, coords_gu
     axs[1, 1].plot(sci_row, label='Empirical')
     axs[1, 1].plot(best_fit_row, label='Best-fit')
     # Annotate plot with FWHM in x and y
-    fwhm_text = f'FWHM x = {fwhm_x_pix:.2f} pix\nFWHM y = {fwhm_y_pix:.2f} pix'
+    fwhm_text = f'FWHM x = {fwhm_x_pix_oversamp_cutout:.2f} pix\nFWHM y = {fwhm_y_pix_oversamp_cutout:.2f} pix'
     axs[1, 1].text(
         0.95, 0.05, fwhm_text,
         transform=axs[1, 1].transAxes,
@@ -494,7 +497,9 @@ def fit_gaussian_psf(cookie_cut_out_sci, obs_filter, fp_mask, pp_mask, coords_gu
     )
     axs[1, 1].legend()
     axs[1, 1].set_title('1D cross-section, empirical vs best-fit')
-    plt.suptitle(f'PSF, oversampling factor: {fac_oversamp:.2f} \n Found coord (y,x): ({y_center_pix_oversamp_cutout:.2f}, {x_center_pix_oversamp_cutout:.2f}) \n Found FWHM x: {fwhm_x_pix:.2f} pix, FWHM y: {fwhm_y_pix:.2f} pix,\nFound amplitude: {amplitude_counts:.2f} counts')
+    plt.suptitle(f'PSF, oversampling factor: {fac_oversamp:.2f} \n Found coord (y,x): ({y_center_pix_oversamp_cutout:.2f}, {x_center_pix_oversamp_cutout:.2f}) \n ' + \
+        f'Found FWHM x: {fwhm_x_pix_oversamp_cutout:.2f} pix, FWHM y: {fwhm_y_pix_oversamp_cutout:.2f} pix,\n' + \
+        f'Found amplitude: {amplitude_counts_oversamp_cutout:.2f} counts')
     plt.tight_layout()
     #plt.show()
     # Save the plot to file with num_coord as a 2-digit zero-padded string
@@ -504,7 +509,7 @@ def fit_gaussian_psf(cookie_cut_out_sci, obs_filter, fp_mask, pp_mask, coords_gu
     plt.close()
     #ipdb.set_trace()
 
-    return x_center_pix_oversamp_cutout, y_center_pix_oversamp_cutout, fwhm_x_pix, fwhm_y_pix, amplitude_counts, gaussian_based_strehl
+    return x_center_pix_oversamp_cutout, y_center_pix_oversamp_cutout, fwhm_x_pix_oversamp_cutout, fwhm_y_pix_oversamp_cutout, amplitude_counts_oversamp_cutout, gaussian_based_strehl
 
 
 def fit_simmed_psfs(cookie_cut_out_sci, data_empirical_original, plot_string, obs_filter, fp_mask, pp_mask, x_center_final_oversamp, y_center_final_oversamp, fac_oversamp):
