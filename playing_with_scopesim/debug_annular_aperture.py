@@ -12,6 +12,7 @@ import ipdb
 from astropy.visualization import ZScaleInterval
 import yaml
 import os
+from astropy.io import fits
 
 
 from matplotlib.cm import ScalarMappable
@@ -102,12 +103,28 @@ array_D_obscuration = []
 # for each observing state (e.g., filter), make simulated data (no oversampling), then fit with a model
 for state in data_states_config['runs']:
 
+    # GRAB A SCOPESIM PSF FOR MANUAL TESTING, IF NEEDED
+    scopesim_file_name = state['file_name']
+    scopesim_psf, scopesim_hdr = fits.getdata(scopesim_file_name, ext=1, header=True)
+    x_cen = 242.26
+    y_cen = 1810.66
+    ipdb.set_trace()
+    scopesim_cutout = scopesim_psf[int(y_cen-0.5*cookie_cut_out_sci_original.shape[0]):int(y_cen+0.5*cookie_cut_out_sci_original.shape[0]), \
+        int(x_cen-0.5*cookie_cut_out_sci_original.shape[1]):int(x_cen+0.5*cookie_cut_out_sci_original.shape[1])]
+    # normalize
+    scopesim_cutout = scopesim_cutout / np.nanmax(scopesim_cutout)
+
+    ipdb.set_trace()
+
     #########################################################
     # START SIMULATION OF 'EMPIRICAL' DATA 
     #########################################################
 
     filter_name = state['filter_name']
     filter_file = observing_config['polychromatic_observing_filters_lm'][filter_name]
+
+
+
 
     # get the central wavelength (for FYI purposes only, if using a polychromatic PSF)
     central_wavelength = observing_config['monochromatic_observing_filters_lm'][filter_name]
@@ -225,6 +242,7 @@ for state in data_states_config['runs']:
     #########################################################
     # START FITTING DATA (all data should be at original sampling)
     #########################################################
+    ipdb.set_trace()
     data_empirical_1d_conv_norm_original = data_empirical_2d_conv_norm.flatten()
     model_wrapper = lambda r_rad_1d_original, D_aperture, D_obscuration, ampl: \
         model_for_fit_fixed(
@@ -237,8 +255,8 @@ for state in data_states_config['runs']:
         fac_oversamp=3,
         #wavel=config_observing['observing_filters_lm'][filter_name],
         filter_file=filter_file,
-        pinhole_size=None,
-        #pinhole_size=3e-8,
+        #pinhole_size=None,
+        pinhole_size=5e-8,
     )
 
     lower_bounds = [25., 2.0, 1e-3]
