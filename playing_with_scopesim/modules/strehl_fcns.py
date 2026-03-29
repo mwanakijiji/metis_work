@@ -121,7 +121,8 @@ def fit_airy_psf(cookie_cut_out_sci, data_empirical_original, obs_filter, x_cent
     return strehl_results
 
 
-def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_empirical_original, filter_name, plot_string, x_center_2nd_pass_cookie_oversamp, y_center_2nd_pass_cookie_oversamp, config_observing, fac_oversamp, polychromatic=True):
+def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_empirical_original, filter_name, plot_string, 
+        x_center_2nd_pass_cookie_oversamp, y_center_2nd_pass_cookie_oversamp, config_observing, fac_oversamp, polychromatic=True):
     '''
     Strehl based on PSF fit, using model with fixed aperture dimensions
 
@@ -180,7 +181,8 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_empi
                                                     ampl=1, 
                                                     shape_oversamp=shape_oversamp, 
                                                     valid_mask=valid_mask, 
-                                                    filter_file=filter_file)
+                                                    filter_file=filter_file, 
+                                                    oversamp_factor=fac_oversamp)
     else: # monochromatic
         wavel_mono = config_observing['monochromatic_observing_filters_lm'][filter_name]
         logging.info(f'Making a monochromatic PSF for wavelength: {wavel_mono} um')
@@ -190,7 +192,8 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_empi
                                                     ampl=1, 
                                                     shape_oversamp=shape_oversamp, 
                                                     valid_mask=valid_mask, 
-                                                    wavel=wavel_mono)
+                                                    wavel=wavel_mono, 
+                                                    oversamp_factor=fac_oversamp)
     model_annular_2d_oversamp = intensity_1d_full_1d.reshape(shape_oversamp)
 
     # normalize the model PSF to the empirical PSF, so that they have the same total power
@@ -299,7 +302,8 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_empi
     return strehl_results
 
 
-def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, data_cookie_empirical_original, filter_name, plot_string, x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, config_observing, fit_method, pinhole_size=1e-8):
+def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut_out_sci_original, filter_name, plot_string, 
+        x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, config_observing, fit_method, pinhole_size=1e-8):
     '''
     Fit a 2D analytical PSF to a given frame.
 
@@ -318,9 +322,10 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, data_cooki
     OUTPUTS:
     '''
 
-    # make the cutout from the full array
-    #psf_perfect_cutout = psf_perfect_oversamp[int(y_center_final_oversamp-0.5*cookie_cut_out_sci.shape[0]):int(y_center_final_oversamp+0.5*cookie_cut_out_sci.shape[0]), \
-    #        int(x_center_final_oversamp-0.5*cookie_cut_out_sci.shape[1]):int(x_center_final_oversamp+0.5*cookie_cut_out_sci.shape[1])]
+    # strategy:
+    # 1. fit a model that is oversampled
+    # 2. rebin the model to the original shape
+    # 3. apply a loss function that compares the original empirical data, and the rebinned model
 
     r_rad_2d_oversamp = angle_from_center_2d(array_passed_in=cookie_cut_out_sci_oversamp, 
                         y_center=y_center_final_cookie_oversamp, 
@@ -329,28 +334,38 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, data_cooki
                         fac_oversamp=fac_oversamp, 
                         units='radians')
 
-    original_shape = data_empirical_original.shape
+    '''
+    r_rad_2d_original = angle_from_center_2d(array_passed_in=cookie_cut_out_sci_original, 
+                        y_center=y_center_final_cookie_original, 
+                        x_center=x_center_final_cookie_oversamp, 
+                        pixel_scale_mas=config_observing['pixel_scales']['img_lm'], 
+                        fac_oversamp=fac_oversamp, 
+                        units='radians')
+    '''
+
 
     # replace nans with median in oversampled cookie cut-out
     nonan_empirical_2d_oversamp = np.where(np.isnan(cookie_cut_out_sci_oversamp), np.nanmedian(cookie_cut_out_sci_oversamp), cookie_cut_out_sci_oversamp)
 
     # flatten arrays first
     r_rad_1d_oversamp = r_rad_2d_oversamp.flatten()
-    test_empirical_1d_full = nonan_empirical_2d_oversamp.flatten()
+    nonan_empirical_1d_oversamp = nonan_empirical_2d_oversamp.flatten()
 
     # Create a SINGLE mask for valid (non-NaN, finite) data points
     # Apply the SAME mask to both arrays to keep them aligned
-    mask_oversampled = np.isfinite(test_empirical_1d_full) & np.isfinite(r_rad_1d_oversamp)
+    mask_oversampled = np.isfinite(nonan_empirical_1d_oversamp) & np.isfinite(r_rad_1d_oversamp)
 
     # Apply the SAME mask to both arrays
     r_rad_1d_oversamp_masked = r_rad_1d_oversamp[mask_oversampled]
-    test_empirical_1d_oversamp = test_empirical_1d_full[mask_oversampled]
+    nonan_empirical_1d_oversamp_masked = nonan_empirical_1d_oversamp[mask_oversampled]
 
     # reshape back to 2D
     valid_mask_oversampled_1d = mask_oversampled.copy()
     valid_mask_oversampled_2d = valid_mask_oversampled_1d.reshape(nonan_empirical_2d_oversamp.shape)
+
     
-    # downsample images back to original shape: r_rad, empirical array, mask
+    # downsample images back to original shape: r_rad, mask
+    '''
     r_rad_2d_native = block_reduce(
         r_rad_2d_oversamp, block_size=(fac_oversamp, fac_oversamp), func=np.mean
     )
@@ -361,16 +376,14 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, data_cooki
         valid_mask_oversampled_2d, block_size=(fac_oversamp, fac_oversamp), func=np.max
     ).astype(bool, copy=False)
 
-    valid_mask_original_shape_1d = mask_reduced_2d.flatten()    
+    '''
+    #valid_mask_original_shape_1d = mask_reduced_2d.flatten()    
 
     logging.info(f"Original data points: {len(r_rad_1d_oversamp)}")
     logging.info(f"Valid data points after masking: {len(r_rad_1d_oversamp_masked)}")
-    logging.info(f"Arrays are aligned: {len(r_rad_1d_oversamp_masked) == len(test_empirical_1d_oversamp)}")
+    #logging.info(f"Arrays are aligned: {len(r_rad_1d_oversamp_masked) == len(test_empirical_1d_oversamp)}")
 
-    # Initial parameter guesses
-    # [D_aperture, D_obscuration, ampl]
-    initial_guess = [36., 12., 1.2e6]
-    #initial_guess = [36., 12., 1e5]  
+ 
 
     # Create a wrapper function that binds the fixed parameters (baseline_shape and valid_mask)
     # This ensures curve_fit only optimizes D_aperture, D_obscuration, and ampl
@@ -378,26 +391,42 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, data_cooki
     #baseline_shape = (size, size)
 
     # flatten empirical image (note that this has never been resampled)
-    data_empirical_original_1d = data_empirical_original.flatten()
-    r_rad_1d_native_full = r_rad_2d_native.flatten()
+    data_empirical_original_1d = cookie_cut_out_sci_original.flatten()
+    #r_rad_1d_native_full = r_rad_2d_native.flatten()
     # mask to leave only valid data points
-    ipdb.set_trace()
-    r_fit = r_rad_1d_native_full[valid_mask_original_shape_1d]
-    empir_orig_valid_2d = data_empirical_original_1d[valid_mask_original_shape_1d]
+
+    #r_fit = r_rad_1d_native_full[valid_mask_original_shape_1d]
+    #empir_orig_valid_2d = data_empirical_original_1d[valid_mask_original_shape_1d]
     #pinhole_size = None
+
+    shape_original_2d = cookie_cut_out_sci_original.shape
+    shape_oversampled_2d = nonan_empirical_2d_oversamp.shape
+    # note that the the model_for_fit_fixed() will internally 
+    # generate an OVERSAMPLED model, which gets rebinned to the original shape before comparing with the empirical data
+
+    # rebin the original r_rad to 1D (necessary to let)
+    r_rad_1d_original = block_reduce(r_rad_2d_oversamp, block_size=(fac_oversamp, fac_oversamp), func=np.mean)
+
     ipdb.set_trace()
-    model_wrapper = lambda r_rad_1d, D_aperture, D_obscuration, ampl: \
+    model_wrapper = lambda r_rad_1d_original, D_aperture, D_obscuration, ampl: \
         model_for_fit_fixed(
-            r_rad_1d,
+            r_rad_1d_original,
             D_aperture,
             D_obscuration,
             ampl,
-            original_shape,
-            valid_mask_original_shape,
+            shape_original_2d,
+            shape_oversampled_2d,
+            valid_mask_oversampled_1d,
+            fac_oversamp=fac_oversamp,
             filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
             pinhole_size=pinhole_size
             )
 
+
+    # Initial parameter guesses
+    # [D_aperture, D_obscuration, ampl]
+    initial_guess = [35., 13., 1.2e6]
+    #initial_guess = [36., 12., 1e5] 
     # Set bounds for parameters: [D_aperture, D_obscuration, ampl]
     lower_bounds = [25., 2.0, 10.0]
     upper_bounds = [60.0, 20., 2e6]
@@ -422,11 +451,39 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, data_cooki
         logging.info(f"Fit method: amoeba (Nelder-Mead), chi_sq = {fopt:.2f}")
     elif fit_method == 'curve_fit':
         # Perform the fit with curve_fit
+        ipdb.set_trace()
         logging.info('Fitting PSF with curve_fit algorithm')
+
+        #########################################################
+        # Begin Example call to test model_for_fit_fixed in one line
+        # loop over a few test pinhole sizes
+        for pinhole_size in [None, 1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0]:
+            test = model_for_fit_fixed(
+                r_rad_1d_original, 
+                34.6878,             # D_aperture [example value in meters]
+                12.8502,              # D_obscuration [example value in meters]
+                1.2e6,              # ampl [example value]
+                shape_original_2d,
+                shape_oversampled_2d,
+                valid_mask_oversampled_1d,
+                fac_oversamp=fac_oversamp,
+                filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
+                pinhole_size=pinhole_size
+            )
+
+            test_2d = test.reshape(shape_original_2d)
+            plt.imshow(test_2d)
+            plt.savefig(f'Figure_1_test_model_pinhole_{pinhole_size}.png')
+            print(f'Saved Figure_1_test_model_pinhole_{pinhole_size}.png')
+            plt.close()
+        ipdb.set_trace()
+        # End example call
+        #########################################################
+
         popt, pcov = curve_fit(
             model_wrapper,
-            r_fit,
-            empir_orig_valid_2d,
+            xdata = r_rad_1d_original,
+            ydata = data_empirical_original_1d,
             p0=initial_guess,
             bounds=(lower_bounds, upper_bounds),
             method='trf'  # Trust Region Reflective algorithm supports bounds
@@ -472,9 +529,9 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, data_cooki
         initial_guess[2],
         original_shape,
         valid_mask_original_shape,
+        fac_oversamp=fac_oversamp,
         filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
-        pinhole_size=pinhole_size,
-        fac_oversamp=fac_oversamp
+        pinhole_size=pinhole_size
     )
     best_fit_model_1d = model_for_fit_fixed(
         r_fit,
@@ -483,9 +540,9 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, data_cooki
         ampl_fit,
         original_shape,
         valid_mask_original_shape,
+        fac_oversamp=fac_oversamp,
         filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
-        pinhole_size=pinhole_size,
-        fac_oversamp=fac_oversamp
+        pinhole_size=pinhole_size
     )
     
     # Reshape to 2D (though these are already 1D masked arrays, we need to reconstruct the full 2D)

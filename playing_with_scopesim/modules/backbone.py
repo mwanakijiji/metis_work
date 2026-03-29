@@ -6,6 +6,33 @@ import matplotlib.pyplot as plt
 from .helpers import fit_gaussian_psf, fit_simmed_psfs, load_config_and_pipe
 from .psf_grid_prep import load_grid_data_from_fits, prepare_psf_grid
 from .strehl_fcns import fit_annular_aperture_fixed_parameters, fit_annular_aperture_free_parameters
+from scipy.ndimage import zoom
+from photutils.centroids import centroid_2dg, centroid_sources
+
+# Fixed canvas for oversampled vs native FYI PNGs (same pixel size for blink comparison).
+_COOKIE_FYI_FIGSIZE_INCH = (7.0, 6.25)
+_COOKIE_FYI_DPI = 120
+
+
+def _save_blinkable_cookie_fyi_plot(
+    image_2d: np.ndarray,
+    scatter_x: float,
+    scatter_y: float,
+    title: str,
+    out_path: str,
+) -> None:
+    fig, ax = plt.subplots(
+        figsize=_COOKIE_FYI_FIGSIZE_INCH,
+        dpi=_COOKIE_FYI_DPI,
+        constrained_layout=True,
+    )
+    im = ax.imshow(image_2d, origin="lower", cmap="gray_r")
+    ax.scatter(scatter_x, scatter_y, color="red", s=10)
+    ax.set_title(title, fontsize=10)
+    fig.colorbar(im, ax=ax, fraction=0.055, pad=0.02)
+    # No bbox_inches="tight" — keeps identical width×height in pixels across plots.
+    fig.savefig(out_path, dpi=_COOKIE_FYI_DPI)
+    plt.close(fig)
 
 
 @dataclass(frozen=True)
@@ -25,12 +52,16 @@ def process_one_psf(
     num_coord: int,
     num_psfs_to_process: int,
     *,
-    grid_data_oversamp: np.ndarray,
-    grid_data_original: np.ndarray,
-    x_pos_pix_oversamp_1st_pass: np.ndarray,
-    y_pos_pix_oversamp_1st_pass: np.ndarray,
-    coords_centroided_1st_pass_all_oversamp: np.ndarray,
-    raw_cutout_size_oversampled: int,
+    cookie_cutout_original_this_psf: np.ndarray,
+    #grid_data_oversamp: np.ndarray,
+    #grid_data_original: np.ndarray,
+    #x_pos_pix_oversamp_1st_pass: np.ndarray,
+    #y_pos_pix_oversamp_1st_pass: np.ndarray,
+    #coords_centroided_1st_pass_all_oversamp: np.ndarray,
+    #x_pos_pix_native_1st_pass: np.ndarray,
+    #y_pos_pix_native_1st_pass: np.ndarray,
+    #coords_centroided_1st_pass_all_native: np.ndarray,
+    #raw_cutout_size_oversampled: int,
     oversample_factor: int,
     filter_name: str,
     fp_mask: str,
@@ -43,38 +74,99 @@ def process_one_psf(
 ) -> SinglePsfFitResult:
     logging.info(f"Processing PSF {num_coord} of {num_psfs_to_process}")
 
-    cookie_edge_size = raw_cutout_size_oversampled
-    idx_x_start = int(x_pos_pix_oversamp_1st_pass[num_coord] - 0.5 * cookie_edge_size)
-    idx_x_end = int(x_pos_pix_oversamp_1st_pass[num_coord] + 0.5 * cookie_edge_size)
-    idx_y_start = int(y_pos_pix_oversamp_1st_pass[num_coord] - 0.5 * cookie_edge_size)
-    idx_y_end = int(y_pos_pix_oversamp_1st_pass[num_coord] + 0.5 * cookie_edge_size)
+    cookie_edge_size_original = cookie_cutout_original_this_psf.shape[0]
+
+    # now oversample the cutout
+    cookie_cutout_this_psf_oversamp = zoom(cookie_cutout_original_this_psf, oversample_factor, order=3)
+
+    # consider the center of the frame to be the first guess for the 2nd-pass centroid 
+    # (remember, the 1st-pass was used to cut out the PSF in the first place)
+    x_cen_oversamp = cookie_cutout_this_psf_oversamp.shape[1] / 2
+    y_cen_oversamp = cookie_cutout_this_psf_oversamp.shape[0] / 2
+
+    # centroid the oversampled cutout with a Gaussian fit
+    (
+        x_center_pix_gaussian_best_fit_cookie_oversamp,
+        y_center_pix_gaussian_best_fit_cookie_oversamp,
+        fwhm_x_pix_gaussian_best_fit_cookie_oversamp,
+        fwhm_y_pix_gaussian_best_fit_cookie_oversamp,
+        amplitude_counts_gaussian_best_fit_cookie_oversamp,
+        gaussian_based_strehl,
+    ) = fit_gaussian_psf(
+        cookie_cutout_this_psf_oversamp,
+        obs_filter=filter_name,
+        fp_mask=fp_mask,
+        pp_mask=pp_mask,
+        coords_guess=[x_cen_oversamp, y_cen_oversamp],
+        plot_string=f"num_coord_{num_coord}_fpmask_{fp_mask}_ppmask_{pp_mask}_filter_{filter_name}",
+        fac_oversamp=oversample_factor,
+    )
+
+
+    #idx_x_start_oversamp = int(x_pos_pix_oversamp_1st_pass[num_coord] - 0.5 * cookie_edge_size)
+    #idx_x_end_oversamp = int(x_pos_pix_oversamp_1st_pass[num_coord] + 0.5 * cookie_edge_size)
+    #idx_y_start_oversamp = int(y_pos_pix_oversamp_1st_pass[num_coord] - 0.5 * cookie_edge_size)
+    #idx_y_end_oversamp = int(y_pos_pix_oversamp_1st_pass[num_coord] + 0.5 * cookie_edge_size)
+
+    # Native bounds from oversampled slice so windows match (avoids int(center±half) on two scales).
+    #fac_i = oversample_factor
+    #fac_f = float(fac_i)
+    #idx_x_start_cookie_original = idx_x_start_oversamp // fac_i
+    #idx_y_start_cookie_original = idx_y_start_oversamp // fac_i
+    #idx_x_end_cookie_original = (idx_x_end_oversamp + fac_i - 1) // fac_i
+    #idx_y_end_cookie_original = (idx_y_end_oversamp + fac_i - 1) // fac_i
 
     # make the cutout from the full array (oversampled)
+    '''
     cookie_cut_out_sci_oversamp = grid_data_oversamp[
-        idx_y_start:idx_y_end, idx_x_start:idx_x_end
+        idx_y_start_oversamp:idx_y_end_oversamp, idx_x_start_oversamp:idx_x_end_oversamp
     ]
+    grid_data_cookie_original = grid_data_original[
+        idx_y_start_cookie_original:idx_y_end_cookie_original,
+        idx_x_start_cookie_original:idx_x_end_cookie_original,
+    ]
+    cookie_cut_out_sci_original = grid_data_cookie_original
+    '''
 
-
-
-    plt.clf()
-    plt.imshow(cookie_cut_out_sci_oversamp, origin="lower", cmap="gray_r")
-    x_scatter = x_pos_pix_oversamp_1st_pass[num_coord] - idx_x_start
-    y_scatter = y_pos_pix_oversamp_1st_pass[num_coord] - idx_y_start
-    plt.scatter(x_scatter, y_scatter, color="red", s=10)
-    plt.title(
-        f"Oversampled cookie cut-out sci (1st pass centroid) at coord (y,x): {y_pos_pix_oversamp_1st_pass[num_coord]}, {x_pos_pix_oversamp_1st_pass[num_coord]}"
-    )
-    plt.colorbar()
+    # plot the oversampled cutout
+    '''
+    #x_scatter_oversamp = x_pos_pix_oversamp_1st_pass[num_coord] - idx_x_start_oversamp
+    #y_scatter_oversamp = y_pos_pix_oversamp_1st_pass[num_coord] - idx_y_start_oversamp
     plot_filename = f"junk_cookie_cut_out_sci_oversamp_{num_coord}.png"
-    plt.savefig(f"figs_dump/{plot_filename}", bbox_inches="tight")
-    plt.close()
+    _save_blinkable_cookie_fyi_plot(
+        cookie_cut_out_sci_oversamp,
+        x_scatter_oversamp,
+        y_scatter_oversamp,
+        f"Oversampled cookie cut-out sci (1st pass centroid) at coord (y,x): "
+        f"{y_pos_pix_oversamp_1st_pass[num_coord]}, {x_pos_pix_oversamp_1st_pass[num_coord]}",
+        f"figs_dump/{plot_filename}",
+    )
     logging.info(f"Saved {plot_filename} to figs_dump/")
+
+    # Same offset as oversampled plot, in native pixels: (x_ov - idx_start) / fac
+    x_scatter_native = (
+        x_pos_pix_oversamp_1st_pass[num_coord] - idx_x_start_oversamp
+    ) / fac_f
+    y_scatter_native = (
+        y_pos_pix_oversamp_1st_pass[num_coord] - idx_y_start_oversamp
+    ) / fac_f
+    plot_filename = f"junk_cookie_cut_out_sci_original_{num_coord}.png"
+    _save_blinkable_cookie_fyi_plot(
+        cookie_cut_out_sci_original,
+        x_scatter_native,
+        y_scatter_native,
+        f"Original cookie cut-out sci (1st pass centroid) at coord (y,x): "
+        f"{y_pos_pix_native_1st_pass[num_coord]}, {x_pos_pix_native_1st_pass[num_coord]}",
+        f"figs_dump/{plot_filename}",
+    )
+    logging.info(f"Saved {plot_filename} to figs_dump/")
+    ipdb.set_trace()
 
     # convert 1st pass centroid to cutout pixel coordinates
     coords_this_cutout_oversamp_1st_pass = np.array(
         [
-            coords_centroided_1st_pass_all_oversamp[num_coord][0] - idx_y_start,
-            coords_centroided_1st_pass_all_oversamp[num_coord][1] - idx_x_start,
+            coords_centroided_1st_pass_all_oversamp[num_coord][0] - idx_y_start_oversamp,
+            coords_centroided_1st_pass_all_oversamp[num_coord][1] - idx_x_start_oversamp,
         ]
     )
 
@@ -95,42 +187,30 @@ def process_one_psf(
         plot_string=f"num_coord_{num_coord}_fpmask_{fp_mask}_ppmask_{pp_mask}_filter_{filter_name}",
         fac_oversamp=oversample_factor,
     )
+    
 
     # convert 2nd-pass centroid (from Gaussian centroid best-fit) to oversampled pixel coordinates in the FULL array
-    x_center_2nd_pass_oversamp_fullarray = x_center_pix_gaussian_best_fit_cookie_oversamp + idx_x_start
-    y_center_2nd_pass_oversamp_fullarray = y_center_pix_gaussian_best_fit_cookie_oversamp + idx_y_start
+    x_center_2nd_pass_oversamp_fullarray = (
+        x_center_pix_gaussian_best_fit_cookie_oversamp + idx_x_start_oversamp
+    )
+    y_center_2nd_pass_oversamp_fullarray = (
+        y_center_pix_gaussian_best_fit_cookie_oversamp + idx_y_start_oversamp
+    )
 
-    # Native-sampling cookie bounds (truncation must match how we map oversampled indices back)
-    idx_x_start_cookie_original = int(idx_x_start / oversample_factor)
-    idx_x_end_cookie_original = int(idx_x_end / oversample_factor)
-    idx_y_start_cookie_original = int(idx_y_start / oversample_factor)
-    idx_y_end_cookie_original = int(idx_y_end / oversample_factor)
-    grid_data_cookie_original = grid_data_original[
-        idx_y_start_cookie_original:idx_y_end_cookie_original,
-        idx_x_start_cookie_original:idx_x_end_cookie_original,
-    ]
-
-    # Native cutout coords: full-array native position minus native cutout origin (not x_ov/fac alone;
-    # that is wrong when idx_*_start is not a multiple of oversample_factor).
-    fac = float(oversample_factor)
+    # Native cutout position (Gaussian), aligned with cookie bounds above
     x_center_2nd_pass_original_samp_cookie_cutout = (
-        (idx_x_start + x_center_pix_gaussian_best_fit_cookie_oversamp) / fac
+        (idx_x_start_oversamp + x_center_pix_gaussian_best_fit_cookie_oversamp) / fac_f
         - idx_x_start_cookie_original
     )
     y_center_2nd_pass_original_samp_cookie_cutout = (
-        (idx_y_start + y_center_pix_gaussian_best_fit_cookie_oversamp) / fac
+        (idx_y_start_oversamp + y_center_pix_gaussian_best_fit_cookie_oversamp) / fac_f
         - idx_y_start_cookie_original
     )
-
-    # make the equivalent cutout from the original array
-    cookie_cut_out_sci_original = grid_data_original[
-        idx_y_start_cookie_original:idx_y_end_cookie_original, idx_x_start_cookie_original:idx_x_end_cookie_original
-    ]
-
-    ipdb.set_trace()
+    '''
 
     strehl_updates = {}
 
+    '''
     if fit_simmed_psf:
         logging.info(f"Fitting ScopeSim PSF {num_coord} of {num_psfs_to_process}")
         fit_simmed_psfs(
@@ -144,7 +224,9 @@ def process_one_psf(
             y_center_final_oversamp=y_center_2nd_pass_oversamp_fullarray,
             fac_oversamp=oversample_factor,
         )
+    '''
     
+    '''
     if fit_annular_aperture_fixed:
         logging.info(
             f"Calculating Strehl from annular aperture {num_coord} of {num_psfs_to_process}"
@@ -162,20 +244,20 @@ def process_one_psf(
             polychromatic=True,
         )
         strehl_updates.update(strehl_annular_aperture_fixed)
+    '''
 
-    ipdb.set_trace()
     if fit_annular_aperture_free:
         logging.info(f"Fitting analytical PSF {num_coord} of {num_psfs_to_process}")
         strehl_annular_aperture_free = fit_annular_aperture_free_parameters(
-            cookie_cut_out_sci_oversamp,
-            data_cookie_empirical_original=grid_data_cookie_original,
-            filter_name=filter_name,
-            plot_string=f"num_coord_{num_coord}_fpmask_{fp_mask}_ppmask_{pp_mask}_filter_{filter_name}",
-            x_center_final_cookie_oversamp=x_center_2nd_pass_oversamp_fullarray,
-            y_center_final_cookie_oversamp=y_center_2nd_pass_oversamp_fullarray,
-            config_observing=config_observing,
-            fac_oversamp=oversample_factor,
-            fit_method=fit_method,
+            cookie_cut_out_sci_oversamp = cookie_cutout_this_psf_oversamp,
+            cookie_cut_out_sci_original = cookie_cutout_original_this_psf,
+            filter_name = filter_name,
+            plot_string = f"num_coord_{num_coord}_fpmask_{fp_mask}_ppmask_{pp_mask}_filter_{filter_name}",
+            x_center_final_cookie_oversamp = x_center_pix_gaussian_best_fit_cookie_oversamp,
+            y_center_final_cookie_oversamp = y_center_pix_gaussian_best_fit_cookie_oversamp,
+            config_observing = config_observing,
+            fac_oversamp = oversample_factor,
+            fit_method = fit_method,
         )
         strehl_updates.update(strehl_annular_aperture_free)
 
@@ -227,6 +309,7 @@ def strehl_psfs(
     None; writes out plots and data
     '''
 
+    edge_size_original = 20 # pixels along one side of the cutout, original pixel sampling
     oversample_factor = 3  # try to keep odd to facilitate centering
     logging.info(f"PSF oversampling factor: {oversample_factor}")
 
@@ -235,8 +318,9 @@ def strehl_psfs(
         config_file_choice=config_coords_guesses_file_name, print_one_line=False
     )
 
-    # retrieve data
+    # retrieve data and do 1st-pass centroiding
     grid_data, grid_header = load_grid_data_from_fits(file_name, hdu_index=1)
+    ## ## TO DO: DON'T OVERSAMPLE YET
     prep = prepare_psf_grid(
         grid_data,
         config_coords_guesses_config,
@@ -251,6 +335,9 @@ def strehl_psfs(
     x_pos_pix_oversamp_1st_pass = prep.x_pos_pix_oversamp # x-positions of the centroids (oversampled)
     y_pos_pix_oversamp_1st_pass = prep.y_pos_pix_oversamp # y-positions of the centroids (oversampled)
     coords_centroided_1st_pass_all_oversamp = prep.coords_centroided_1st_pass_all_oversamp # coordinates of the centroids (oversampled)
+    x_pos_pix_native_1st_pass = prep.x_pos_pix_native # x-positions of the centroids (native pixel scale)
+    y_pos_pix_native_1st_pass = prep.y_pos_pix_native # y-positions of the centroids (native pixel scale)
+    coords_centroided_1st_pass_all_native = prep.coords_centroided_1st_pass_all_native # coordinates of the centroids (native pixel scale)
     raw_cutout_size_oversampled = prep.raw_cutout_size_oversampled # size of the raw cutout in oversampled pixels (note no cutout has been made yet)
     num_psfs_to_process = prep.num_psfs_to_process # number of PSFs to process
     total_psfs = prep.total_psfs # total number of PSFs in the grid
@@ -280,15 +367,29 @@ def strehl_psfs(
 
     # loop over PSFs in the readout
     for num_coord in range(num_psfs_to_process):
+        # make cutout of the PSF from the original array, using the closest int to the 1st pass centroids
+
+        x_cen_1st_pass_native = coords_centroided_1st_pass_all_native[num_coord][1]
+        y_cen_1st_pass_native = coords_centroided_1st_pass_all_native[num_coord][0]
+
+        grid_data_original_cutout_this_psf = grid_data_original[
+            int(x_cen_1st_pass_native - 0.5*edge_size_original):int(x_cen_1st_pass_native + 0.5*edge_size_original),
+            int(y_cen_1st_pass_native - 0.5*edge_size_original):int(y_cen_1st_pass_native + 0.5*edge_size_original)
+        ]
+        
         result = process_one_psf(
             num_coord,
             num_psfs_to_process,
-            grid_data_oversamp=grid_data_oversamp,
-            grid_data_original=grid_data_original,
-            x_pos_pix_oversamp_1st_pass=x_pos_pix_oversamp_1st_pass, # redundant
-            y_pos_pix_oversamp_1st_pass=y_pos_pix_oversamp_1st_pass, # redundant
-            coords_centroided_1st_pass_all_oversamp=coords_centroided_1st_pass_all_oversamp,
-            raw_cutout_size_oversampled=raw_cutout_size_oversampled, # along one side
+            cookie_cutout_original_this_psf=grid_data_original_cutout_this_psf,
+            #grid_data_oversamp=grid_data_oversamp,
+            #grid_data_original=grid_data_original,
+            #x_pos_pix_oversamp_1st_pass=x_pos_pix_oversamp_1st_pass, # redundant
+            #y_pos_pix_oversamp_1st_pass=y_pos_pix_oversamp_1st_pass, # redundant
+            #coords_centroided_1st_pass_all_oversamp=coords_centroided_1st_pass_all_oversamp,
+            #x_pos_pix_native_1st_pass=x_pos_pix_native_1st_pass,
+            #y_pos_pix_native_1st_pass=y_pos_pix_native_1st_pass,
+            #coords_centroided_1st_pass_all_native=coords_centroided_1st_pass_all_native,
+            #raw_cutout_size_oversampled=raw_cutout_size_oversampled, # along one side
             oversample_factor=oversample_factor,
             filter_name=filter_name,
             fp_mask=fp_mask,
