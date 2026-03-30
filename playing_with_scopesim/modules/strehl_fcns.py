@@ -1,6 +1,8 @@
 import logging
 
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")  # put this before importing pyplot
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -327,6 +329,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     # 2. rebin the model to the original shape
     # 3. apply a loss function that compares the original empirical data, and the rebinned model
 
+    ipdb.set_trace()
     r_rad_2d_oversamp = angle_from_center_2d(array_passed_in=cookie_cut_out_sci_oversamp, 
                         y_center=y_center_final_cookie_oversamp, 
                         x_center=x_center_final_cookie_oversamp, 
@@ -407,21 +410,18 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     # rebin the original r_rad to 1D (necessary to let)
     r_rad_1d_original = block_reduce(r_rad_2d_oversamp, block_size=(fac_oversamp, fac_oversamp), func=np.mean)
 
-    ipdb.set_trace()
     model_wrapper = lambda r_rad_1d_original, D_aperture, D_obscuration, ampl: \
         model_for_fit_fixed(
             r_rad_1d_original,
             D_aperture,
             D_obscuration,
             ampl,
-            shape_original_2d,
-            shape_oversampled_2d,
-            valid_mask_oversampled_1d,
+            centroid_yx_original=(y_center_final_cookie_oversamp,x_center_final_cookie_oversamp),
+            shape_original_2d=shape_original_2d,
             fac_oversamp=fac_oversamp,
             filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
             pinhole_size=pinhole_size
             )
-
 
     # Initial parameter guesses
     # [D_aperture, D_obscuration, ampl]
@@ -451,35 +451,33 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         logging.info(f"Fit method: amoeba (Nelder-Mead), chi_sq = {fopt:.2f}")
     elif fit_method == 'curve_fit':
         # Perform the fit with curve_fit
-        ipdb.set_trace()
         logging.info('Fitting PSF with curve_fit algorithm')
 
         #########################################################
         # Begin Example call to test model_for_fit_fixed in one line
         # loop over a few test pinhole sizes
-        for pinhole_size in [None, 1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0]:
+        for pinhole_size_test in [None, 1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0]:
             test = model_for_fit_fixed(
-                r_rad_1d_original, 
-                34.6878,             # D_aperture [example value in meters]
-                12.8502,              # D_obscuration [example value in meters]
-                1.2e6,              # ampl [example value]
-                shape_original_2d,
-                shape_oversampled_2d,
-                valid_mask_oversampled_1d,
+                r_rad_1d_original=r_rad_1d_original, 
+                D_aperture=34.6878,             # D_aperture [example value in meters]
+                D_obscuration=12.8502,              # D_obscuration [example value in meters]
+                ampl=1.2e6,              # ampl [example value]
+                centroid_yx_original=(y_center_final_cookie_oversamp,x_center_final_cookie_oversamp),
+                shape_original_2d=shape_original_2d,
                 fac_oversamp=fac_oversamp,
                 filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
-                pinhole_size=pinhole_size
+                pinhole_size=pinhole_size_test
             )
 
             test_2d = test.reshape(shape_original_2d)
             plt.imshow(test_2d)
-            plt.savefig(f'Figure_1_test_model_pinhole_{pinhole_size}.png')
-            print(f'Saved Figure_1_test_model_pinhole_{pinhole_size}.png')
+            plt.savefig(f'Figure_1_test_model_pinhole_{pinhole_size_test}.png')
+            print(f'Saved Figure_1_test_model_pinhole_{pinhole_size_test}.png')
             plt.close()
-        ipdb.set_trace()
+
         # End example call
         #########################################################
-
+        pinhole_size = 2e-8
         popt, pcov = curve_fit(
             model_wrapper,
             xdata = r_rad_1d_original,
@@ -488,7 +486,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
             bounds=(lower_bounds, upper_bounds),
             method='trf'  # Trust Region Reflective algorithm supports bounds
         )
-    ipdb.set_trace()
+
     # Extract best-fit parameters and uncertainties
     D_aperture_fit = popt[0]
     D_obscuration_fit = popt[1]
@@ -521,49 +519,130 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         else:
             logging.info("Covariance matrix is finite - fit MAY have converged successfully")
 
-    # generate the best-fit model based on the fit parameters (same native masked r as the fit)
+    # generate the best-fit model based on the fit parameters (same r_rad grid as curve_fit)
     initial_guess_model_1d = model_for_fit_fixed(
-        r_fit,
+        r_rad_1d_original,
         initial_guess[0],
         initial_guess[1],
         initial_guess[2],
-        original_shape,
-        valid_mask_original_shape,
+        centroid_yx_original=(y_center_final_cookie_oversamp, x_center_final_cookie_oversamp),
+        shape_original_2d=shape_original_2d,
         fac_oversamp=fac_oversamp,
         filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
-        pinhole_size=pinhole_size
+        pinhole_size=pinhole_size,
     )
     best_fit_model_1d = model_for_fit_fixed(
-        r_fit,
+        r_rad_1d_original,
         D_aperture_fit,
         D_obscuration_fit,
         ampl_fit,
-        original_shape,
-        valid_mask_original_shape,
+        centroid_yx_original=(y_center_final_cookie_oversamp, x_center_final_cookie_oversamp),
+        shape_original_2d=shape_original_2d,
         fac_oversamp=fac_oversamp,
         filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
-        pinhole_size=pinhole_size
+        pinhole_size=pinhole_size,
+    )
+    ipdb.set_trace()
+
+    ####### BEGIN TEMP PLOTTING
+    
+    initial_guess_model_2d = initial_guess_model_1d.reshape(shape_original_2d)
+    best_fit_model_2d = best_fit_model_1d.reshape(shape_original_2d)
+
+    data_original_2d = np.asarray(cookie_cut_out_sci_original, dtype=float)
+    residuals_fit_native_2d = data_original_2d - best_fit_model_2d
+    zscale_native = ZScaleInterval()
+    vmin_n, vmax_n = zscale_native.get_limits(data_original_2d)
+
+    # Native-grid summary: original, model, residuals, and 1D cross-section
+    fig_triple, ax_triple = plt.subplots(
+        2, 2, figsize=(10, 8), constrained_layout=True
+    )
+    for ax in ax_triple.flat:
+        ax.set_box_aspect(1)
+
+    # Top-left: original data
+    im_data = ax_triple[0, 0].imshow(
+        data_original_2d, origin="lower", cmap="gray_r", vmin=vmin_n, vmax=vmax_n
+    )
+    ax_triple[0, 0].set_title("Original data")
+
+    # Top-right: best-fit model
+    ax_triple[0, 1].imshow(
+        best_fit_model_2d, origin="lower", cmap="gray_r", vmin=vmin_n, vmax=vmax_n
+    )
+    ax_triple[0, 1].set_title("Best-fit model")
+
+    # Bottom-left: residuals image
+    rmax = np.nanmax(np.abs(residuals_fit_native_2d))
+    if not np.isfinite(rmax) or rmax == 0:
+        rmax = 1e-15
+    im_res = ax_triple[1, 0].imshow(
+        residuals_fit_native_2d,
+        origin="lower",
+        cmap="RdBu_r",
+        vmin=-25000,
+        vmax=25000,
+    )
+    ax_triple[1, 0].set_title("Residuals (data − model)")
+
+    # Bottom-right: 1D cross-section through the center row
+    ny, nx = data_original_2d.shape
+    center_y = ny // 2
+    x_pix = np.arange(nx)
+    cross_data = data_original_2d[center_y, :]
+    cross_model = best_fit_model_2d[center_y, :]
+    ax_triple[1, 1].plot(x_pix, cross_data, label="Data")
+    ax_triple[1, 1].plot(x_pix, cross_model, label="Model", linestyle="--")
+    ax_triple[1, 1].set_xlabel("Pixel")
+    ax_triple[1, 1].set_ylabel("Counts")
+    ax_triple[1, 1].set_title("Center-row cross-section")
+    ax_triple[1, 1].legend()
+
+    # Colorbars
+    cbar_data = fig_triple.colorbar(
+        im_data,
+        ax=[ax_triple[0, 0], ax_triple[0, 1]],
+        fraction=0.035,
+        pad=0.02,
+        shrink=0.8,
+    )
+    cbar_data.set_label("Counts")
+    cbar_res = fig_triple.colorbar(
+        im_res, ax=ax_triple[1, 0], fraction=0.035, pad=0.02, shrink=0.8
+    )
+    cbar_res.set_label("Δ counts")
+
+    pinhole_label = (
+        "None (delta pinhole)" if pinhole_size is None else f"{pinhole_size:.2e} rad"
+    )
+    fig_triple.suptitle(
+        f"Native fit grid — {filter_name} "
+        f"(λ={config_observing['monochromatic_observing_filters_lm'][filter_name]*1e6:.2f} μm)\n"
+        f"Init: D_aper={initial_guess[0]:.2f}, D_obsc={initial_guess[1]:.2f}, ampl={initial_guess[2]:.2e}\n"
+        f"Fit:  D_aper={D_aperture_fit:.2f}±{D_aperture_err:.2f}, "
+        f"D_obsc={D_obscuration_fit:.2f}±{D_obscuration_err:.2f}, "
+        f"ampl={ampl_fit:.2e}±{ampl_err:.2e}\n"
+        f"pinhole_size={pinhole_label}",
+        fontsize=11,
     )
     
-    # Reshape to 2D (though these are already 1D masked arrays, we need to reconstruct the full 2D)
-    # Actually, model_for_fit_fixed returns masked 1D, so we need to reconstruct the full 2D array
-    initial_guess_model_2d_full = np.full(original_shape, np.nan).flatten()
-    initial_guess_model_2d_full[valid_mask_original_shape] = initial_guess_model_1d
-    initial_guess_model_2d = initial_guess_model_2d_full.reshape(original_shape)
-    
-    best_fit_model_2d_full = np.full(original_shape, np.nan).flatten()
-    best_fit_model_2d_full[valid_mask_original_shape] = best_fit_model_1d
-    best_fit_model_2d = best_fit_model_2d_full.reshape(original_shape)
+    file_triple = f"figs_dump/free_ann_ap_data_model_resid_native_{plot_string}.png"
+    fig_triple.savefig(file_triple)
+    logging.info(f"Saved {file_triple} to figs_dump/")
+    plt.close(fig_triple)
+
+    ####### END TEMP PLOTTING
 
     # Upsample native-resolution models to oversampled cookie shape for MTF / plots vs empirical
-    zy = cookie_cut_out_sci.shape[0] / best_fit_model_2d.shape[0]
-    zx = cookie_cut_out_sci.shape[1] / best_fit_model_2d.shape[1]
+    zy = cookie_cut_out_sci_oversamp.shape[0] / best_fit_model_2d.shape[0]
+    zx = cookie_cut_out_sci_oversamp.shape[1] / best_fit_model_2d.shape[1]
     best_fit_model_2d_oversamp = zoom(best_fit_model_2d, (zy, zx), order=3)
     initial_guess_model_2d_oversamp = zoom(initial_guess_model_2d, (zy, zx), order=3)
-
+    ipdb.set_trace()
     # Calculate chi-squared
-    chi_squared = np.sum((y_fit - best_fit_model_1d) ** 2 / (0.01**2))  # assuming noise std = 0.01
-    dof = len(y_fit) - 3  # degrees of freedom (data points - number of parameters)
+    chi_squared = np.sum((data_empirical_original_1d - best_fit_model_1d) ** 2 / (0.01**2))  # assuming noise std = 0.01
+    dof = len(data_empirical_original_1d) - 3  # degrees of freedom (data points - number of parameters)
     reduced_chi_squared = chi_squared / dof
 
     # best_fit_model_2d is already created above
@@ -572,17 +651,21 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     logging.info(f"Degrees of freedom = {dof}")
     logging.info(f"Reduced chi-squared = {reduced_chi_squared:.6f}")
 
+
+
+
+    ipdb.set_trace()
     ############################################################
     # Find the Strehl from the MTF, like in fit_annular_aperture_fixed
     fft_model_power_cutoff, fft_empirical_power_cutoff, cutoff_freq, fx, fy, n_fft = mtf_arrays(
-        array_empirical=cookie_cut_out_sci,
+        array_empirical=cookie_cut_out_sci_oversamp,
         array_model=best_fit_model_2d_oversamp,
         config_observing=config_observing,
         fac_oversamp=fac_oversamp,
-        size=size,
+        size=shape_oversampled_2d[0],
         filter_name=filter_name,
     )
-
+    ipdb.set_trace()
     # normalize the powers so that zero freq is equal
     fft_model_power_cutoff_norm = (
         fft_model_power_cutoff
@@ -591,7 +674,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     )
     strehl_from_free_annular_aperture_mtf = np.sum(fft_empirical_power_cutoff) / np.sum(fft_model_power_cutoff_norm)
     logging.info(f"Strehl from free annular aperture, MTF: {strehl_from_free_annular_aperture_mtf}")
-
+    ipdb.set_trace()
     # plot a cross-section through the FTs of the empirical and model PSFs
     plt.clf()
     plt.figure(figsize=(30, 5))
@@ -611,24 +694,26 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     plt.close()
 
     zscale = ZScaleInterval()
-    vmin, vmax = zscale.get_limits(test_empirical_2d)
+    vmin, vmax = zscale.get_limits(nonan_empirical_2d_oversamp)
 
     fig, axs = plt.subplots(3, 2, figsize=(20, 15), constrained_layout=True,
                             gridspec_kw={'width_ratios': [1, 1], 'height_ratios': [1, 1, 1]})
     for ax in axs.flat:
         ax.set_box_aspect(1)
 
+    ipdb.set_trace()
     # Panel 1: Empirical data
-    im0 = axs[0,0].imshow(test_empirical_2d, vmin=vmin, vmax=vmax)
+    im0 = axs[0,0].imshow(nonan_empirical_2d_oversamp, vmin=vmin, vmax=vmax)
     axs[0,0].set_title("Empirical")
 
     # Panel 2: Best fit
     im1 = axs[0,1].imshow(best_fit_model_2d_oversamp, vmin=vmin, vmax=vmax)
     axs[0,1].set_title("Best fit")
 
+    ipdb.set_trace()
     # Panel 3: Cross-section between empirical and best-fit PSF
-    center_y, center_x = np.array(test_empirical_2d.shape) // 2
-    cross_empirical = test_empirical_2d[center_y, :]
+    center_y, center_x = np.array(nonan_empirical_2d_oversamp.shape) // 2
+    cross_empirical = nonan_empirical_2d_oversamp[center_y, :]
     cross_best_fit = best_fit_model_2d_oversamp[center_y, :]
     axs[1,0].plot(cross_empirical, label="Empirical")
     axs[1,0].plot(cross_best_fit, label="Best fit")
@@ -647,10 +732,11 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     axs[2,0].set_title("Initial guess")
 
     # Panel 4: Residuals
-    residuals = test_empirical_2d - best_fit_model_2d_oversamp
+    residuals = nonan_empirical_2d_oversamp - best_fit_model_2d_oversamp
     im2 = axs[2,1].imshow(residuals, vmin=vmin, vmax=vmax)
     axs[2,1].set_title("Empirical - Best fit")
 
+    ipdb.set_trace()
     # degbug: write FITS file
     #fits.writeto(f'junk_resids.fits', residuals, overwrite=True)
 

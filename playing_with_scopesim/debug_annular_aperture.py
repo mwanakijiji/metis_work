@@ -108,13 +108,11 @@ for state in data_states_config['runs']:
     scopesim_psf, scopesim_hdr = fits.getdata(scopesim_file_name, ext=1, header=True)
     x_cen = 242.26
     y_cen = 1810.66
-    ipdb.set_trace()
     scopesim_cutout = scopesim_psf[int(y_cen-0.5*cookie_cut_out_sci_original.shape[0]):int(y_cen+0.5*cookie_cut_out_sci_original.shape[0]), \
         int(x_cen-0.5*cookie_cut_out_sci_original.shape[1]):int(x_cen+0.5*cookie_cut_out_sci_original.shape[1])]
     # normalize
-    scopesim_cutout = scopesim_cutout / np.nanmax(scopesim_cutout)
+    scopesim_cutout = scopesim_cutout / np.nanmax(scopesim_cutout) # if you want to use it, call this manually at a set_trace downstream
 
-    ipdb.set_trace()
 
     #########################################################
     # START SIMULATION OF 'EMPIRICAL' DATA 
@@ -242,7 +240,7 @@ for state in data_states_config['runs']:
     #########################################################
     # START FITTING DATA (all data should be at original sampling)
     #########################################################
-    ipdb.set_trace()
+    print('Fitting data...')
     data_empirical_1d_conv_norm_original = data_empirical_2d_conv_norm.flatten()
     model_wrapper = lambda r_rad_1d_original, D_aperture, D_obscuration, ampl: \
         model_for_fit_fixed(

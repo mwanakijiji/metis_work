@@ -102,7 +102,6 @@ def process_one_psf(
         fac_oversamp=oversample_factor,
     )
 
-
     #idx_x_start_oversamp = int(x_pos_pix_oversamp_1st_pass[num_coord] - 0.5 * cookie_edge_size)
     #idx_x_end_oversamp = int(x_pos_pix_oversamp_1st_pass[num_coord] + 0.5 * cookie_edge_size)
     #idx_y_start_oversamp = int(y_pos_pix_oversamp_1st_pass[num_coord] - 0.5 * cookie_edge_size)
@@ -369,14 +368,17 @@ def strehl_psfs(
     for num_coord in range(num_psfs_to_process):
         # make cutout of the PSF from the original array, using the closest int to the 1st pass centroids
 
+        # 1-st pass coords of the PSF in the original array
         x_cen_1st_pass_native = coords_centroided_1st_pass_all_native[num_coord][1]
         y_cen_1st_pass_native = coords_centroided_1st_pass_all_native[num_coord][0]
 
+        # cut out the PSF
         grid_data_original_cutout_this_psf = grid_data_original[
             int(x_cen_1st_pass_native - 0.5*edge_size_original):int(x_cen_1st_pass_native + 0.5*edge_size_original),
             int(y_cen_1st_pass_native - 0.5*edge_size_original):int(y_cen_1st_pass_native + 0.5*edge_size_original)
         ]
         
+        # find strehls
         result = process_one_psf(
             num_coord,
             num_psfs_to_process,

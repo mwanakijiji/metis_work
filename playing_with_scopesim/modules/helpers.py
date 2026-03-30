@@ -15,7 +15,7 @@ import scopesim as sim
 import yaml
 from scipy.signal import convolve2d
 from skimage.measure import block_reduce
-
+from scipy.ndimage import shift
 import ipdb
 
 def load_config_and_pipe(config_file_choice, print_one_line=False):
@@ -124,10 +124,48 @@ def intensity_annular_aperture(r_rad_array, wavel, D_aperture, D_obscuration, am
         rad_per_pix = r_rad_array[0, 1] - r_rad_array[0, 0] ## ## TODO: MAKE THIS MORE ELEGANT
         # fractional pixels: linear ramp at boundary so edge pixels get value in (0, 1)
         # make pinhole where r_rad_array is less than pinhole_size
+        '''
         pinhole_array = np.clip(
             (pinhole_size - r_rad_array),
             0, 1
         )
+        '''
+        #########################################################
+        # START DROP-IN IDEA TO AVOID DISPLACEMENTS WHEN CONVOLVING
+        #########################################################
+
+        # Shift I_r so that its maximum is exactly at the center of the array
+        
+
+        # Find the coordinates of the maximum of I_r
+        max_pos = np.unravel_index(np.nanargmax(I_r), I_r.shape)
+        center_pos = ((I_r.shape[0] - 1) / 2.0, (I_r.shape[1] - 1) / 2.0)
+        # Compute the shift required to move the max to the center
+        shift_vals = (center_pos[0] - max_pos[0], center_pos[1] - max_pos[1])
+        # Perform the shift
+        ipdb.set_trace()
+        I_r = shift(I_r, shift_vals, order=3, mode='nearest')
+
+        ny, nx = r_rad_array.shape ## ## TO DO: CHECK ALL THIS
+        # Pixel coordinate grids with origin at array center
+        y = np.arange(ny) - (ny - 1) / 2.0
+        x = np.arange(nx) - (nx - 1) / 2.0
+        # Radius in pixels, then convert to radians using rad_per_pix
+        r_pix = -np.sqrt(x[None, :]**2 + y[:, None]**2)
+        r_rad_centered = r_pix * rad_per_pix
+        # Hard pinhole (delta-function-like on the grid)
+        # = (r_rad_centered <= pinhole_size).astype(float)
+
+        # Or soft edge (if you want the fractional-pixel ramp)
+        pinhole_array = np.clip((pinhole_size - r_rad_centered)/rad_per_pix, 0, 1)
+        ipdb.set_trace()
+        
+
+        #########################################################
+        # END DROP-IN IDEA TO AVOID DISPLACEMENTS WHEN CONVOLVING
+        #########################################################
+
+
         '''
         pinhole_array = np.clip(
             (pinhole_size - r_rad_array + rad_per_pix / 4) / rad_per_pix,
@@ -136,6 +174,10 @@ def intensity_annular_aperture(r_rad_array, wavel, D_aperture, D_obscuration, am
         '''
         # convolve with the pinhole array
         I_r = convolve2d(I_r, pinhole_array, mode='same')
+
+        # shift I_r back to the original position
+        I_r = shift(I_r, -shift_vals, order=3, mode='nearest')
+        ipdb.set_trace()
 
     # normalize to the amplitude
     I_r = ampl * I_r / np.nanmax(I_r)
@@ -201,7 +243,7 @@ def model_for_fit_fixed(r_rad_1d_original, D_aperture, D_obscuration, ampl, cent
     - D_aperture: aperture diameter (meters)
     - D_obscuration: obscuration diameter (meters)
     - ampl: amplitude
-    - centroid_yx_original: tuple, centroid of the original shape
+    - centroid_yx_original: centroid in the cookie cut-out, in the original coordinates
     - shape_oversamp: tuple, shape of the 2D array (fixed, not optimized)
     - valid_mask: boolean array, mask for valid data points (fixed, not optimized)
     - fac_oversamp: oversampling factor
