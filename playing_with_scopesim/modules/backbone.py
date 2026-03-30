@@ -308,7 +308,7 @@ def strehl_psfs(
     None; writes out plots and data
     '''
 
-    edge_size_original = 20 # pixels along one side of the cutout, original pixel sampling
+    edge_size_original = 21 # pixels along one side of the cutout, original pixel sampling
     oversample_factor = 3  # try to keep odd to facilitate centering
     logging.info(f"PSF oversampling factor: {oversample_factor}")
 

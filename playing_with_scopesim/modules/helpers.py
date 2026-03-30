@@ -136,15 +136,15 @@ def intensity_annular_aperture(r_rad_array, wavel, D_aperture, D_obscuration, am
 
         # Shift I_r so that its maximum is exactly at the center of the array
         
-
+        #ipdb.set_trace() # 0
         # Find the coordinates of the maximum of I_r
         max_pos = np.unravel_index(np.nanargmax(I_r), I_r.shape)
         center_pos = ((I_r.shape[0] - 1) / 2.0, (I_r.shape[1] - 1) / 2.0)
         # Compute the shift required to move the max to the center
         shift_vals = (center_pos[0] - max_pos[0], center_pos[1] - max_pos[1])
         # Perform the shift
-        ipdb.set_trace()
         I_r = shift(I_r, shift_vals, order=3, mode='nearest')
+        #ipdb.set_trace() # 1
 
         ny, nx = r_rad_array.shape ## ## TO DO: CHECK ALL THIS
         # Pixel coordinate grids with origin at array center
@@ -157,8 +157,8 @@ def intensity_annular_aperture(r_rad_array, wavel, D_aperture, D_obscuration, am
         # = (r_rad_centered <= pinhole_size).astype(float)
 
         # Or soft edge (if you want the fractional-pixel ramp)
-        pinhole_array = np.clip((pinhole_size - r_rad_centered)/rad_per_pix, 0, 1)
-        ipdb.set_trace()
+        pinhole_array = np.clip((pinhole_size - r_rad_centered), 0, 1)
+        #ipdb.set_trace() # 2
         
 
         #########################################################
@@ -174,13 +174,15 @@ def intensity_annular_aperture(r_rad_array, wavel, D_aperture, D_obscuration, am
         '''
         # convolve with the pinhole array
         I_r = convolve2d(I_r, pinhole_array, mode='same')
+        #ipdb.set_trace() # 3
 
         # shift I_r back to the original position
-        I_r = shift(I_r, -shift_vals, order=3, mode='nearest')
-        ipdb.set_trace()
+        I_r = shift(I_r, -np.array(shift_vals), order=3, mode='nearest')
+        #ipdb.set_trace() # 4
 
     # normalize to the amplitude
     I_r = ampl * I_r / np.nanmax(I_r)
+    #ipdb.set_trace() # 5
 
     return I_r
 

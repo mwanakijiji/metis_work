@@ -456,6 +456,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         #########################################################
         # Begin Example call to test model_for_fit_fixed in one line
         # loop over a few test pinhole sizes
+        '''
         for pinhole_size_test in [None, 1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0]:
             test = model_for_fit_fixed(
                 r_rad_1d_original=r_rad_1d_original, 
@@ -474,10 +475,11 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
             plt.savefig(f'Figure_1_test_model_pinhole_{pinhole_size_test}.png')
             print(f'Saved Figure_1_test_model_pinhole_{pinhole_size_test}.png')
             plt.close()
+            '''
 
         # End example call
         #########################################################
-        pinhole_size = 2e-8
+        pinhole_size = 0.2e-8 # 1.5e-8 is pretty close
         popt, pcov = curve_fit(
             model_wrapper,
             xdata = r_rad_1d_original,
@@ -631,6 +633,33 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     fig_triple.savefig(file_triple)
     logging.info(f"Saved {file_triple} to figs_dump/")
     plt.close(fig_triple)
+
+    fig_cs, (ax_lin, ax_log) = plt.subplots(
+        1, 2, figsize=(12, 4), sharex=True, constrained_layout=True
+    )
+    # Linear
+    ax_lin.plot(x_pix, cross_data, label="Data")
+    ax_lin.plot(x_pix, cross_model, label="Model", linestyle="--")
+    ax_lin.set_xlabel("Pixel")
+    ax_lin.set_ylabel("Counts")
+    ax_lin.legend()
+    # Log: avoid non-positive values
+    cross_data_log = cross_data.copy()
+    cross_model_log = cross_model.copy()
+    cross_data_log[cross_data_log <= 0] = np.nan
+    cross_model_log[cross_model_log <= 0] = np.nan
+    ax_log.plot(x_pix, cross_data_log, label="Data")
+    ax_log.plot(x_pix, cross_model_log, label="Model", linestyle="--")
+    ax_log.set_xlabel("Pixel")
+    ax_log.set_ylabel("Counts (log)")
+    ax_log.set_yscale("log")
+    ax_log.legend()
+    file_cs = f"figs_dump/free_ann_ap_cross_sections_lin_log_{plot_string}.png"
+    print(f"Saved {file_cs} to figs_dump/")
+    fig_cs.savefig(file_cs)
+    plt.close(fig_cs)
+    print(f"Saved {file_cs} to figs_dump/")
+
 
     ####### END TEMP PLOTTING
 
