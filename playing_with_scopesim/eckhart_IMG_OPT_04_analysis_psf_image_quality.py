@@ -9,6 +9,20 @@ import ipdb
 from modules.helpers import load_config_and_pipe
 from modules.backbone import strehl_psfs
 
+# Reqs.:
+# - Ref. Overleaf doc IMG_OPT_04_Test_Description_PSF_Image_Quality
+# 
+# 1. METIS-1408: Quality and alignment of the optical components within Mid-infrared ELT Imager and
+# Spectrograph (METIS) shall provide diffraction limited performance (Strehl ≥ 80 %)
+# at λ > 3μm in all modes over the entire FOV.
+# 2. METIS-1409: The Instrument Wavefront Error (WFE) shall satisfy the diffraction limit requirement
+# (Strehl>0.8) at lambda = 3 μm for IMG (both LM and NQ) and IMG. The minimum
+# RMS WFE below shall be satisfied over the full Field Of View (FOV) relevant to the
+# given optical path.
+# 3. METIS-2864: The minimum Strehl ratio of the WCU+CFO+IMG-LM optical path shall be >80% at
+# 3.3μm over the entire field of view.
+# 4. METIS-3503: METIS shall be able to characterise the shape of the instrument PSF across the entire
+# FoV using the WCU.
 
 def main():
 

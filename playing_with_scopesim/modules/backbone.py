@@ -8,6 +8,7 @@ from .psf_grid_prep import load_grid_data_from_fits, prepare_psf_grid
 from .strehl_fcns import fit_annular_aperture_fixed_parameters, fit_annular_aperture_free_parameters
 from scipy.ndimage import zoom
 from photutils.centroids import centroid_2dg, centroid_sources
+import pickle
 
 # Fixed canvas for oversampled vs native FYI PNGs (same pixel size for blink comparison).
 _COOKIE_FYI_FIGSIZE_INCH = (7.0, 6.25)
@@ -285,16 +286,6 @@ def strehl_psfs(
             fit_annular_aperture_free=fit_annular_aperture_free,
         )
 
-        '''
-        coord_x_array[num_coord] = result.coord_x_normsamp
-        coord_y_array[num_coord] = result.coord_y_normsamp
-        fwhm_x_pix_array[num_coord] = result.fwhm_x_normsamp
-        fwhm_y_pix_array[num_coord] = result.fwhm_y_normsamp
-        amplitude_counts_array[num_coord] = result.amplitude_counts
-        gaussian_based_strehl_array[num_coord] = result.gaussian_based_strehl
-        strehl_results_this_psf.update(result.strehl_updates)
-        '''
-
         # for each strehl value in result, put it in strehl_results_this_psf as a key-value pair
         for key, value in result.strehl_updates.items():
             strehl_results_this_psf[key] = value
@@ -305,9 +296,29 @@ def strehl_psfs(
         # put the results from this PSF into the overall dictionary
         strehl_results_all[f'psf_num_{num_coord:02d}'] = strehl_results_this_psf
     
+    # pass/fail: for each PSF, is the Strehl values greater than 0.8?
+    # user criterion: strehl_free_ann_ap_mtf
+    pass_fail_list = []
+    criterion_key = 'strehl_free_ann_ap_mtf'
+    for psf_results in strehl_results_all.values():
+        pass_fail = True if psf_results[criterion_key] >= 0.8 else False
+        pass_fail_list.append(pass_fail)
+    logging.info("--------------------------------")
+    pass_fail_all = all(pass_fail_list)
+    logging.info(f"Pass/fail for each PSF: {pass_fail_list}")
+    logging.info(f"PASS/FAIL FOR ALL PSFs: {all(pass_fail_list)}")
+    logging.info("--------------------------------")
+
+    
+    # pickle the results
+    file_name_pickle = f"strehl_results_all_{fp_mask}_{pp_mask}_{filter_name}.pkl"
+    with open(file_name_pickle, 'wb') as f:
+        pickle.dump({'strehl_results_all': strehl_results_all, 'pass_fail_all': pass_fail_all}, f)
+    logging.info(f"Saved strehl results to {file_name_pickle}")
 
     # plot the grid_data and annotate it with the best-fit fwhm in x and y for each PSF
     plt.clf()
+    plt.figure(figsize=(18, 12))
     plt.imshow(grid_data, origin="lower", cmap="gray_r")
     for psf_results in strehl_results_all.values():
         x_cen = psf_results['x_cen_1st_pass_native']
