@@ -277,6 +277,7 @@ def model_for_fit_fixed(
     centroid_yx_original=None,
     shape_original_2d=None,
     fac_oversamp=None,
+    pixel_scale_mas=None,
     *,
     wavel=None,
     filter_file=None,
@@ -284,8 +285,6 @@ def model_for_fit_fixed(
     centroid_yx_oversamp=None,
     shape_oversamp=None,
     valid_mask=None,
-    oversamp_factor=None,
-    pixel_scale_mas=5.47,
     save_fyi_plot=True,
 ):
     """
@@ -310,18 +309,11 @@ def model_for_fit_fixed(
     - shape_oversamp: explicit oversampled shape; when provided without
       shape_original_2d, return the oversampled model directly
     - valid_mask: legacy argument kept for compatibility
-    - oversamp_factor: legacy alias for fac_oversamp
     - pixel_scale_mas: detector pixel scale in mas
     
     Returns:
     - 1D array of model intensity values on the requested output grid
     """
-    del r_rad_1d_original, valid_mask
-
-    if fac_oversamp is None:
-        fac_oversamp = oversamp_factor
-    if fac_oversamp is None:
-        raise ValueError("Need fac_oversamp or oversamp_factor.")
 
     if shape_original_2d is not None:
         shape_oversamp_2d = tuple(int(dim * fac_oversamp) for dim in shape_original_2d)
@@ -345,6 +337,8 @@ def model_for_fit_fixed(
         fac_oversamp=fac_oversamp,
         units='radians',
     )
+
+
 
     # generate model intensities on oversampled array
     if wavel: # monochromatic PSF

@@ -96,7 +96,8 @@ def process_one_psf(
 
     strehl_updates = {}
 
-    # fit a ScopeSim PSF
+    # fit a ScopeSim PSF functionality currently disabled; can reinsert later if needed
+    '''
     if fit_simmed_psf:
         logging.info(f"Fitting ScopeSim PSF {num_coord} of {num_psfs_to_process}")
         strehl_simmed_psf = fit_simmed_psfs(
@@ -110,8 +111,7 @@ def process_one_psf(
             config_observing=config_observing,
         )
         strehl_updates.update(strehl_simmed_psf)
-
-    ipdb.set_trace() # 2
+    '''
 
     # fit an annular aperture model with fixed aperture
     if fit_annular_aperture_fixed:
@@ -215,6 +215,7 @@ def strehl_psfs(
         oversample_factor=oversample_factor,
         grid_header=grid_header,
     )
+    ipdb.set_trace() # 2
 
     # unpack quantities
     grid_data = prep.grid_data # original data (native pixel scale)
@@ -251,10 +252,12 @@ def strehl_psfs(
         amplitude_counts_array,
         gaussian_based_strehl_array,
     ) = (np.zeros(total_psfs) for _ in range(9))
-    strehl_results_all = {}
+    strehl_results_all = {} # to contain info from all the PSFs
 
     # loop over all PSFs that we want to process from this one detector readout
     for num_coord in range(num_psfs_to_process):
+
+        strehl_results_this_psf = {} # to contain info from this PSF alone
         # make cutout of the PSF from the original array, using the closest int to the 1st pass centroids
 
         # 1-st pass coords of the PSF in the original array
@@ -283,38 +286,48 @@ def strehl_psfs(
             fit_annular_aperture_free=fit_annular_aperture_free,
         )
 
+        '''
         coord_x_array[num_coord] = result.coord_x_normsamp
         coord_y_array[num_coord] = result.coord_y_normsamp
         fwhm_x_pix_array[num_coord] = result.fwhm_x_normsamp
         fwhm_y_pix_array[num_coord] = result.fwhm_y_normsamp
         amplitude_counts_array[num_coord] = result.amplitude_counts
         gaussian_based_strehl_array[num_coord] = result.gaussian_based_strehl
-        strehl_results_all.update(result.strehl_updates)
+        strehl_results_this_psf.update(result.strehl_updates)
+        '''
 
-    logging.info("Strehl results:")
-    for k, v in strehl_results_all.items():
-        logging.info(f"\t{k}:\t{v:.3f}")
+        # for each strehl value in result, put it in strehl_results_this_psf as a key-value pair
+        for key, value in result.strehl_updates.items():
+            strehl_results_this_psf[key] = value
+        # also include the 1st-pass centroid coordinates
+        strehl_results_this_psf['x_cen_1st_pass_native'] = x_cen_1st_pass_native
+        strehl_results_this_psf['y_cen_1st_pass_native'] = y_cen_1st_pass_native
+
+        # put the results from this PSF into the overall dictionary
+        strehl_results_all[f'psf_num_{num_coord:02d}'] = strehl_results_this_psf
+    
 
     # plot the grid_data and annotate it with the best-fit fwhm in x and y for each PSF
     plt.clf()
     plt.imshow(grid_data, origin="lower", cmap="gray_r")
-    for num_coord in range(len(coord_x_array)):
-        text_x = coord_x_array[num_coord] - 125
-        text_y = coord_y_array[num_coord] + 10
+    for psf_results in strehl_results_all.values():
+        x_cen = psf_results['x_cen_1st_pass_native']
+        y_cen = psf_results['y_cen_1st_pass_native']
+        strehl_free_ann_ap_mtf = psf_results.get('strehl_free_ann_ap_mtf', np.nan)
+        plt.scatter(x_cen, y_cen, color="red", s=10)
         plt.text(
-            text_x,
-            text_y,
-            f"x: {fwhm_x_pix_array[num_coord]:.2f}, \n y: {fwhm_y_pix_array[num_coord]:.2f}, \n theta: {angle_theta_array[num_coord]:.2f}, \n amp: {amplitude_counts_array[num_coord]:.2f}, \n strehl: {gaussian_based_strehl_array[num_coord]:.2f}",
+            x_cen - 125,
+            y_cen + 10,
+            f"{strehl_free_ann_ap_mtf:.3f}",
             color="k",
             fontsize=7,
             rotation=20,
         )
-    plt.title("FWHM in x and y (pix), amplitude (counts)")
-    plot_file_name = "fyi_plot_fwhm_and_amp.png"
-    plt.savefig(f"figs_dump/{plot_file_name}", bbox_inches="tight")
-    logging.info(f"Saved {plot_file_name} to figs_dump/")
+    plt.title("PSF first-pass centroids with free-annular-aperture MTF Strehl")
+    plot_file_name = "figs_dump/fyi_plot_strehl_free_ann_ap_mtf.png"
+    plt.savefig(plot_file_name, bbox_inches="tight")
+    logging.info(f"Saved {plot_file_name}")
     plt.close()
 
-    ipdb.set_trace() # 2
 
     return  # strehl_results_all

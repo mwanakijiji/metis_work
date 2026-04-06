@@ -54,7 +54,7 @@ def fit_airy_psf(cookie_cut_out_sci, data_empirical_original, obs_filter, x_cent
                                 x_0=x_center_pix_gaussian_best_fit_oversamp, 
                                 y_0=y_center_pix_gaussian_best_fit_oversamp, 
                                 radius=radius_pix)
-    ipdb.set_trace() # check that the radius is correct
+
     yy, xx = np.mgrid[0:cookie_cut_out_sci.shape[0], 0:cookie_cut_out_sci.shape[1]]
     airy_psf = airy_model(xx, yy)
 
@@ -124,7 +124,7 @@ def fit_airy_psf(cookie_cut_out_sci, data_empirical_original, obs_filter, x_cent
     return strehl_results
 
 
-def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_empirical_original, filter_name, plot_string, 
+def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_cookie_empirical_original, filter_name, plot_string, 
         x_center_2nd_pass_cookie_oversamp, y_center_2nd_pass_cookie_oversamp, config_observing, fac_oversamp, polychromatic=True):
     '''
     Strehl based on PSF fit, using model with fixed aperture dimensions
@@ -182,10 +182,12 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_empi
                                                     D_aperture=config_observing['D_aperture']['full'], 
                                                     D_obscuration=config_observing['D_aperture']['D_obscuration'], 
                                                     ampl=1, 
+                                                    centroid_yx_oversamp=(y_center_2nd_pass_cookie_oversamp, x_center_2nd_pass_cookie_oversamp),
                                                     shape_oversamp=shape_oversamp, 
+                                                    pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
+                                                    fac_oversamp=fac_oversamp,
                                                     valid_mask=valid_mask, 
                                                     filter_file=filter_file, 
-                                                    oversamp_factor=fac_oversamp,
                                                     save_fyi_plot=True)
     else: # monochromatic
         wavel_mono = config_observing['monochromatic_observing_filters_lm'][filter_name]
@@ -195,13 +197,16 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_empi
                                                     D_obscuration=config_observing['D_aperture']['D_obscuration'], 
                                                     ampl=1, 
                                                     shape_oversamp=shape_oversamp, 
+                                                    pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
+                                                    fac_oversamp=fac_oversamp,
                                                     valid_mask=valid_mask, 
-                                                    wavel=wavel_mono, 
-                                                    oversamp_factor=fac_oversamp)
+                                                    wavel=wavel_mono)
     model_annular_2d_oversamp = intensity_1d_full_1d.reshape(shape_oversamp)
 
     # normalize the model PSF to the empirical PSF, so that they have the same total power
     model_annular_2d_oversamp_norm = (model_annular_2d_oversamp / np.sum(model_annular_2d_oversamp)) * np.sum(cookie_cut_out_sci_oversamp)
+
+    
 
     # make mask corresponding to first dark ring for an Airy (but not annular) aperture, so as to see how much power is in the central region
     # note this is just the first dark Airy ring for a monochromatic PSF, but this should be good enough for the polychromatic case as well
@@ -209,9 +214,17 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_empi
     mask_central = r_rad_2d_oversamp < dark_ring_loc_rad
 
     # strehl given the max values of the normalized model and empirical PSF
-    strehl_from_fixed_annular_aperture_max = np.max(cookie_cut_out_sci_oversamp) / np.max(model_annular_2d_oversamp_norm)
+    # downsample the model PSF to the native scale
+    model_annular_2d_oversamp_norm_native = block_reduce(
+        model_annular_2d_oversamp_norm,
+        block_size=(fac_oversamp, fac_oversamp),
+        func=np.mean,
+    )
 
-    # strehl given the enclosed power in the central region
+    # take the max values of the empirica and model PSFs, at the native detector scale
+    strehl_from_fixed_annular_aperture_max = np.max(data_cookie_empirical_original) / np.max(model_annular_2d_oversamp_norm_native)
+
+    # strehl given the enclosed power in the central region (note this uses the oversampled model PSF; is that the best way?)
     model_annular_2d_full_norm_masked = model_annular_2d_oversamp_norm * mask_central
     test_empirical_2d_masked = nonan_empirical_2d_oversamp * mask_central
     strehl_from_fixed_annular_aperture_power_enclosed = np.sum(test_empirical_2d_masked) / np.sum(model_annular_2d_full_norm_masked)
@@ -297,7 +310,7 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_empi
     # 1. max of the empirical and model PSFs
     # 2. enclosed power in the central region
     # 3. MTF
-    # INSERT_YOUR_CODE
+
     strehl_results = {
         'strehl_fix_ann_ap_max': strehl_from_fixed_annular_aperture_max,
         'strehl_fix_ann_ap_pow': strehl_from_fixed_annular_aperture_power_enclosed,
