@@ -215,7 +215,6 @@ def strehl_psfs(
         oversample_factor=oversample_factor,
         grid_header=grid_header,
     )
-    ipdb.set_trace() # 2
 
     # unpack quantities
     grid_data = prep.grid_data # original data (native pixel scale)
