@@ -12,9 +12,6 @@ from modules.backbone import strehl_psfs
 
 def main():
 
-    print("About to break...", flush=True)
-    #ipdb.set_trace()
-
     stem = '/podman-share/metis_work/playing_with_scopesim/'
     # config file with the observing parameters
     observing_config_file = stem + 'config/config_file_IMG_04_observing.yaml'
@@ -48,7 +45,7 @@ def main():
     defaults = data_states_config.get("defaults", {})
     runs = data_states_config.get("runs", [])
 
-    # merge config data state defaults with per-run overrides
+    # to set up the data states, merge config data state defaults with overrides that are specific for each run
     data_states = []
     for entry in runs:
         merged = {**defaults, **entry}

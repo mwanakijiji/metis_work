@@ -18,6 +18,7 @@ from skimage.measure import block_reduce
 from scipy.ndimage import shift
 import ipdb
 
+
 def load_config_and_pipe(config_file_choice, print_one_line=False):
     '''
     Load a config file and print its contents to the log
@@ -331,8 +332,8 @@ def angle_from_center_2d(array_passed_in, y_center, x_center, pixel_scale_mas, f
     N.b. the input array is already assumed to be oversampled; the fac_oversamp here just is for rescaling the pixel values
 
     array_passed_in: the array to create the 2D array of distances from the center in arcseconds from
-    y_center: the y-center of the array
-    x_center: the x-center of the array
+    y_center: the y-center of the PSF
+    x_center: the x-center of the PSF
     pixel_scale_mas: the pixel scale in mas
     fac_oversamp: the oversampling factor
 
@@ -358,6 +359,7 @@ def angle_from_center_2d(array_passed_in, y_center, x_center, pixel_scale_mas, f
 
     # rescale based on the oversampling factor to fit the input array (this effectively makes the plate scale smaller)
     r_rad_2d = r_rad_2d / fac_oversamp
+
 
     return r_rad_2d
 

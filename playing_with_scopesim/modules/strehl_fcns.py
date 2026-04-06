@@ -54,6 +54,7 @@ def fit_airy_psf(cookie_cut_out_sci, data_empirical_original, obs_filter, x_cent
                                 x_0=x_center_pix_gaussian_best_fit_oversamp, 
                                 y_0=y_center_pix_gaussian_best_fit_oversamp, 
                                 radius=radius_pix)
+    ipdb.set_trace() # check that the radius is correct
     yy, xx = np.mgrid[0:cookie_cut_out_sci.shape[0], 0:cookie_cut_out_sci.shape[1]]
     airy_psf = airy_model(xx, yy)
 
@@ -544,7 +545,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
         pinhole_size=pinhole_size,
     )
-    ipdb.set_trace()
+    ipdb.set_trace() # problem already here
 
     ####### BEGIN TEMP PLOTTING
     

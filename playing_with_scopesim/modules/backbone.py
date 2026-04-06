@@ -102,6 +102,7 @@ def process_one_psf(
         fac_oversamp=oversample_factor,
     )
 
+
     #idx_x_start_oversamp = int(x_pos_pix_oversamp_1st_pass[num_coord] - 0.5 * cookie_edge_size)
     #idx_x_end_oversamp = int(x_pos_pix_oversamp_1st_pass[num_coord] + 0.5 * cookie_edge_size)
     #idx_y_start_oversamp = int(y_pos_pix_oversamp_1st_pass[num_coord] - 0.5 * cookie_edge_size)
@@ -317,9 +318,9 @@ def strehl_psfs(
         config_file_choice=config_coords_guesses_file_name, print_one_line=False
     )
 
-    # retrieve data and do 1st-pass centroiding
+    # retrieve data, oversample, and do 1st-pass centroiding
+    # (note oversampled empirical frame is only used for centroiding; the cost function for fitting later on just uses the frame as-is)
     grid_data, grid_header = load_grid_data_from_fits(file_name, hdu_index=1)
-    ## ## TO DO: DON'T OVERSAMPLE YET
     prep = prepare_psf_grid(
         grid_data,
         config_coords_guesses_config,
@@ -328,6 +329,7 @@ def strehl_psfs(
         grid_header=grid_header,
     )
 
+    # unpack quantities
     grid_data = prep.grid_data # original data (native pixel scale)
     grid_data_original = prep.grid_data_original # original data (native pixel scale)
     grid_data_oversamp = prep.grid_data_oversamp # oversampled data
@@ -350,6 +352,7 @@ def strehl_psfs(
         logging.info(f"Processing {num_psfs_to_process} out of {total_psfs} PSFs")
     logging.info(f"Processing {num_psfs_to_process} out of {total_psfs} PSFs")
 
+    # initialize arrays/dicts to store results
     (
         coord_x_array,
         coord_y_array,
@@ -361,10 +364,9 @@ def strehl_psfs(
         amplitude_counts_array,
         gaussian_based_strehl_array,
     ) = (np.zeros(total_psfs) for _ in range(9))
-
     strehl_results_all = {}
 
-    # loop over PSFs in the readout
+    # loop over all PSFs that we want to process from this one detector readout
     for num_coord in range(num_psfs_to_process):
         # make cutout of the PSF from the original array, using the closest int to the 1st pass centroids
 
