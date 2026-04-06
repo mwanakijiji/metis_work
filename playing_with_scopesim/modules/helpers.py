@@ -107,6 +107,7 @@ def intensity_annular_aperture(
     pinhole_diam_rad=None,
     pixel_scale_mas=5.47,
     fac_oversamp=1,
+    save_fyi_plot=True,
 ):
     '''
     Calculate the intensity through an aperture with a central obscuration
@@ -137,17 +138,6 @@ def intensity_annular_aperture(
     if pinhole_diam_rad is not None:
         # pixel scale in radians (same units as r_rad_array)
         rad_per_pix = ((pixel_scale_mas / 1000.0) / 206265.0) / fac_oversamp # this is for 'pixels' in the oversampled grid
-        # fractional pixels: linear ramp at boundary so edge pixels get value in (0, 1)
-        # make pinhole where r_rad_array is less than pinhole_diam_rad
-        '''
-        pinhole_array = np.clip(
-            (pinhole_diam_rad - r_rad_array),
-            0, 1
-        )
-        '''
-        #########################################################
-        # START DROP-IN IDEA TO AVOID DISPLACEMENTS WHEN CONVOLVING
-        #########################################################
 
         # Shift I_r so that its maximum is exactly at the center of the array
         
@@ -180,30 +170,31 @@ def intensity_annular_aperture(
         r_sub_sq = x_sub**2 + y_sub**2
         pinhole_array = (r_sub_sq <= radius_pix**2).mean(axis=(-1, -2))
 
-        # make an FYI plot, superimposing a circle with radius pinhole_diam_rad
-        fig, ax = plt.subplots()
-        im = ax.imshow(pinhole_array, origin='lower', cmap='gray_r')
-        circle = plt.Circle(
-            ((nx - 1) / 2.0, (ny - 1) / 2.0),
-            0.5 * pinhole_diam_rad / rad_per_pix,
-            fill=False,
-            color='red',
-            linewidth=1.5,
-        )
-        # Overplot dashed vertical and horizontal lines every N=fac_oversamp pixels
-        for v in np.arange(2.5, nx+2.5, fac_oversamp):
-            ax.axvline(x=v, color='blue', linestyle='--', linewidth=0.7, alpha=0.5)
-        for h in np.arange(2.5, nx+2.5, fac_oversamp):
-            ax.axhline(y=h, color='blue', linestyle='--', linewidth=0.7, alpha=0.5)
-        plt.xlabel('x (oversampled pixels)')
-        plt.xlabel('y (oversampled pixels)')
-        ax.add_patch(circle)
-        fig.colorbar(im, ax=ax)
-        ax.set_title('Pixel colors as fraction inscribed by pinhole radius (red)')
-        file_name_plot = 'figs_dump/pinhole_array_FYI.png'
-        plt.savefig(file_name_plot)
-        logging.info('Saved plot of pinhole array as ' + file_name_plot)   
-        ipdb.set_trace() # 2
+        if save_fyi_plot:
+            # make an FYI plot, superimposing a circle with radius pinhole_diam_rad
+            fig, ax = plt.subplots()
+            im = ax.imshow(pinhole_array, origin='lower', cmap='gray_r')
+            circle = plt.Circle(
+                ((nx - 1) / 2.0, (ny - 1) / 2.0),
+                0.5 * pinhole_diam_rad / rad_per_pix,
+                fill=False,
+                color='red',
+                linewidth=1.5,
+            )
+            # Overplot dashed vertical and horizontal lines every N=fac_oversamp pixels
+            for v in np.arange(2.5, nx+2.5, fac_oversamp):
+                ax.axvline(x=v, color='blue', linestyle='--', linewidth=0.7, alpha=0.5)
+            for h in np.arange(2.5, nx+2.5, fac_oversamp):
+                ax.axhline(y=h, color='blue', linestyle='--', linewidth=0.7, alpha=0.5)
+            plt.xlabel('x (oversampled pixels)')
+            plt.xlabel('y (oversampled pixels)')
+            ax.add_patch(circle)
+            fig.colorbar(im, ax=ax)
+            ax.set_title('Pixel colors as fraction inscribed by pinhole radius (red)')
+            file_name_plot = 'figs_dump/pinhole_array_FYI.png'
+            plt.savefig(file_name_plot)
+            logging.info('Saved plot of pinhole array as ' + file_name_plot)
+        #ipdb.set_trace() # 2
 
         #########################################################
         # END DROP-IN IDEA TO AVOID DISPLACEMENTS WHEN CONVOLVING
@@ -295,6 +286,7 @@ def model_for_fit_fixed(
     valid_mask=None,
     oversamp_factor=None,
     pixel_scale_mas=5.47,
+    save_fyi_plot=True,
 ):
     """
     Wrapper function for intensity_annular_aperture to use with curve_fit.
@@ -365,6 +357,7 @@ def model_for_fit_fixed(
             pinhole_diam_rad=pinhole_diam_rad,
             pixel_scale_mas=pixel_scale_mas,
             fac_oversamp=fac_oversamp,
+            save_fyi_plot=save_fyi_plot,
         )
     else: # polychromatic; reads in a filter curve
         decimated_filter_curve_df = _filter_curve_from_filter_file(filter_file)
@@ -384,6 +377,7 @@ def model_for_fit_fixed(
                 pinhole_diam_rad=pinhole_diam_rad,
                 pixel_scale_mas=pixel_scale_mas,
                 fac_oversamp=fac_oversamp,
+                save_fyi_plot=save_fyi_plot and (idx == 0),
             )
             # debug: save as FITS file
             #fits.writeto(f'junk.fits', intensity_2d, overwrite=True)
@@ -668,20 +662,19 @@ def fit_gaussian_psf(cookie_cut_out_sci, obs_filter, fp_mask, pp_mask, coords_gu
     return x_center_pix_oversamp_cutout, y_center_pix_oversamp_cutout, fwhm_x_pix_oversamp_cutout, fwhm_y_pix_oversamp_cutout, amplitude_counts_oversamp_cutout, gaussian_based_strehl
 
 
-def fit_simmed_psfs(cookie_cut_out_sci, data_empirical_original, plot_string, obs_filter, fp_mask, pp_mask, x_center_final_oversamp, y_center_final_oversamp, fac_oversamp):
+def fit_simmed_psfs(cookie_cut_out_sci_oversamp, obs_filter, fp_mask, pp_mask, x_center_final_oversamp, y_center_final_oversamp, fac_oversamp, config_observing=None):
     '''
     Find FWHM of a PSF using a perfect PSF from ScopeSim
     
     INPUTS:
-    cookie_cut_out_sci: 2D array of the science frame
-    data_empirical_original: 2D array of the original empirical data
-    plot_string: string to add to the plot file name
+    cookie_cut_out_sci_oversamp: 2D array of the science frame
     obs_filter: observing filter (string)
     fp_mask: focal plane mask (string)
     pp_mask: pupil plane mask (string)
     x_center_final_oversamp: final x-center of the PSF (i.e., no more centroiding will be done here); in coordinates of the entire array
     y_center_final_oversamp: final y-center of the PSF; in coordinates of the entire array
     fac_oversamp: oversampling factor
+    config_observing: observing configuration dictionary (currently unused; kept for API consistency)
 
     OUTPUTS:
     psf_perfect_cutout_best_fit: cutout around the best-fit simulated PSF
@@ -708,6 +701,7 @@ def fit_simmed_psfs(cookie_cut_out_sci, data_empirical_original, plot_string, ob
 
 
     logging.info('--------------------------------')
+    logging.info('Generating a ScopeSim simmed PSF to compare to the empirical input')
     logging.info('Current Observing filter:', obs_filter)
     logging.info('Current WCU FP mask:', wcu.fpmask)
     logging.info('Current WCU PP mask:', pp_mask)
@@ -737,8 +731,9 @@ def fit_simmed_psfs(cookie_cut_out_sci, data_empirical_original, plot_string, ob
     #ipdb.set_trace()
     # Get perfect, background-subtracted PSF - no detector noise
     psf_perfect = sci - background
+    ipdb.set_trace() # 2
 
-    # Oversample the background-subtracted PSF to match the cookie_cut_out_sci oversampling
+    # Oversample the background-subtracted PSF to match the cookie_cut_out_sci_oversamp oversampling
     psf_perfect_oversamp = zoom(psf_perfect, fac_oversamp, order=3)
 
     # for debugging
@@ -750,29 +745,29 @@ def fit_simmed_psfs(cookie_cut_out_sci, data_empirical_original, plot_string, ob
     #ipdb.set_trace()
 
     # take a cutout of the PSF at the exact same coordinates as the cookie cut-out
-    psf_perfect_cutout = psf_perfect_oversamp[int(y_center_final_oversamp-0.5*cookie_cut_out_sci.shape[0]):int(y_center_final_oversamp+0.5*cookie_cut_out_sci.shape[0]), \
-        int(x_center_final_oversamp-0.5*cookie_cut_out_sci.shape[1]):int(x_center_final_oversamp+0.5*cookie_cut_out_sci.shape[1])]
+    psf_perfect_cutout = psf_perfect_oversamp[int(y_center_final_oversamp-0.5*cookie_cut_out_sci_oversamp.shape[0]):int(y_center_final_oversamp+0.5*cookie_cut_out_sci_oversamp.shape[0]), \
+        int(x_center_final_oversamp-0.5*cookie_cut_out_sci_oversamp.shape[1]):int(x_center_final_oversamp+0.5*cookie_cut_out_sci_oversamp.shape[1])]
 
     # cut out the central region the same size as the cookie cut-out
-    #psf_perfect_cutout = psf_perfect[int(psf_perfect.shape[0]/2-0.5*cookie_cut_out_sci.shape[0]):int(psf_perfect.shape[0]/2+0.5*cookie_cut_out_sci.shape[0]), \
-    #    int(psf_perfect.shape[1]/2-0.5*cookie_cut_out_sci.shape[1]):int(psf_perfect.shape[1]/2+0.5*cookie_cut_out_sci.shape[1])]
+    #psf_perfect_cutout = psf_perfect[int(psf_perfect.shape[0]/2-0.5*cookie_cut_out_sci_oversamp.shape[0]):int(psf_perfect.shape[0]/2+0.5*cookie_cut_out_sci_oversamp.shape[0]), \
+    #    int(psf_perfect.shape[1]/2-0.5*cookie_cut_out_sci_oversamp.shape[1]):int(psf_perfect.shape[1]/2+0.5*cookie_cut_out_sci_oversamp.shape[1])]
 
-    # multiply psf_perfect_cutout by a coefficient to make it a best-fit to cookie_cut_out_sci
-    coefficient = np.sum(cookie_cut_out_sci) / np.sum(psf_perfect_cutout)
+    # multiply psf_perfect_cutout by a coefficient to make it a best-fit to cookie_cut_out_sci_oversamp
+    coefficient = np.sum(cookie_cut_out_sci_oversamp) / np.sum(psf_perfect_cutout)
     psf_perfect_cutout_best_fit = psf_perfect_cutout * coefficient
 
-    strehl_from_simmed_psf = np.max(cookie_cut_out_sci) / np.max(psf_perfect_cutout_best_fit)
+    strehl_from_simmed_psf = np.max(cookie_cut_out_sci_oversamp) / np.max(psf_perfect_cutout_best_fit)
     logging.info(f'Strehl from Scopesim simmed PSF: {strehl_from_simmed_psf:.2f}')
 
-    # Make subplots of cookie_cut_out_sci, psf_perfect_cutout_best_fit, and the residuals
+    # Make subplots of cookie_cut_out_sci_oversamp, psf_perfect_cutout_best_fit, and the residuals
     plt.figure(figsize=(12, 4))
     
-    # Panel 1: cookie_cut_out_sci
+    # Panel 1: cookie_cut_out_sci_oversamp
     plt.subplot(1, 3, 1)
     zscale1 = ZScaleInterval()
-    vmin1, vmax1 = zscale1.get_limits(cookie_cut_out_sci)
-    plt.imshow(cookie_cut_out_sci, origin="lower", cmap="viridis", vmin=vmin1, vmax=vmax1)
-    plt.title("cookie_cut_out_sci")
+    vmin1, vmax1 = zscale1.get_limits(cookie_cut_out_sci_oversamp)
+    plt.imshow(cookie_cut_out_sci_oversamp, origin="lower", cmap="viridis", vmin=vmin1, vmax=vmax1)
+    plt.title("cookie_cut_out_sci_oversamp")
     plt.colorbar(shrink=0.7, label="Counts")
     
     # Panel 2: psf_perfect_cutout_best_fit
@@ -784,7 +779,7 @@ def fit_simmed_psfs(cookie_cut_out_sci, data_empirical_original, plot_string, ob
     plt.colorbar(shrink=0.7, label="Counts")
     
     # Panel 3: Residuals
-    residuals = cookie_cut_out_sci - psf_perfect_cutout_best_fit
+    residuals = cookie_cut_out_sci_oversamp - psf_perfect_cutout_best_fit
     plt.subplot(1, 3, 3)
     zscale3 = ZScaleInterval()
     vmin3, vmax3 = zscale3.get_limits(residuals)
@@ -796,5 +791,7 @@ def fit_simmed_psfs(cookie_cut_out_sci, data_empirical_original, plot_string, ob
     plot_filename = "junk_psf_perfect_cutout_best_fit.png"
     plt.savefig(f"figs_dump/{plot_filename}", bbox_inches="tight")
     logging.info(f"Saved {plot_filename}")
+
+    ipdb.set_trace() # 2
 
     return psf_perfect_cutout_best_fit, strehl_from_simmed_psf

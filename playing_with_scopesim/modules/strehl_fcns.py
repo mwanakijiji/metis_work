@@ -185,7 +185,8 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_empi
                                                     shape_oversamp=shape_oversamp, 
                                                     valid_mask=valid_mask, 
                                                     filter_file=filter_file, 
-                                                    oversamp_factor=fac_oversamp)
+                                                    oversamp_factor=fac_oversamp,
+                                                    save_fyi_plot=True)
     else: # monochromatic
         wavel_mono = config_observing['monochromatic_observing_filters_lm'][filter_name]
         logging.info(f'Making a monochromatic PSF for wavelength: {wavel_mono} um')
@@ -339,8 +340,12 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     logging.info(f"Original data points: {dummy_x_native.size}")
     logging.info(f"Oversampled data points: {dummy_x_oversamp.size}")
 
-    model_wrapper = lambda xdata, D_aperture, D_obscuration, ampl: \
-        model_for_fit_fixed(
+    save_fyi_plot_state = {"done": False}
+
+    def model_wrapper(xdata, D_aperture, D_obscuration, ampl):
+        save_fyi_plot = not save_fyi_plot_state["done"]
+        save_fyi_plot_state["done"] = True
+        return model_for_fit_fixed(
             xdata,
             D_aperture,
             D_obscuration,
@@ -350,8 +355,9 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
             fac_oversamp=fac_oversamp,
             pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
             filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
-            pinhole_diam_rad=pinhole_diam_rad
-            )
+            pinhole_diam_rad=pinhole_diam_rad,
+            save_fyi_plot=save_fyi_plot,
+        )
 
     # Initial parameter guesses
     # [D_aperture, D_obscuration, ampl]
@@ -467,6 +473,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
         filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
         pinhole_diam_rad=pinhole_diam_rad,
+        save_fyi_plot=False,
     )
     best_fit_model_1d = model_for_fit_fixed(
         dummy_x_native,
@@ -479,10 +486,9 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
         filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
         pinhole_diam_rad=pinhole_diam_rad,
+        save_fyi_plot=False,
     )
-    ipdb.set_trace() # problem already here
 
-    ####### BEGIN TEMP PLOTTING
     
     initial_guess_model_2d = initial_guess_model_1d.reshape(shape_original_2d)
     best_fit_model_2d = best_fit_model_1d.reshape(shape_original_2d)
@@ -597,8 +603,6 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     print(f"Saved {file_cs} to figs_dump/")
 
 
-    ####### END TEMP PLOTTING
-
     # Build oversampled models directly on the oversampled grid for diagnostics/MTF.
     initial_guess_model_2d_oversamp = model_for_fit_fixed(
         dummy_x_oversamp,
@@ -611,6 +615,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
         filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
         pinhole_diam_rad=pinhole_diam_rad,
+        save_fyi_plot=False,
     ).reshape(shape_oversampled_2d)
     best_fit_model_2d_oversamp = model_for_fit_fixed(
         dummy_x_oversamp,
@@ -623,6 +628,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
         filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
         pinhole_diam_rad=pinhole_diam_rad,
+        save_fyi_plot=False,
     ).reshape(shape_oversampled_2d)
 
     # Calculate chi-squared
