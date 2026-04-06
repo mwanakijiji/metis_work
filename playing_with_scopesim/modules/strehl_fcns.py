@@ -306,7 +306,7 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_empi
 
 
 def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut_out_sci_original, filter_name, plot_string, 
-        x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, config_observing, fit_method, pinhole_size=1e-8):
+        x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, config_observing, fit_method, pinhole_diam_rad=1e-8):
     '''
     Fit a 2D analytical PSF to a given frame.
 
@@ -320,7 +320,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     fac_oversamp: oversampling factor
     config_observing: config object containing the observing parameters
     fit_method: 'curve_fit' (default) or 'amoeba' - optimizer to use for finding best fit
-    pinhole_size: size of the pinhole in pixels (if None, the analytical expression for the PSF alone is used; this is equivalent to a pinhole delta function); units radians
+    pinhole_diam_rad: size of the pinhole in pixels (if None, the analytical expression for the PSF alone is used; this is equivalent to a pinhole delta function); units radians
 
     OUTPUTS:
     '''
@@ -350,7 +350,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
             fac_oversamp=fac_oversamp,
             pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
             filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
-            pinhole_size=pinhole_size
+            pinhole_diam_rad=pinhole_diam_rad
             )
 
     # Initial parameter guesses
@@ -387,7 +387,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         # Begin Example call to test model_for_fit_fixed in one line
         # loop over a few test pinhole sizes
         '''
-        for pinhole_size_test in [None, 1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0]:
+        for pinhole_diam_rad_test in [None, 1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0]:
             test = model_for_fit_fixed(
                 r_rad_1d_original=r_rad_1d_original, 
                 D_aperture=34.6878,             # D_aperture [example value in meters]
@@ -397,19 +397,23 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
                 shape_original_2d=shape_original_2d,
                 fac_oversamp=fac_oversamp,
                 filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
-                pinhole_size=pinhole_size_test
+                pinhole_diam_rad=pinhole_diam_rad_test
             )
 
             test_2d = test.reshape(shape_original_2d)
             plt.imshow(test_2d)
-            plt.savefig(f'Figure_1_test_model_pinhole_{pinhole_size_test}.png')
-            print(f'Saved Figure_1_test_model_pinhole_{pinhole_size_test}.png')
+            plt.savefig(f'Figure_1_test_model_pinhole_{pinhole_diam_rad_test}.png')
+            print(f'Saved Figure_1_test_model_pinhole_{pinhole_diam_rad_test}.png')
             plt.close()
             '''
 
         # End example call
         #########################################################
-        pinhole_size = 3.2e-8 # 3.2e-8 is pretty close, with debugged centering; was 1.5e-6 previously
+        plate_scale_wcu_fp2pt1 = 3.319 # [mm/asec]; Table 2.6 in E-REP-MPIA-1203, 'METIS WCU radiometric model'
+        pinhole_diam_um = 25. # 25 um for LM, 66 um for N
+        # convert to radians
+        pinhole_diam_asec = pinhole_diam_um * 10**-3 / plate_scale_wcu_fp2pt1
+        pinhole_diam_rad = pinhole_diam_asec * (1./206265.) # [rad]; 3.2e-8 is pretty close, with debugged centering; was 1.5e-6 previously
         popt, pcov = curve_fit(
             model_wrapper,
             xdata = dummy_x_native,
@@ -462,7 +466,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         fac_oversamp=fac_oversamp,
         pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
         filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
-        pinhole_size=pinhole_size,
+        pinhole_diam_rad=pinhole_diam_rad,
     )
     best_fit_model_1d = model_for_fit_fixed(
         dummy_x_native,
@@ -474,7 +478,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         fac_oversamp=fac_oversamp,
         pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
         filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
-        pinhole_size=pinhole_size,
+        pinhole_diam_rad=pinhole_diam_rad,
     )
     ipdb.set_trace() # problem already here
 
@@ -548,7 +552,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     cbar_res.set_label("Δ counts")
 
     pinhole_label = (
-        "None (delta pinhole)" if pinhole_size is None else f"{pinhole_size:.2e} rad"
+        "None (delta pinhole)" if pinhole_diam_rad is None else f"{pinhole_diam_rad:.2e} rad"
     )
     fig_triple.suptitle(
         f"Native fit grid — {filter_name} "
@@ -557,7 +561,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         f"Fit:  D_aper={D_aperture_fit:.2f}±{D_aperture_err:.2f}, "
         f"D_obsc={D_obscuration_fit:.2f}±{D_obscuration_err:.2f}, "
         f"ampl={ampl_fit:.2e}±{ampl_err:.2e}\n"
-        f"pinhole_size={pinhole_label}",
+        f"pinhole_diam={pinhole_label}",
         fontsize=11,
     )
     
@@ -606,7 +610,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         fac_oversamp=fac_oversamp,
         pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
         filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
-        pinhole_size=pinhole_size,
+        pinhole_diam_rad=pinhole_diam_rad,
     ).reshape(shape_oversampled_2d)
     best_fit_model_2d_oversamp = model_for_fit_fixed(
         dummy_x_oversamp,
@@ -618,7 +622,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         fac_oversamp=fac_oversamp,
         pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
         filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
-        pinhole_size=pinhole_size,
+        pinhole_diam_rad=pinhole_diam_rad,
     ).reshape(shape_oversampled_2d)
 
     # Calculate chi-squared

@@ -19,6 +19,7 @@ from scipy.ndimage import shift
 import ipdb
 
 
+
 def load_config_and_pipe(config_file_choice, print_one_line=False):
     '''
     Load a config file and print its contents to the log
@@ -97,7 +98,16 @@ def jinc(x):
     return y
 
 
-def intensity_annular_aperture(r_rad_array, wavel, D_aperture, D_obscuration, ampl=1, pinhole_size=None):
+def intensity_annular_aperture(
+    r_rad_array,
+    wavel,
+    D_aperture,
+    D_obscuration,
+    ampl=1,
+    pinhole_diam_rad=None,
+    pixel_scale_mas=5.47,
+    fac_oversamp=1,
+):
     '''
     Calculate the intensity through an aperture with a central obscuration
     Ref. 'E-REP-MPIA-1203 0-1 xx-10-2024', Sec. 4.4
@@ -107,6 +117,10 @@ def intensity_annular_aperture(r_rad_array, wavel, D_aperture, D_obscuration, am
     - wavel: wavelength (units meters)
     - D_aperture: aperture diameter (units meters)
     - D_obscuration: obscuration diameter (units meters)
+    - pinhole_diam_rad: size of the pinhole in radians (if None, the analytical expression
+      for the PSF alone is used; this is equivalent to a pinhole delta function)
+    - pixel_scale_mas: detector pixel scale in mas/pixel
+    - fac_oversamp: oversampling factor of the model grid
 
     OUTPUTS:
     - I_r_array: 2D array of intensity on the detector
@@ -120,14 +134,14 @@ def intensity_annular_aperture(r_rad_array, wavel, D_aperture, D_obscuration, am
     I_r = (1/(1-eps_**2)**2) * ( (2*jinc(nu_)) - eps_**2 * (2*jinc(nu_*eps_)) ) ** 2
 
     # convolve with a pinhole, if we're using one of finite size
-    if pinhole_size is not None:
+    if pinhole_diam_rad is not None:
         # pixel scale in radians (same units as r_rad_array)
-        rad_per_pix = r_rad_array[0, 1] - r_rad_array[0, 0] ## ## TODO: MAKE THIS MORE ELEGANT
+        rad_per_pix = ((pixel_scale_mas / 1000.0) / 206265.0) / fac_oversamp # this is for 'pixels' in the oversampled grid
         # fractional pixels: linear ramp at boundary so edge pixels get value in (0, 1)
-        # make pinhole where r_rad_array is less than pinhole_size
+        # make pinhole where r_rad_array is less than pinhole_diam_rad
         '''
         pinhole_array = np.clip(
-            (pinhole_size - r_rad_array),
+            (pinhole_diam_rad - r_rad_array),
             0, 1
         )
         '''
@@ -147,20 +161,49 @@ def intensity_annular_aperture(r_rad_array, wavel, D_aperture, D_obscuration, am
         I_r = shift(I_r, shift_vals, order=3, mode='nearest')
         #ipdb.set_trace() # 1
 
-        ny, nx = r_rad_array.shape ## ## TO DO: CHECK ALL THIS
+        ny, nx = r_rad_array.shape
         # Pixel coordinate grids with origin at array center
         y = np.arange(ny) - (ny - 1) / 2.0
         x = np.arange(nx) - (nx - 1) / 2.0
         # Radius in pixels, then convert to radians using rad_per_pix
-        r_pix = -np.sqrt(x[None, :]**2 + y[:, None]**2)
+        r_pix = np.sqrt(x[None, :]**2 + y[:, None]**2)
         r_rad_centered = r_pix * rad_per_pix
         # Hard pinhole (delta-function-like on the grid)
-        # = (r_rad_centered <= pinhole_size).astype(float)
+        # = (r_rad_centered <= pinhole_diam_rad).astype(float)
 
-        # Or soft edge (if you want the fractional-pixel ramp)
-        pinhole_array = np.clip((pinhole_size - r_rad_centered), 0, 1)
-        #ipdb.set_trace() # 2
-        
+        # Approximate the circle-square overlap with subpixel sampling.
+        radius_pix = 0.5 * pinhole_diam_rad / rad_per_pix
+        n_sub = 8
+        subpix_offsets = (np.arange(n_sub) + 0.5) / n_sub - 0.5
+        x_sub = x[None, :, None, None] + subpix_offsets[None, None, None, :]
+        y_sub = y[:, None, None, None] + subpix_offsets[None, None, :, None]
+        r_sub_sq = x_sub**2 + y_sub**2
+        pinhole_array = (r_sub_sq <= radius_pix**2).mean(axis=(-1, -2))
+
+        # make an FYI plot, superimposing a circle with radius pinhole_diam_rad
+        fig, ax = plt.subplots()
+        im = ax.imshow(pinhole_array, origin='lower', cmap='gray_r')
+        circle = plt.Circle(
+            ((nx - 1) / 2.0, (ny - 1) / 2.0),
+            0.5 * pinhole_diam_rad / rad_per_pix,
+            fill=False,
+            color='red',
+            linewidth=1.5,
+        )
+        # Overplot dashed vertical and horizontal lines every N=fac_oversamp pixels
+        for v in np.arange(2.5, nx+2.5, fac_oversamp):
+            ax.axvline(x=v, color='blue', linestyle='--', linewidth=0.7, alpha=0.5)
+        for h in np.arange(2.5, nx+2.5, fac_oversamp):
+            ax.axhline(y=h, color='blue', linestyle='--', linewidth=0.7, alpha=0.5)
+        plt.xlabel('x (oversampled pixels)')
+        plt.xlabel('y (oversampled pixels)')
+        ax.add_patch(circle)
+        fig.colorbar(im, ax=ax)
+        ax.set_title('Pixel colors as fraction inscribed by pinhole radius (red)')
+        file_name_plot = 'figs_dump/pinhole_array_FYI.png'
+        plt.savefig(file_name_plot)
+        logging.info('Saved plot of pinhole array as ' + file_name_plot)   
+        ipdb.set_trace() # 2
 
         #########################################################
         # END DROP-IN IDEA TO AVOID DISPLACEMENTS WHEN CONVOLVING
@@ -169,7 +212,7 @@ def intensity_annular_aperture(r_rad_array, wavel, D_aperture, D_obscuration, am
 
         '''
         pinhole_array = np.clip(
-            (pinhole_size - r_rad_array + rad_per_pix / 4) / rad_per_pix,
+            (pinhole_diam_rad - r_rad_array + rad_per_pix / 4) / rad_per_pix,
             0, 1
         )
         '''
@@ -246,7 +289,7 @@ def model_for_fit_fixed(
     *,
     wavel=None,
     filter_file=None,
-    pinhole_size=None,
+    pinhole_diam_rad=None,
     centroid_yx_oversamp=None,
     shape_oversamp=None,
     valid_mask=None,
@@ -256,8 +299,7 @@ def model_for_fit_fixed(
     """
     Wrapper function for intensity_annular_aperture to use with curve_fit.
 
-    Build an annular-aperture PSF on the oversampled grid and optionally
-    rebin it to the native detector grid.
+    Takes in a 1D array of radial distances, upsamples them, makes a model array of intensity values, then downsamples them again
     
     Parameters:
     - r_rad_1d_original: vestigial xdata placeholder for curve_fit callers
@@ -270,7 +312,7 @@ def model_for_fit_fixed(
     - fac_oversamp: oversampling factor
     - wavel: wavelength (meters); for monochromatic PSFs
     - filter_file: filter curve file to make polychromatic PSFs; for more realistic PSFs
-    - pinhole_size: size of the pinhole in pixels (if None, the analytical expression
+    - pinhole_diam: size of the pinhole in pixels (if None, the analytical expression
       for the PSF alone is used; this is equivalent to a pinhole delta function)
     - centroid_yx_oversamp: centroid in oversampled cookie-cutout coordinates
     - shape_oversamp: explicit oversampled shape; when provided without
@@ -320,7 +362,9 @@ def model_for_fit_fixed(
             D_aperture=D_aperture, 
             D_obscuration=D_obscuration, 
             ampl=ampl, 
-            pinhole_size=pinhole_size
+            pinhole_diam_rad=pinhole_diam_rad,
+            pixel_scale_mas=pixel_scale_mas,
+            fac_oversamp=fac_oversamp,
         )
     else: # polychromatic; reads in a filter curve
         decimated_filter_curve_df = _filter_curve_from_filter_file(filter_file)
@@ -337,7 +381,9 @@ def model_for_fit_fixed(
                 D_aperture=D_aperture, 
                 D_obscuration=D_obscuration, 
                 ampl=ampl, 
-                pinhole_size=pinhole_size
+                pinhole_diam_rad=pinhole_diam_rad,
+                pixel_scale_mas=pixel_scale_mas,
+                fac_oversamp=fac_oversamp,
             )
             # debug: save as FITS file
             #fits.writeto(f'junk.fits', intensity_2d, overwrite=True)
