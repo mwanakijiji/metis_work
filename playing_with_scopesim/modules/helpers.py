@@ -235,48 +235,82 @@ def _filter_curve_from_filter_file(filter_file):
     return decimated_df
 
 
-def model_for_fit_fixed(r_rad_1d_original, D_aperture, D_obscuration, ampl, centroid_yx_original, shape_original_2d, fac_oversamp, *, wavel=None, filter_file=None, pinhole_size=None, ):
+def model_for_fit_fixed(
+    r_rad_1d_original,
+    D_aperture,
+    D_obscuration,
+    ampl,
+    centroid_yx_original=None,
+    shape_original_2d=None,
+    fac_oversamp=None,
+    *,
+    wavel=None,
+    filter_file=None,
+    pinhole_size=None,
+    centroid_yx_oversamp=None,
+    shape_oversamp=None,
+    valid_mask=None,
+    oversamp_factor=None,
+    pixel_scale_mas=5.47,
+):
     """
     Wrapper function for intensity_annular_aperture to use with curve_fit.
 
-    Takes in a 1D array of radial distances, upsamples them, makes a model array of intensity values, then downsamples them again
+    Build an annular-aperture PSF on the oversampled grid and optionally
+    rebin it to the native detector grid.
     
     Parameters:
-    - r_rad_1d_oversamp: 1D array of radial distances within cookie cut-out
+    - r_rad_1d_original: vestigial xdata placeholder for curve_fit callers
     - D_aperture: aperture diameter (meters)
     - D_obscuration: obscuration diameter (meters)
     - ampl: amplitude
-    - centroid_yx_original: centroid in the cookie cut-out, in the original coordinates
-    - shape_oversamp: tuple, shape of the 2D array (fixed, not optimized)
-    - valid_mask: boolean array, mask for valid data points (fixed, not optimized)
+    - centroid_yx_original: centroid in native cookie-cutout coordinates
+    - shape_original_2d: native cookie-cutout shape; when provided, the model is
+      rebinned to this shape before being returned
     - fac_oversamp: oversampling factor
     - wavel: wavelength (meters); for monochromatic PSFs
     - filter_file: filter curve file to make polychromatic PSFs; for more realistic PSFs
-    - pinhole_size: size of the pinhole in pixels (if None, the analytical expression for the PSF alone is used; this is equivalent to a pinhole delta function)
+    - pinhole_size: size of the pinhole in pixels (if None, the analytical expression
+      for the PSF alone is used; this is equivalent to a pinhole delta function)
+    - centroid_yx_oversamp: centroid in oversampled cookie-cutout coordinates
+    - shape_oversamp: explicit oversampled shape; when provided without
+      shape_original_2d, return the oversampled model directly
+    - valid_mask: legacy argument kept for compatibility
+    - oversamp_factor: legacy alias for fac_oversamp
+    - pixel_scale_mas: detector pixel scale in mas
     
     Returns:
-    - 1D array of intensity values (masked, same length as input)
+    - 1D array of model intensity values on the requested output grid
     """
+    del r_rad_1d_original, valid_mask
 
-    # r_rad_1d_original is 1D (flattened original shape), need to reshape to 2D first
-    r_rad_2d_original = r_rad_1d_original.reshape(shape_original_2d)
+    if fac_oversamp is None:
+        fac_oversamp = oversamp_factor
+    if fac_oversamp is None:
+        raise ValueError("Need fac_oversamp or oversamp_factor.")
 
-    # oversample
-    r_rad_2d_oversamp = zoom(r_rad_2d_original, (fac_oversamp, fac_oversamp), order=3)
-    centroid_yx_oversamp = (centroid_yx_original[0] * fac_oversamp, centroid_yx_original[1] * fac_oversamp) # center on the oversampled array
+    if shape_original_2d is not None:
+        shape_oversamp_2d = tuple(int(dim * fac_oversamp) for dim in shape_original_2d)
+    elif shape_oversamp is not None:
+        shape_oversamp_2d = tuple(shape_oversamp)
+    else:
+        raise ValueError("Need shape_original_2d or shape_oversamp.")
 
-    # flatten again
-    r_rad_1d_oversamp = r_rad_2d_oversamp.flatten()
+    if centroid_yx_oversamp is None:
+        if centroid_yx_original is None:
+            raise ValueError("Need centroid_yx_original or centroid_yx_oversamp.")
+        centroid_yx_oversamp = tuple(
+            ((coord + 0.5) * fac_oversamp) - 0.5 for coord in centroid_yx_original
+        )
 
-    # Mask to include only valid points
-
-    #r_rad_1d_oversamp = r_rad_1d_oversamp[valid_mask]
-    #r_rad_2d_oversamp = r_rad_1d_oversamp.reshape(shape_oversampled_2d)
-    # Reconstruct the full 2D array by inserting masked values back into their original positions
-
-    #r_rad_2d_full = np.full(shape_oversamp, np.nan).flatten()
-    #r_rad_2d_full[valid_mask] = r_rad_1d_oversamp
-    #r_rad_2d = r_rad_2d_full.reshape(shape_oversamp)
+    r_rad_2d_oversamp = angle_from_center_2d(
+        array_passed_in=np.zeros(shape_oversamp_2d, dtype=float),
+        y_center=centroid_yx_oversamp[0],
+        x_center=centroid_yx_oversamp[1],
+        pixel_scale_mas=pixel_scale_mas,
+        fac_oversamp=fac_oversamp,
+        units='radians',
+    )
 
     # generate model intensities on oversampled array
     if wavel: # monochromatic PSF
@@ -310,20 +344,14 @@ def model_for_fit_fixed(r_rad_1d_original, D_aperture, D_obscuration, ampl, cent
         # renormalize to the desired amplitude
         intensity_2d = ampl * intensity_2d / np.nanmax(intensity_2d) 
 
-    # Flatten and apply the same mask to return only valid points
-    #intensity_1d_full = intensity_2d.flatten()
-    #intensity_1d_full_masked = intensity_1d_full[valid_mask]
+    if shape_original_2d is None:
+        return intensity_2d.flatten()
 
-    # reshape to 2D
-    #intensity_2d_masked = intensity_1d_full_masked.reshape(shape_oversampled_2d)
+    intensity_2d_model_original_scale = block_reduce(
+        intensity_2d, block_size=(fac_oversamp, fac_oversamp), func=np.mean
+    )
 
-    # rebin to the original shape
-    intensity_2d_model_original_scale = block_reduce(intensity_2d, block_size=(fac_oversamp, fac_oversamp), func=np.mean)
-
-    # flatten
-    intensity_1d_model_original_scale = intensity_2d_model_original_scale.flatten()
-
-    return intensity_1d_model_original_scale
+    return intensity_2d_model_original_scale.flatten()
 
 
 def angle_from_center_2d(array_passed_in, y_center, x_center, pixel_scale_mas, fac_oversamp, units='radians'):
