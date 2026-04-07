@@ -67,11 +67,14 @@ def main():
         fname = merged["file_name"]
         if not fname.startswith("/"):
             merged["file_name"] = stem + fname
+        results_write_dir = merged["results_write_dir"]
+        if not results_write_dir.startswith("/"):
+            merged["results_write_dir"] = stem + results_write_dir
         data_states.append(merged)
 
     # loop over each data state
     #ipdb.set_trace()
-    for state in data_states[0:1]:
+    for state in data_states: # data_states[0:1]: # if just for a small test
         strehl_psfs(
             state["file_name"],
             fp_mask=state["fp_mask"],
@@ -83,6 +86,7 @@ def main():
             psfs_subset=state["psfs_subset"],
             config_coords_guesses_file_name=state["config_coords_guesses_file_name"],
             config_observing=observing_config,
+            results_write_dir=state["results_write_dir"],
             fit_method="curve_fit"
         )
 

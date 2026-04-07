@@ -1,5 +1,6 @@
 import io
 import logging
+import os
 import sys
 import numpy as np
 import pandas as pd
@@ -108,6 +109,7 @@ def intensity_annular_aperture(
     pixel_scale_mas=5.47,
     fac_oversamp=1,
     save_fyi_plot=True,
+    results_write_dir="figs_dump",
 ):
     '''
     Calculate the intensity through an aperture with a central obscuration
@@ -172,6 +174,7 @@ def intensity_annular_aperture(
 
         if save_fyi_plot:
             # make an FYI plot, superimposing a circle with radius pinhole_diam_rad
+            os.makedirs(results_write_dir, exist_ok=True)
             fig, ax = plt.subplots()
             im = ax.imshow(pinhole_array, origin='lower', cmap='gray_r')
             circle = plt.Circle(
@@ -191,7 +194,7 @@ def intensity_annular_aperture(
             ax.add_patch(circle)
             fig.colorbar(im, ax=ax)
             ax.set_title('Pixel colors as fraction inscribed by pinhole radius (red)')
-            file_name_plot = 'figs_dump/pinhole_array_FYI.png'
+            file_name_plot = os.path.join(results_write_dir, 'pinhole_array_FYI.png')
             plt.savefig(file_name_plot)
             logging.info('Saved plot of pinhole array as ' + file_name_plot)
         #ipdb.set_trace() # 2
@@ -286,6 +289,7 @@ def model_for_fit_fixed(
     shape_oversamp=None,
     valid_mask=None,
     save_fyi_plot=True,
+    results_write_dir="figs_dump",
 ):
     """
     Wrapper function for intensity_annular_aperture to use with curve_fit.
@@ -352,6 +356,7 @@ def model_for_fit_fixed(
             pixel_scale_mas=pixel_scale_mas,
             fac_oversamp=fac_oversamp,
             save_fyi_plot=save_fyi_plot,
+            results_write_dir=results_write_dir,
         )
     else: # polychromatic; reads in a filter curve
         decimated_filter_curve_df = _filter_curve_from_filter_file(filter_file)
@@ -372,6 +377,7 @@ def model_for_fit_fixed(
                 pixel_scale_mas=pixel_scale_mas,
                 fac_oversamp=fac_oversamp,
                 save_fyi_plot=save_fyi_plot and (idx == 0),
+                results_write_dir=results_write_dir,
             )
             # debug: save as FITS file
             #fits.writeto(f'junk.fits', intensity_2d, overwrite=True)
@@ -462,7 +468,7 @@ def mtf_arrays(array_empirical, array_model, config_observing, fac_oversamp, siz
 
     return fft_model_power_cutoff, fft_empirical_power_cutoff, cutoff_freq, fx, fy, n_fft
 
-def fit_empirical_fwhm(frame, plot_string):
+def fit_empirical_fwhm(frame, plot_string, results_write_dir="figs_dump"):
     '''
     Take the data as-is, find where the intensity is 50% of the peak intensity, and then calculate the FWHM in x and y.
 
@@ -512,7 +518,8 @@ def fit_empirical_fwhm(frame, plot_string):
     # save the plot to file
     plot_filename = 'empirical_fwhm_' + plot_string + '.png'
     #ipdb.set_trace()
-    plt.savefig(f"figs_dump/{plot_filename}", bbox_inches='tight')
+    os.makedirs(results_write_dir, exist_ok=True)
+    plt.savefig(os.path.join(results_write_dir, plot_filename), bbox_inches='tight')
     plt.close()
     logging.info(f'Figure saved as {plot_filename}')
     #plt.show()
@@ -553,7 +560,7 @@ def fit_gaussian(frame, center_guess):
     return fitted_array, x_center_pix, y_center_pix, fwhm_x_pix, fwhm_y_pix, sigma_x_pix, sigma_y_pix, angle_theta_deg, amplitude_counts
 
 
-def fyi_plot_centroiding(array_to_plot, coords_to_plot, title_string=None, zscale=False):
+def fyi_plot_centroiding(array_to_plot, coords_to_plot, title_string=None, zscale=False, results_write_dir="figs_dump"):
     # INSERT_YOUR_CODE
 
     interval = ZScaleInterval()
@@ -563,12 +570,14 @@ def fyi_plot_centroiding(array_to_plot, coords_to_plot, title_string=None, zscal
     plt.scatter(coords_to_plot[:, 1], coords_to_plot[:, 0], color='red', s=10)
     plt.title(title_string)
     plot_filename = f"fyi_plot_centroiding_{title_string}.png"
-    plt.savefig(f"figs_dump/{plot_filename}", bbox_inches='tight')
-    logging.info(f"Saved {plot_filename} to figs_dump/")
+    os.makedirs(results_write_dir, exist_ok=True)
+    file_path = os.path.join(results_write_dir, plot_filename)
+    plt.savefig(file_path, bbox_inches='tight')
+    logging.info(f"Saved {file_path}")
     plt.close()
 
 
-def fit_gaussian_psf(cookie_cut_out_sci, obs_filter, fp_mask, pp_mask, coords_guess, plot_string, fac_oversamp):
+def fit_gaussian_psf(cookie_cut_out_sci, obs_filter, fp_mask, pp_mask, coords_guess, plot_string, fac_oversamp, results_write_dir="figs_dump"):
     '''
     Find FWHM of Gaussian-best-fit to empirical; all fit parameters are free
 
@@ -648,7 +657,8 @@ def fit_gaussian_psf(cookie_cut_out_sci, obs_filter, fp_mask, pp_mask, coords_gu
     #plt.show()
     # Save the plot to file with num_coord as a 2-digit zero-padded string
     plot_filename = f'psf_gaussian_best_fit_'+plot_string+'.png'
-    plt.savefig(f"figs_dump/{plot_filename}", bbox_inches='tight')
+    os.makedirs(results_write_dir, exist_ok=True)
+    plt.savefig(os.path.join(results_write_dir, plot_filename), bbox_inches='tight')
     logging.info(f'Figure saved as {plot_filename}')
     plt.close()
     #ipdb.set_trace()
@@ -656,7 +666,7 @@ def fit_gaussian_psf(cookie_cut_out_sci, obs_filter, fp_mask, pp_mask, coords_gu
     return x_center_pix_oversamp_cutout, y_center_pix_oversamp_cutout, fwhm_x_pix_oversamp_cutout, fwhm_y_pix_oversamp_cutout, amplitude_counts_oversamp_cutout, gaussian_based_strehl
 
 
-def fit_simmed_psfs(cookie_cut_out_sci_oversamp, obs_filter, fp_mask, pp_mask, x_center_final_oversamp, y_center_final_oversamp, fac_oversamp, config_observing=None):
+def fit_simmed_psfs(cookie_cut_out_sci_oversamp, obs_filter, fp_mask, pp_mask, x_center_final_oversamp, y_center_final_oversamp, fac_oversamp, config_observing=None, results_write_dir="figs_dump"):
     '''
     Find FWHM of a PSF using a perfect PSF from ScopeSim
     
@@ -783,7 +793,8 @@ def fit_simmed_psfs(cookie_cut_out_sci_oversamp, obs_filter, fp_mask, pp_mask, x
     
     plt.tight_layout()
     plot_filename = "junk_psf_perfect_cutout_best_fit.png"
-    plt.savefig(f"figs_dump/{plot_filename}", bbox_inches="tight")
+    os.makedirs(results_write_dir, exist_ok=True)
+    plt.savefig(os.path.join(results_write_dir, plot_filename), bbox_inches="tight")
     logging.info(f"Saved {plot_filename}")
 
     ipdb.set_trace() # 2

@@ -1,4 +1,5 @@
 import logging
+import os
 from dataclasses import dataclass
 import ipdb
 import numpy as np
@@ -59,6 +60,7 @@ def process_one_psf(
     fp_mask: str,
     pp_mask: str,
     config_observing: dict,
+    results_write_dir: str,
     fit_method: str,
     fit_simmed_psf: bool,
     fit_annular_aperture_fixed: bool,
@@ -92,6 +94,7 @@ def process_one_psf(
         coords_guess=[x_cen_oversamp, y_cen_oversamp],
         plot_string=f"num_coord_{num_coord}_fpmask_{fp_mask}_ppmask_{pp_mask}_filter_{filter_name}",
         fac_oversamp=oversample_factor,
+        results_write_dir=results_write_dir,
     )
 
 
@@ -110,6 +113,7 @@ def process_one_psf(
             y_center_final_oversamp = y_center_pix_gaussian_best_fit_cookie_oversamp,
             fac_oversamp=oversample_factor,
             config_observing=config_observing,
+            results_write_dir=results_write_dir,
         )
         strehl_updates.update(strehl_simmed_psf)
     '''
@@ -130,6 +134,7 @@ def process_one_psf(
             config_observing=config_observing,
             fac_oversamp=oversample_factor,
             polychromatic=True,
+            results_write_dir=results_write_dir,
         )
         strehl_updates.update(strehl_annular_aperture_fixed)
 
@@ -146,6 +151,7 @@ def process_one_psf(
             config_observing = config_observing,
             fac_oversamp = oversample_factor,
             fit_method = fit_method,
+            results_write_dir=results_write_dir,
         )
         strehl_updates.update(strehl_annular_aperture_free)
 
@@ -176,6 +182,7 @@ def strehl_psfs(
     psfs_subset="all",
     config_coords_guesses_file_name=None,
     config_observing=None,
+    results_write_dir="figs_dump",
     fit_method="curve_fit",
 ):
     '''
@@ -280,6 +287,7 @@ def strehl_psfs(
             fp_mask=fp_mask,
             pp_mask=pp_mask,
             config_observing=config_observing,
+            results_write_dir=results_write_dir,
             fit_method=fit_method,
             fit_simmed_psf=fit_simmed_psf,
             fit_annular_aperture_fixed=fit_annular_aperture_fixed,
@@ -334,7 +342,11 @@ def strehl_psfs(
             rotation=20,
         )
     plt.title("PSF first-pass centroids with free-annular-aperture MTF Strehl")
-    plot_file_name = "figs_dump/fyi_plot_strehl_free_ann_ap_mtf.png"
+    os.makedirs(results_write_dir, exist_ok=True)
+    plot_file_name = os.path.join(
+        results_write_dir,
+        f"fyi_plot_strehl_free_ann_ap_mtf_{fp_mask}_{pp_mask}_{filter_name}.png",
+    )
     plt.savefig(plot_file_name, bbox_inches="tight")
     logging.info(f"Saved {plot_file_name}")
     plt.close()

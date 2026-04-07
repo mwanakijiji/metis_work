@@ -1,4 +1,5 @@
 import logging
+import os
 
 import numpy as np
 import matplotlib
@@ -20,7 +21,7 @@ from .helpers import (
     mtf_arrays,
 )
 
-def fit_airy_psf(cookie_cut_out_sci, data_empirical_original, obs_filter, x_center_pix_gaussian_best_fit_oversamp, y_center_pix_gaussian_best_fit_oversamp, fac_oversamp, config_observing, plot_string=None):
+def fit_airy_psf(cookie_cut_out_sci, data_empirical_original, obs_filter, x_center_pix_gaussian_best_fit_oversamp, y_center_pix_gaussian_best_fit_oversamp, fac_oversamp, config_observing, plot_string=None, results_write_dir="figs_dump"):
     '''
     Strehl based on Airy PSF fit with the same total power as the empirical PSF
 
@@ -112,8 +113,10 @@ def fit_airy_psf(cookie_cut_out_sci, data_empirical_original, obs_filter, x_cent
     fig.colorbar(im3, cax=cax3)
     plot_filename = f'total_power_comparison_{plot_string}.png'
     #plt.show()
-    plt.savefig(plot_filename)
-    logging.info(f'Saved {plot_filename} to figs_dump/')
+    os.makedirs(results_write_dir, exist_ok=True)
+    file_path = os.path.join(results_write_dir, plot_filename)
+    plt.savefig(file_path)
+    logging.info(f'Saved {file_path}')
 
     strehl_airy_max = peak_flux_empirical / peak_flux_airy
     logging.info(f'Strehl from unobstructed circular aperture (-> Airy), max vals: {strehl_airy_max}')
@@ -125,7 +128,8 @@ def fit_airy_psf(cookie_cut_out_sci, data_empirical_original, obs_filter, x_cent
 
 
 def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_cookie_empirical_original, filter_name, plot_string, 
-        x_center_2nd_pass_cookie_oversamp, y_center_2nd_pass_cookie_oversamp, config_observing, fac_oversamp, polychromatic=True):
+        x_center_2nd_pass_cookie_oversamp, y_center_2nd_pass_cookie_oversamp, config_observing, fac_oversamp, polychromatic=True,
+        results_write_dir="figs_dump"):
     '''
     Strehl based on PSF fit, using model with fixed aperture dimensions
 
@@ -188,7 +192,8 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_cook
                                                     fac_oversamp=fac_oversamp,
                                                     valid_mask=valid_mask, 
                                                     filter_file=filter_file, 
-                                                    save_fyi_plot=True)
+                                                    save_fyi_plot=True,
+                                                    results_write_dir=results_write_dir)
     else: # monochromatic
         wavel_mono = config_observing['monochromatic_observing_filters_lm'][filter_name]
         logging.info(f'Making a monochromatic PSF for wavelength: {wavel_mono} um')
@@ -200,7 +205,8 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_cook
                                                     pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
                                                     fac_oversamp=fac_oversamp,
                                                     valid_mask=valid_mask, 
-                                                    wavel=wavel_mono)
+                                                    wavel=wavel_mono,
+                                                    results_write_dir=results_write_dir)
     model_annular_2d_oversamp = intensity_1d_full_1d.reshape(shape_oversamp)
 
     # normalize the model PSF to the empirical PSF, so that they have the same total power
@@ -280,9 +286,10 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_cook
     )
     plt.colorbar()
     #plt.show()
-    file_name_plot = f'figs_dump/intensity_1d_full_2d_{plot_string}.png'
+    os.makedirs(results_write_dir, exist_ok=True)
+    file_name_plot = os.path.join(results_write_dir, f'intensity_1d_full_2d_{plot_string}.png')
     plt.savefig(file_name_plot)
-    logging.info(f'Saved {file_name_plot} to figs_dump/')
+    logging.info(f'Saved {file_name_plot}')
 
     # plot a cross-section through the FTs of the empirical and model PSFs
     plt.clf()
@@ -298,9 +305,9 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_cook
     plt.axvline(x=-cutoff_freq, color='k', linestyle='--', alpha=0.5)
     plt.legend()
     plt.title(f'Cross-sections of MTFs\nStrehl from MTF: {strehl_from_fixed_annular_aperture_mtf:.2f}')
-    file_name_plot = f'figs_dump/mtf_fixed_ann_ap_{plot_string}.png'
+    file_name_plot = os.path.join(results_write_dir, f'mtf_fixed_ann_ap_{plot_string}.png')
     plt.savefig(file_name_plot)
-    logging.info(f'Saved {file_name_plot} to figs_dump/')
+    logging.info(f'Saved {file_name_plot}')
 
     logging.info(f"Strehl from fixed annular aperture, max: {strehl_from_fixed_annular_aperture_max}")
     logging.info(f"Strehl from fixed annular aperture, enclosed power: {strehl_from_fixed_annular_aperture_power_enclosed}")
@@ -320,7 +327,8 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_cook
 
 
 def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut_out_sci_original, filter_name, plot_string, 
-        x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, config_observing, fit_method, pinhole_diam_rad=1e-8):
+        x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, config_observing, fit_method, pinhole_diam_rad=1e-8,
+        results_write_dir="figs_dump"):
     '''
     Fit a 2D analytical PSF to a given frame.
 
@@ -353,6 +361,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     logging.info(f"Original data points: {dummy_x_native.size}")
     logging.info(f"Oversampled data points: {dummy_x_oversamp.size}")
 
+    os.makedirs(results_write_dir, exist_ok=True)
     save_fyi_plot_state = {"done": False}
 
     def model_wrapper(xdata, D_aperture, D_obscuration, ampl):
@@ -370,6 +379,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
             filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
             pinhole_diam_rad=pinhole_diam_rad,
             save_fyi_plot=save_fyi_plot,
+            results_write_dir=results_write_dir,
         )
 
     # Initial parameter guesses
@@ -487,6 +497,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
         pinhole_diam_rad=pinhole_diam_rad,
         save_fyi_plot=False,
+        results_write_dir=results_write_dir,
     )
     best_fit_model_1d = model_for_fit_fixed(
         dummy_x_native,
@@ -500,6 +511,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
         pinhole_diam_rad=pinhole_diam_rad,
         save_fyi_plot=False,
+        results_write_dir=results_write_dir,
     )
 
     
@@ -584,9 +596,9 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         fontsize=11,
     )
     
-    file_triple = f"figs_dump/free_ann_ap_data_model_resid_native_{plot_string}.png"
+    file_triple = os.path.join(results_write_dir, f"free_ann_ap_data_model_resid_native_{plot_string}.png")
     fig_triple.savefig(file_triple)
-    logging.info(f"Saved {file_triple} to figs_dump/")
+    logging.info(f"Saved {file_triple}")
     plt.close(fig_triple)
 
     fig_cs, (ax_lin, ax_log) = plt.subplots(
@@ -609,11 +621,11 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     ax_log.set_ylabel("Counts (log)")
     ax_log.set_yscale("log")
     ax_log.legend()
-    file_cs = f"figs_dump/free_ann_ap_cross_sections_lin_log_{plot_string}.png"
-    print(f"Saved {file_cs} to figs_dump/")
+    file_cs = os.path.join(results_write_dir, f"free_ann_ap_cross_sections_lin_log_{plot_string}.png")
+    print(f"Saved {file_cs}")
     fig_cs.savefig(file_cs)
     plt.close(fig_cs)
-    print(f"Saved {file_cs} to figs_dump/")
+    print(f"Saved {file_cs}")
 
 
     # Build oversampled models directly on the oversampled grid for diagnostics/MTF.
@@ -629,6 +641,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
         pinhole_diam_rad=pinhole_diam_rad,
         save_fyi_plot=False,
+        results_write_dir=results_write_dir,
     ).reshape(shape_oversampled_2d)
     best_fit_model_2d_oversamp = model_for_fit_fixed(
         dummy_x_oversamp,
@@ -642,6 +655,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
         pinhole_diam_rad=pinhole_diam_rad,
         save_fyi_plot=False,
+        results_write_dir=results_write_dir,
     ).reshape(shape_oversampled_2d)
 
     # Calculate chi-squared
@@ -689,9 +703,9 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     plt.axvline(x=-cutoff_freq, color='k', linestyle='--', alpha=0.5)
     plt.legend()
     plt.title(f'Cross-sections of MTFs\nStrehl from MTF: {strehl_from_free_annular_aperture_mtf:.2f}')
-    file_name_plot = f'figs_dump/mtf_free_ann_ap_{plot_string}.png'
+    file_name_plot = os.path.join(results_write_dir, f'mtf_free_ann_ap_{plot_string}.png')
     plt.savefig(file_name_plot)
-    logging.info(f'Saved {file_name_plot} to figs_dump/')
+    logging.info(f'Saved {file_name_plot}')
     plt.close()
 
     zscale = ZScaleInterval()
@@ -752,9 +766,9 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     fig.colorbar(im0, ax=axs, orientation='vertical', fraction=0.04, pad=0.04).set_label('Color scale is the same')
 
 
-    file_name_plot = f'figs_dump/free_ann_ap_best_fit_{plot_string}.png'
+    file_name_plot = os.path.join(results_write_dir, f'free_ann_ap_best_fit_{plot_string}.png')
     plt.savefig(file_name_plot)
-    logging.info(f"Saved {file_name_plot} to figs_dump/")
+    logging.info(f"Saved {file_name_plot}")
     plt.close()
 
     # return dict of Strehl ratios found with different methods
