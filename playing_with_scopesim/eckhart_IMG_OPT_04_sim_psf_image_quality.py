@@ -83,7 +83,7 @@ def pipe_2_log(callable_func, msg="Output"):
         logging.info(line)
 
 
-def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode, angle_array, dit=1, ndit=1, exptime=0.01, use_exp_time_only=False):
+def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode, angle_array, dit=1, ndit=1, exptime=0.01, use_exp_time_only=False, out_dir=None):
     '''
     Generate simulated data for the IMG-OPT-04 PSF image quality test
     
@@ -104,7 +104,6 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     '''
 
     # set up instrument
-    ipdb.set_trace()
 
     cmd = None # reset
     if nd_filter is not None:
@@ -121,11 +120,9 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
 
     wcu = metis['wcu_source']
 
-    ipdb.set_trace()
 
     bb_temp = 1000 * u.K
 
-    ipdb.set_trace()
     pipe_2_log(lambda m=metis: m.effects.pprint_all(), msg="Optical train effects (initial)")
 
     #########################################################
@@ -156,7 +153,6 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     logging.info('WCU source state:')
     pipe_2_log(lambda m=metis: metis["wcu_source"].info(), msg="Optical train effects (background)")
 
-    ipdb.set_trace()
     # sanity check that user inputs really are the same as what the instrument is using
     def sanity_check_user_inputs(metis, obs_filter, fp_mask, pp_mask):
         if metis.cmds.get("!OBS.filter_name") != obs_filter:
@@ -174,7 +170,6 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
 
     # check for background-taking
     #sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask, pp_mask=pp_mask)
-    ipdb.set_trace()
     background = outhdul_off[1].data
 
     #########################################################
@@ -182,7 +177,6 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
 
     logging.info('Re-opening WCU BB aperture to get a PSF ...')
     wcu.set_bb_aperture(value = 1.0) # open BB source
-    ipdb.set_trace()
     metis.observe()
     # print the ingredients of the PSF generation
     # pipe_2_log(lambda m=metis: [print(f"{k}: {v}") for k, v in vars(m["psf"]).items()], msg="PSF ingredients") # this prints EVERYTHING
@@ -194,7 +188,6 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     # Get perfect PSF - no detector noise
     #hdul_perfect = metis.image_planes[0].hdu
 
-    #ipdb.set_trace()
     pipe_2_log(lambda m=metis: m.effects.pprint_all(), msg="Optical train effects (science)")
 
     if use_exp_time_only:
@@ -219,12 +212,11 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     #hdul_perfect = metis.image_planes[0].hdu
 
     # background-subtract
-    ipdb.set_trace()
     raw_sci_readout = outhdul_on[1].data
     bckgd_subted = raw_sci_readout - background
     
-    ## BEGIN CHECK
-    file_name_write = 'IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '.fits'
+    basename_file_name_write = 'IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '.fits'
+    abs_file_name_write = out_dir + basename_file_name_write
 
 
     # Copy the primary header
@@ -248,121 +240,14 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     else:
         hdul_new[0].header['EXPTIME'] = (exptime, 'Exposure time')
     
-    hdul_new.writeto(file_name_write, overwrite=True)
-    logging.info('Saved background-subtracted readout without aberrations to ' + file_name_write)
+    hdul_new.writeto(abs_file_name_write, overwrite=True)
+    logging.info('Saved background-subtracted readout without aberrations to ' + abs_file_name_write)
 
     logging.info('--------------------------------')
     logging.info(f'Median of raw science readout: {np.median(raw_sci_readout):.4f}')
     logging.info(f'Median of background: {np.median(background):.4f}')
     logging.info(f'Median of background-subtracted readout: {np.median(bckgd_subted):.4f}')
 
-    ## END CHECK
-    #exit()
-
-    '''
-    # loop over rotation angles
-    for angle in angle_array:
-
-
-        ipdb.set_trace()
-
-        logging.info('Rotating by ' + str(angle) + ' degrees')
-        sci_rotated = ndimage.rotate(outhdul_on[1].data, angle, order=3, reshape=False)
-        background_rotated = ndimage.rotate(background, angle, order=3, reshape=False)
-        bckgd_subted_rotated = ndimage.rotate(bckgd_subted, angle, order=3, reshape=False)
-
-        outhdul_on[1].data = bckgd_subted_rotated # reassign; note that this step will have to be done later outside the ScopeSim context
-        ipdb.set_trace()
-        
-        plt.clf()
-        zscale = ZScaleInterval()
-        vmin, vmax = zscale.get_limits(bckgd_subted)
-        plt.imshow(sci_rotated, origin='lower', vmin=vmin, vmax=vmax)
-        plt.title(f'Raw readout\nWCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp) + '\n' + 'Clocking angle: ' + str(angle))
-        plt.colorbar()
-        plt.tight_layout()
-        file_name_plot_raw_readout = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_clocking_angle_' + str(angle) + '_raw_readout.png'
-        plt.savefig(file_name_plot_raw_readout)
-        #plt.show()
-        plt.close()
-        logging.info('Saved PNG of raw readout to ' + file_name_plot_raw_readout)
-
-        plt.clf()
-        zscale = ZScaleInterval()
-        vmin, vmax = zscale.get_limits(bckgd_subted)
-        plt.imshow(background_rotated, origin='lower', vmin=vmin, vmax=vmax)
-        plt.title(f'Background\nWCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp) + '\n' + 'Clocking angle: ' + str(angle))
-        plt.colorbar()
-        plt.tight_layout()
-        file_name_plot_background = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_clocking_angle_' + str(angle) + '_background.png'
-        plt.savefig(file_name_plot_background)
-        #plt.show()
-        plt.close()
-        logging.info('Saved PNG of background to ' + file_name_plot_background)
-
-        # detector
-        plt.clf()
-        zscale = ZScaleInterval()
-        vmin, vmax = zscale.get_limits(bckgd_subted)
-        plt.imshow(bckgd_subted_rotated, origin='lower', vmin=vmin, vmax=vmax)
-        plt.title(f'Bckgd-subtracted readout\nWCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp) + '\n' + 'Clocking angle: ' + str(angle))
-        plt.colorbar()
-        plt.tight_layout()
-        file_name_plot_bckgd_subtracted_readout = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_clocking_angle_' + str(angle) + '_bckgd_subtracted_readout.png'
-        plt.savefig(file_name_plot_bckgd_subtracted_readout)
-        #plt.show()
-        plt.close()
-        logging.info('Saved PNG of bckgd-subtracted readout to ' + file_name_plot_bckgd_subtracted_readout)
-
-        # histogram
-        plt.clf()
-        plt.hist(bckgd_subted.ravel(), bins=200)
-        plt.title('Bckgd-subtracted histogram; WCU FP mask: ' + str(fp_mask) + '\n' + 'WCU PP mask: ' + str(pp_mask) + '\n' + 'Observing filter: ' + str(obs_filter) + '\n' + 'BB temp: ' + str(bb_temp) + '\n' + 'Clocking angle: ' + str(angle))
-        plt.tight_layout()
-        file_name_plot_bckgd_subtracted_histogram = 'IMG_OPT_04_wcu_focal_mask_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_clocking_angle_' + str(angle) + '_bckgd_subtracted_histogram.png'
-        plt.savefig(file_name_plot_bckgd_subtracted_histogram) 
-        #plt.show()
-        plt.close()
-        logging.info('Saved PNG of bckgd-subtracted histogram to ' + file_name_plot_bckgd_subtracted_histogram)
-
-
-        # save background-subtracted to FITS file, with filter and other info in the header
-        # Make a new FITS file (let's call it file_name_write_all_layers) with the same primary header as outhdul,
-        # but with: 
-        #  [0] header, 
-        #  [1] background-subtracted image (bckgd_subted_rotated), 
-        #  [2] raw_sci_readout, 
-        #  [3] background_rotated
-
- 
-        #hdul_new.writeto(file_name_write_all_layers, overwrite=True)
-
-        file_name_write = 'IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '_clocking_angle_' + str(angle) + '.fits'
-
-        # Copy the primary header
-        primary_hdu = fits.PrimaryHDU(header=outhdul_on[0].header)
-        # Add background-subtracted readout as first extension
-        hdu_bckgd_subted = fits.ImageHDU(data=bckgd_subted_rotated, name='BCKGD_SUBTED')
-        # Add raw science readout as second extension
-        hdu_raw_readout = fits.ImageHDU(data=raw_sci_readout, name='RAW_READOUT')
-        # Add background as third extension
-        hdu_background = fits.ImageHDU(data=background_rotated, name='BACKGROUND')
-        hdul_new = fits.HDUList([primary_hdu, hdu_bckgd_subted, hdu_raw_readout, hdu_background])
-
-        # add some stuff to the header, some of which may be redundant
-        hdul_new[0].header['FILTER'] = (obs_filter, 'Observing filter')
-        hdul_new[0].header['WCU_FP'] = (fp_mask, 'WCU focal plane mask')
-        hdul_new[0].header['WCU_PP'] = (pp_mask, 'WCU pupil plane mask')
-        hdul_new[0].header['BB_TEMP'] = (bb_temp.value, 'BB temperature')
-        if ndit is not None:
-            hdul_new[0].header['NDIT'] = (ndit, 'Number of dithered exposures')
-            hdul_new[0].header['DIT'] = (dit, 'Det integration time')
-        else:
-            hdul_new[0].header['EXPTIME'] = (exptime, 'Exposure time')
-        
-        hdul_new.writeto(file_name_write, overwrite=True)
-        logging.info('Saved background-subtracted readout without aberrations to ' + file_name_write)
-    '''
 
 
 def main():
@@ -372,6 +257,8 @@ def main():
     now = datetime.datetime.now()
     log_dir = stem + 'IMG_04_logs/'
     log_file_name = log_dir + 'log_IMG_04_simulation_psf_image_quality_' + now.strftime('%Y-%m-%d_%H-%M-%S') + '.txt'
+    out_dir = stem + 'IMG_04_simmed_data/' # directory to write the simulated data to
+    
 
     # Ensure log directory exists and force config in case handlers already set
     os.makedirs(log_dir, exist_ok=True)
@@ -384,50 +271,37 @@ def main():
         ],
         force=True
     )
+    os.makedirs(out_dir, exist_ok=True)
 
     logging.info(f'Log file created at {now.strftime("%Y-%m-%d %H:%M:%S")}')
     logging.info(f'Log file name: {log_file_name}')
     logging.info(f'Log file directory: {stem + "IMG_04_logs/"}')
     logging.info(f'Log file directory: {stem + "IMG_04_logs/"}')
-
-    # initialize instrument here just to obtain filter lists: LM band
-    '''
-    cmd = sim.UserCommands(use_instrument='METIS', set_modes=['wcu_img_lm'])
-    metis = sim.OpticalTrain(cmd)
-    lm_filters_list = metis["filter_wheel"].filters.keys() # filters
-    #lm_fpmasks_list = ["pinhole_lm", "grid_lm"] # FP masks
-    lm_fpmasks_list = ["grid_lm"] # FP masks
-
-    # same for N band
-    cmd = sim.UserCommands(use_instrument='METIS', set_modes=['wcu_img_n'])
-    metis = sim.OpticalTrain(cmd)
-    n_filters_list = metis["filter_wheel"].filters.keys() # filters
-    n_fpmasks_list = ["pinhole_n"] # FP masks
-    '''
+    logging.info(f'Simmed file output directory: {out_dir}')
 
     # clocking angles for the PSF
     #angle_array = [0, 45, 60]
-    angle_array = [0]
+    angle_array = [0] # can be implemented later
 
     # LM filters
     # dict_keys(['open', 'Lp', 'short-L', 'L_spec', 'Mp', 'M_spec', 'Br_alpha', 'Br_alpha_ref', 'PAH_3.3', 'PAH_3.3_ref', 'CO_1-0_ice', 'CO_ref', 'H2O-ice', 'IB_4.05', 'HCI_L_short', 'HCI_L_long', 'HCI_M'])
     lm_obs_configs = [
         {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Br_alpha",     "nd_filter": None,      "dit": 0.065, "ndit": 2, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Br_alpha_ref", "nd_filter": "ND_OD1",  "dit": 0.2, "ndit": 5, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Lp",           "nd_filter": "ND_OD2",  "dit": float(1/8), "ndit": 3, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "H2O-ice",      "nd_filter": "ND_OD1",      "dit": 0.04, "ndit": 1, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False}, 
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "short-L",      "nd_filter": "ND_OD2",  "dit": 0.25, "ndit": 4, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "PAH_3.3",      "nd_filter": "ND_OD1",  "dit": float(1/8), "ndit": 7, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "PAH_3.3_ref",  "nd_filter": "ND_OD1",  "dit": float(1/8), "ndit": 8, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "IB_4.05",      "nd_filter": "ND_OD1",  "dit": float(1/12), "ndit": 12, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "HCI_L_short",  "nd_filter": "ND_OD2",  "dit": float(1/3), "ndit": 3, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "HCI_L_long",   "nd_filter": "ND_OD1",  "dit": 0.04, "ndit": 25, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Mp",           "nd_filter": "ND_OD2",  "dit": 0.2, "ndit": 5, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "CO_1-0_ice",   "nd_filter": "ND_OD1",  "dit": float(1/21), "ndit": 21, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "CO_ref",       "nd_filter": "ND_OD1",  "dit": float(1/21), "ndit": 21, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "HCI_M",        "nd_filter": "ND_OD1",  "dit": float(1/22), "ndit": 22, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "L_spec",       "nd_filter": "ND_OD2",  "dit": float(1/11), "ndit": 11, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "M_spec",       "nd_filter": "ND_OD2",  "dit": float(1/7), "ndit": 7, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Br_alpha_ref", "nd_filter": "ND_OD1",  "dit": 0.4, "ndit": 5, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Lp",           "nd_filter": "ND_OD2",  "dit": float(3/8), "ndit": 3, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "H2O-ice",      "nd_filter": "ND_OD1",      "dit": 0.06, "ndit": 1, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False}, 
+        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "short-L",      "nd_filter": "ND_OD2",  "dit": 0.375, "ndit": 4, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "PAH_3.3",      "nd_filter": "ND_OD1",  "dit": 0.1875, "ndit": 7, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "PAH_3.3_ref",  "nd_filter": "ND_OD1",  "dit": 0.1875, "ndit": 8, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "IB_4.05",      "nd_filter": "ND_OD1",  "dit": float(1/6), "ndit": 12, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "HCI_L_short",  "nd_filter": "ND_OD2",  "dit": float(5/6), "ndit": 3, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "HCI_L_long",   "nd_filter": "ND_OD1",  "dit": 0.06, "ndit": 25, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Mp",           "nd_filter": "ND_OD2",  "dit": 0.5, "ndit": 5, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "CO_1-0_ice",   "nd_filter": "ND_OD1",  "dit": float(2/21), "ndit": 21, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "CO_ref",       "nd_filter": "ND_OD1",  "dit": float(2/21), "ndit": 21, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "HCI_M",        "nd_filter": "ND_OD1",  "dit": float(1/11), "ndit": 22, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "L_spec",       "nd_filter": "ND_OD2",  "dit": 0.12, "ndit": 11, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "M_spec",       "nd_filter": "ND_OD2",  "dit": float(2/7), "ndit": 7, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
     ]
 
     # for debug
@@ -458,6 +332,7 @@ def main():
             dit=config["dit"],
             ndit=config["ndit"],
             exptime=config["exptime"],
+            out_dir=out_dir
         )
 
 
