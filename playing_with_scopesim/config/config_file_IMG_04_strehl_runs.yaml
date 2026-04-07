@@ -9,7 +9,7 @@ defaults:
   fit_annular_aperture_free: true
   fit_annular_aperture_fixed: true
   # psfs_subset: 'all' to process all PSFs, or an integer to process only the first N PSFs
-  psfs_subset: 2
+  psfs_subset: all
   # fit_method: 'curve_fit' (default) or 'amoeba' for annular aperture free-parameter fit
   fit_method: curve_fit
   config_coords_guesses_file_name: config/config_file_IMG_04_coords_ver11.yaml
