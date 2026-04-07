@@ -319,10 +319,11 @@ def strehl_psfs(
 
     
     # pickle the results
-    file_name_pickle = f"strehl_results_all_{fp_mask}_{pp_mask}_{filter_name}.pkl"
-    with open(file_name_pickle, 'wb') as f:
+    basename_file_name_pickle = f"strehl_results_all_{fp_mask}_{pp_mask}_{filter_name}.pkl"
+    abs_file_name_pickle = os.path.join(results_write_dir, basename_file_name_pickle)
+    with open(abs_file_name_pickle, 'wb') as f:
         pickle.dump({'strehl_results_all': strehl_results_all, 'pass_fail_all': pass_fail_all}, f)
-    logging.info(f"Saved strehl results to {file_name_pickle}")
+    logging.info(f"Saved strehl results to {abs_file_name_pickle}")
 
     # plot the grid_data and annotate it with the best-fit fwhm in x and y for each PSF
     plt.clf()

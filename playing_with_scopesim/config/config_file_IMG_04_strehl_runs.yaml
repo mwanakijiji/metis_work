@@ -28,46 +28,46 @@ runs:
     pp_mask: PPS-CFO2
 
   - filter_name: Br_alpha_ref
-    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_Br_alpha_ref.fits
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha_ref.fits
 
   - filter_name: Lp
-    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_Lp.fits
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Lp.fits
 
   - filter_name: H2O-ice
-    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_H2O-ice.fits
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_H2O-ice.fits
 
   - filter_name: PAH_3.3
-    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_PAH_3.3.fits
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_PAH_3.3.fits
 
   - filter_name: PAH_3.3_ref
-    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_PAH_3.3_ref.fits
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_PAH_3.3_ref.fits
 
   - filter_name: short-L
-    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_short-L.fits
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_short-L.fits
 
   - filter_name: IB_4.05
-    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_IB_4.05.fits
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_IB_4.05.fits
 
   - filter_name: HCI_L_short
-    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_HCI_L_short.fits
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_HCI_L_short.fits
 
   - filter_name: HCI_L_long
-    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_HCI_L_long.fits
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_HCI_L_long.fits
 
   - filter_name: Mp
-    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_Mp.fits
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Mp.fits
 
   - filter_name: CO_1-0_ice
-    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_CO_1-0_ice.fits
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_CO_1-0_ice.fits
 
   - filter_name: CO_ref
-    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_CO_ref.fits
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_CO_ref.fits
 
   - filter_name: HCI_M
-    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_HCI_M.fits
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_HCI_M.fits
 
   - filter_name: L_spec
-    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_L_spec.fits
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_L_spec.fits
 
   - filter_name: M_spec
-    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_Open_filter_M_spec.fits
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_M_spec.fits
