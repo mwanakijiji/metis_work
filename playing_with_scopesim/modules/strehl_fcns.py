@@ -24,21 +24,34 @@ from .helpers import (
 
 def fit_airy_psf(cookie_cut_out_sci, data_empirical_original, obs_filter, x_center_pix_gaussian_best_fit_oversamp, y_center_pix_gaussian_best_fit_oversamp, fac_oversamp, config_observing, plot_string=None, results_write_dir="figs_dump"):
     '''
-    Strehl based on Airy PSF fit with the same total power as the empirical PSF
+    Fit an Airy PSF with the same total power as the empirical PSF.
 
     INPUTS:
-    cookie_cut_out_sci: the empirical PSF
-    data_empirical_original: the original empirical data
-    obs_filter: the observing filter
-    x_center_pix_gaussian_best_fit_oversamp: the x-center of the Gaussian-best-fit PSF
-    y_center_pix_gaussian_best_fit_oversamp: the y-center of the Gaussian-best-fit PSF
-    fac_oversamp: the oversampling factor
-    config_observing: config object containing the observing parameters
-    plot_string: the string to add to the plot file name
+    ----------
+    cookie_cut_out_sci : ndarray
+        Empirical PSF array (2D).
+    data_empirical_original : ndarray
+        The original empirical data.
+    obs_filter : str
+        Observing filter name.
+    x_center_pix_gaussian_best_fit_oversamp : float
+        X-coordinate of the best-fit Gaussian PSF center (oversampled grid).
+    y_center_pix_gaussian_best_fit_oversamp : float
+        Y-coordinate of the best-fit Gaussian PSF center (oversampled grid).
+    fac_oversamp : float
+        Oversampling factor.
+    config_observing : dict
+        Dictionary containing observing configuration parameters.
+    plot_string : str, optional
+        String to add to output plot filenames.
+    results_write_dir : str, optional
+        Directory to write results to.
 
     OUTPUTS:
-    total_power_empirical: the total power of the empirical PSF
-    total_power_gaussian_best_fit: the total power of the Gaussian-best-fit PSF
+    -------
+    strehl_results : dict
+        Dictionary containing the Strehl ratios from the different methods.
+        - 'strehl_airy_max' : Strehl ratio from the Airy PSF fit with the same total power as the empirical PSF.
     '''
 
     total_power_empirical = np.sum(cookie_cut_out_sci)
@@ -75,7 +88,7 @@ def fit_airy_psf(cookie_cut_out_sci, data_empirical_original, obs_filter, x_cent
     im0 = axs[0].imshow(cookie_cut_out_sci, origin='lower', cmap='gray_r',
                        norm=LogNorm(vmin=np.maximum(np.nanmin(cookie_cut_out_sci[cookie_cut_out_sci > 0]), 1e-3),
                                     vmax=np.nanmax(cookie_cut_out_sci)))
-    axs[0].set_title('Empirical PSF')
+    axs[0].set_title(f'Empirical PSF cutout\nFilter={obs_filter}, oversampling={fac_oversamp:.2f}')
     axs[0].set_xlabel('Pixel')
     axs[0].set_ylabel('Pixel')
     divider0 = make_axes_locatable(axs[0])
@@ -83,11 +96,10 @@ def fit_airy_psf(cookie_cut_out_sci, data_empirical_original, obs_filter, x_cent
     fig.colorbar(im0, cax=cax0)
 
     # Airy PSF
-    #ipdb.set_trace(context=10)
     im1 = axs[1].imshow(airy_psf, origin='lower', cmap='gray_r',
                        norm=LogNorm(vmin=np.maximum(np.nanmin(airy_psf[airy_psf > 0]), 1e-3),
                                     vmax=np.nanmax(airy_psf)))
-    axs[1].set_title('Airy PSF')
+    axs[1].set_title('Reference Airy model\nNormalized to empirical total power')
     axs[1].set_xlabel('Pixel')
     axs[1].set_ylabel('Pixel')
     divider1 = make_axes_locatable(axs[1])
@@ -99,19 +111,24 @@ def fit_airy_psf(cookie_cut_out_sci, data_empirical_original, obs_filter, x_cent
     y_pixels = np.arange(cookie_cut_out_sci.shape[1])
     axs[2].plot(y_pixels, cookie_cut_out_sci[mid_row, :], label='Empirical', color='blue')
     axs[2].plot(y_pixels, airy_psf[mid_row, :], label='Model (Airy)', color='orange', linestyle='--')
-    axs[2].set_title('Cross-section')
+    axs[2].set_title('Center-row cross-section\nEmpirical vs Airy reference')
     axs[2].set_xlabel('Pixel')
     axs[2].set_ylabel('Counts')
     axs[2].legend()
 
     # Residuals
     im3 = axs[3].imshow(cookie_cut_out_sci - airy_psf, origin='lower', cmap='gray_r')
-    axs[3].set_title('Residuals')
+    axs[3].set_title('Residuals: empirical minus Airy')
     axs[3].set_xlabel('Pixel')
     axs[3].set_ylabel('Pixel')
     divider3 = make_axes_locatable(axs[3])
     cax3 = divider3.append_axes("right", size="5%", pad=padding_colorbars)
     fig.colorbar(im3, cax=cax3)
+    fig.suptitle(
+        f"Airy-reference comparison for PSF cutout\n"
+        f"Peak-ratio Strehl={peak_flux_empirical / peak_flux_airy:.3f}",
+        fontsize=12,
+    )
     plot_filename = f'total_power_comparison_{plot_string}.png'
     #plt.show()
     os.makedirs(results_write_dir, exist_ok=True)
@@ -132,21 +149,39 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_cook
         x_center_2nd_pass_cookie_oversamp, y_center_2nd_pass_cookie_oversamp, config_observing, fac_oversamp, polychromatic=True,
         results_write_dir="figs_dump"):
     '''
-    Strehl based on PSF fit, using model with fixed aperture dimensions
+    Calculate the Strehl ratio based on a PSF fit using a model with fixed aperture dimensions.
 
-    INPUTS:
-    cookie_cut_out_sci_oversamp: the empirical PSF (oversampled)
-    data_empirical_original: the original empirical data
-    filter_name: the name of the observing filter
-    plot_string: the string to add to the plot file name
-    x_center_final_cookie_oversamp: the x-center of the PSF (i.e., no more centroiding will be done here); in coordinates of the cookie cut-out
-    y_center_final_cookie_oversamp: the y-center of the PSF; in coordinates of the cookie cut-out
-    config_observing: the config object containing the observing parameters
-    fac_oversamp: the oversampling factor
-    polychromatic: whether to use a polychromatic PSF; if true, read in a filter curve; if false, use a single wavelength set in a config file
+    INPUTS
+    ----------
+    cookie_cut_out_sci_oversamp : ndarray
+        The oversampled empirical PSF cutout array (2D).
+    data_empirical_original : ndarray
+        The original empirical data array (2D; native sampling).
+    filter_name : str
+        The name of the observing filter (e.g., 'Lp', 'short-L').
+    plot_string : str
+        A string to add to generated plot file names for identification.
+    x_center_2nd_pass_cookie_oversamp : float
+        X coordinate of the PSF center (in cutout coordinates, oversampled).
+    y_center_2nd_pass_cookie_oversamp : float
+        Y coordinate of the PSF center (in cutout coordinates, oversampled).
+    config_observing : dict
+        Configuration object containing observing parameters (pixel scales, aperture diameters, etc.).
+    fac_oversamp : float or int
+        The oversampling factor of the model/empirical PSF with respect to detector grid.
+    polychromatic : bool, optional
+        If True, use a polychromatic PSF by reading a filter curve.
+        If False, a single wavelength value will be read in from a config file.
+    results_write_dir : str, optional
+        Directory to write out plots and diagnostics. Default is "figs_dump".
 
-    OUTPUTS:
-    strehl_results: a dictionary containing the Strehl ratios from the different methods
+    OUTPUTS
+    -------
+    strehl_results : dict
+        Dictionary containing calculated Strehl ratios using different methods.
+        - 'strehl_fix_ann_ap_max' : Strehl ratio from the max of the empirical and model PSFs.
+        - 'strehl_fix_ann_ap_pow' : Strehl ratio from the enclosed power in the central region.
+        - 'strehl_fix_ann_ap_mtf' : Strehl ratio from the MTF ratios.
     '''
 
     logging.info('--------------------------------')
@@ -238,7 +273,6 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_cook
     test_empirical_2d_masked = nonan_empirical_2d_oversamp * mask_central
     strehl_from_fixed_annular_aperture_power_enclosed = np.sum(test_empirical_2d_masked) / np.sum(model_annular_2d_full_norm_masked)
     #test_factor = np.copy(strehl_from_fixed_annular_aperture_power_enclosed) # use this as a normalization factor downstream
-    #ipdb.set_trace()
 
     ############################################################
     # another method: Fourier transform and use the ratios of the MTF
@@ -264,22 +298,21 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_cook
     # normalize the powers so that power at zero freq is the same in both
     fft_model_power_cutoff_norm = fft_model_power_cutoff * np.nanmax(fft_empirical_power_cutoff) / np.nanmax(fft_model_power_cutoff)
     strehl_from_fixed_annular_aperture_mtf = np.sum(fft_empirical_power_cutoff) / np.sum(fft_model_power_cutoff_norm)
-    #ipdb.set_trace()
 
     # plots subplots of the empirical, normalized model PSF, and residuals
     plt.clf()
     plt.figure(figsize=(15, 5))
     plt.subplot(1, 3, 1)
     plt.imshow(cookie_cut_out_sci_oversamp, origin='lower', cmap='gray_r')
-    plt.title('Empirical')
+    plt.title(f'Empirical oversampled PSF\nFilter={filter_name}, oversampling={fac_oversamp:.2f}')
     plt.colorbar()
     plt.subplot(1, 3, 2)
     plt.imshow(model_annular_2d_oversamp_norm, origin='lower', cmap='gray_r')
-    plt.title('Normalized Model')
+    plt.title('Fixed-annular-aperture model\nNormalized to empirical total power')
     plt.colorbar()
     plt.subplot(1, 3, 3)
     plt.imshow(cookie_cut_out_sci_oversamp - model_annular_2d_oversamp_norm, origin='lower', cmap='gray_r')
-    plt.title('Residuals')
+    plt.title('Residuals: empirical minus fixed model')
     plt.suptitle(
         f"Fixed annular aperture\n"
         f"Fixed: D_aperture={config_observing['D_aperture']['full']:.2f} m, "
@@ -307,7 +340,10 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_cook
     plt.axvline(x=cutoff_freq, color='k', linestyle='--', label='Cutoff frequency', alpha=0.5)
     plt.axvline(x=-cutoff_freq, color='k', linestyle='--', alpha=0.5)
     plt.legend()
-    plt.title(f'Cross-sections of MTFs\nStrehl from MTF: {strehl_from_fixed_annular_aperture_mtf:.2f}')
+    plt.title(
+        f'Fixed-annular-aperture MTF comparison\n'
+        f'Filter={filter_name}, Strehl from MTF={strehl_from_fixed_annular_aperture_mtf:.2f}'
+    )
     file_name_plot = os.path.join(results_write_dir, f'mtf_fixed_ann_ap_{plot_string}.png')
     plt.savefig(file_name_plot)
     logging.info(f'Saved {file_name_plot}')
@@ -333,21 +369,38 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, config_observing, fit_method, pinhole_diam_rad=1e-8,
         results_write_dir="figs_dump"):
     '''
-    Fit a 2D analytical PSF to a given frame.
+    Fit an analytical 2D PSF model to a given science frame.
 
-    INPUTS:
-    cookie_cut_out_sci: 2D array of the cookie cut our from the full science frame
-    data_cookie_empirical_original: the original empirical data (the cookie cut-out array)
-    filter_name: name of the observing filter
-    plot_string: string to add to the plot file name
-    x_center_final_cookie_oversamp: final x-center of the PSF (i.e., no more centroiding will be done here); in coordinates of the cookie cut-out
-    y_center_final_cookie_oversamp: final y-center of the PSF; in coordinates of the cookie cut-out
-    fac_oversamp: oversampling factor
-    config_observing: config object containing the observing parameters
-    fit_method: 'curve_fit' (default) or 'amoeba' - optimizer to use for finding best fit
-    pinhole_diam_rad: size of the pinhole in pixels (if None, the analytical expression for the PSF alone is used; this is equivalent to a pinhole delta function); units radians
+    INPUTS
+    ----------
+    cookie_cut_out_sci_oversamp : ndarray
+        The oversampled empirical PSF cutout array (2D).
+    cookie_cut_out_sci_original : ndarray
+        The original empirical data (the cookie cut-out array; native sampling, 2D).
+    filter_name : str
+        Name of the observing filter (e.g., 'Lp', 'short-L').
+    plot_string : str
+        String to append to output plot file names for identification.
+    x_center_final_cookie_oversamp : float
+        Final X coordinate of the PSF center (in cutout, oversampled grid coordinates).
+    y_center_final_cookie_oversamp : float
+        Final Y coordinate of the PSF center (in cutout, oversampled grid coordinates).
+    fac_oversamp : float or int
+        Oversampling factor for the model/empirical PSF relative to detector grid.
+    config_observing : dict
+        Configuration object containing observing parameters (pixel scales, aperture diameters, etc.).
+    fit_method : str
+        Optimizer to use; 'curve_fit' (default) or 'amoeba'.
+    pinhole_diam_rad : float, optional
+        Size of the pinhole in radians (if None, the analytic PSF is used on its own, i.e., equivalent to a delta function pinhole).
+    results_write_dir : str, optional
+        Directory to write out plots and diagnostics. Default is "figs_dump".
 
-    OUTPUTS:
+    OUTPUTS
+    -------
+    strehl_results : dict
+        Dictionary containing Strehl ratio results and fit diagnostics.
+        - strehl_from_free_annular_aperture_mtf: Strehl ratio from the MTF of the free-parameter annular aperture.
     '''
 
     # Build the model directly on the oversampled grid using the fitted
@@ -537,13 +590,13 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     im_data = ax_triple[0, 0].imshow(
         data_original_2d, origin="lower", cmap="gray_r", vmin=vmin_n, vmax=vmax_n
     )
-    ax_triple[0, 0].set_title("Original data")
+    ax_triple[0, 0].set_title(f"Native empirical PSF\nFilter={filter_name}")
 
     # Top-right: best-fit model
     ax_triple[0, 1].imshow(
         best_fit_model_2d, origin="lower", cmap="gray_r", vmin=vmin_n, vmax=vmax_n
     )
-    ax_triple[0, 1].set_title("Best-fit model")
+    ax_triple[0, 1].set_title("Best-fit free-annular-aperture model")
 
     # Bottom-left: residuals image
     rmax = np.nanmax(np.abs(residuals_fit_native_2d))
@@ -556,7 +609,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         vmin=-25000,
         vmax=25000,
     )
-    ax_triple[1, 0].set_title("Residuals (data − model)")
+    ax_triple[1, 0].set_title("Residuals: native empirical minus best-fit model")
 
     # Bottom-right: 1D cross-section through the center row
     ny, nx = data_original_2d.shape
@@ -568,7 +621,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     ax_triple[1, 1].plot(x_pix, cross_model, label="Model", linestyle="--")
     ax_triple[1, 1].set_xlabel("Pixel")
     ax_triple[1, 1].set_ylabel("Counts")
-    ax_triple[1, 1].set_title("Center-row cross-section")
+    ax_triple[1, 1].set_title("Native center-row cross-section\nEmpirical vs best-fit model")
     ax_triple[1, 1].legend()
 
     # Colorbars
@@ -589,7 +642,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         "None (delta pinhole)" if pinhole_diam_rad is None else f"{pinhole_diam_rad:.2e} rad"
     )
     fig_triple.suptitle(
-        f"Native fit grid — {filter_name} "
+        f"Free-annular-aperture fit on native detector grid — {filter_name} "
         f"(λ={config_observing['monochromatic_observing_filters_lm'][filter_name]*1e6:.2f} μm)\n"
         f"Init: D_aper={initial_guess[0]:.2f}, D_obsc={initial_guess[1]:.2f}, ampl={initial_guess[2]:.2e}\n"
         f"Fit:  D_aper={D_aperture_fit:.2f}±{D_aperture_err:.2f}, "
@@ -612,6 +665,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     ax_lin.plot(x_pix, cross_model, label="Model", linestyle="--")
     ax_lin.set_xlabel("Pixel")
     ax_lin.set_ylabel("Counts")
+    ax_lin.set_title("Center-row cross-section (linear scale)")
     ax_lin.legend()
     # Log: avoid non-positive values
     cross_data_log = cross_data.copy()
@@ -623,7 +677,13 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     ax_log.set_xlabel("Pixel")
     ax_log.set_ylabel("Counts (log)")
     ax_log.set_yscale("log")
+    ax_log.set_title("Center-row cross-section (log scale)")
     ax_log.legend()
+    fig_cs.suptitle(
+        f"Free-annular-aperture cross-sections — {filter_name}\n"
+        f"Native detector row through cutout center",
+        fontsize=11,
+    )
     file_cs = os.path.join(results_write_dir, f"free_ann_ap_cross_sections_lin_log_{plot_string}.png")
     print(f"Saved {file_cs}")
     fig_cs.savefig(file_cs)
@@ -705,7 +765,10 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     plt.axvline(x=cutoff_freq, color='k', linestyle='--', label='Cutoff frequency', alpha=0.5)
     plt.axvline(x=-cutoff_freq, color='k', linestyle='--', alpha=0.5)
     plt.legend()
-    plt.title(f'Cross-sections of MTFs\nStrehl from MTF: {strehl_from_free_annular_aperture_mtf:.2f}')
+    plt.title(
+        f'Free-annular-aperture MTF comparison\n'
+        f'Filter={filter_name}, Strehl from MTF={strehl_from_free_annular_aperture_mtf:.2f}'
+    )
     file_name_plot = os.path.join(results_write_dir, f'mtf_free_ann_ap_{plot_string}.png')
     plt.savefig(file_name_plot)
     logging.info(f'Saved {file_name_plot}')
@@ -721,11 +784,11 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
 
     # Panel 1: Empirical data
     im0 = axs[0,0].imshow(nonan_empirical_2d_oversamp, vmin=vmin, vmax=vmax)
-    axs[0,0].set_title("Empirical")
+    axs[0,0].set_title(f"Empirical oversampled PSF\nFilter={filter_name}")
 
     # Panel 2: Best fit
     im1 = axs[0,1].imshow(best_fit_model_2d_oversamp, vmin=vmin, vmax=vmax)
-    axs[0,1].set_title("Best fit")
+    axs[0,1].set_title("Best-fit free-annular-aperture model")
 
     # Panel 3: Cross-section between empirical and best-fit PSF
     center_y, center_x = np.array(nonan_empirical_2d_oversamp.shape) // 2
@@ -733,34 +796,36 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     cross_best_fit = best_fit_model_2d_oversamp[center_y, :]
     axs[1,0].plot(cross_empirical, label="Empirical")
     axs[1,0].plot(cross_best_fit, label="Best fit")
-    axs[1,0].set_title("Cross-section")
+    axs[1,0].set_title("Center-row cross-section (linear)")
     axs[1,0].legend()
 
     # Panel 3: Cross-section between empirical and best-fit PSF
     axs[1,1].plot(cross_empirical, label="Empirical")
     axs[1,1].plot(cross_best_fit, label="Best fit")
     axs[1,1].set_yscale('log')
-    axs[1,1].set_title("Cross-section")
+    axs[1,1].set_title("Center-row cross-section (log)")
     axs[1,1].legend()
 
     # Panel 3: Initial guess
     im2 = axs[2,0].imshow(initial_guess_model_2d_oversamp, vmin=vmin, vmax=vmax)
-    axs[2,0].set_title("Initial guess")
+    axs[2,0].set_title("Initial free-annular-aperture guess")
 
     # Panel 4: Residuals
     residuals = nonan_empirical_2d_oversamp - best_fit_model_2d_oversamp
     im2 = axs[2,1].imshow(residuals, vmin=vmin, vmax=vmax)
-    axs[2,1].set_title("Empirical - Best fit")
+    axs[2,1].set_title("Residuals: empirical minus best-fit model")
 
     # degbug: write FITS file
     #fits.writeto(f'junk_resids.fits', residuals, overwrite=True)
 
 
     plt.suptitle(
+        f"Free-annular-aperture fit on oversampled PSF\n"
         f"Filter: {filter_name}, λ={config_observing['monochromatic_observing_filters_lm'][filter_name]*1e6:.2f}μm, pix={config_observing['pixel_scales']['img_lm']:.2f}mas, \n"
         f"Best fits: D_aper={D_aperture_fit:.2f}±{D_aperture_err:.2f}m, "
         f'D_obsc={D_obscuration_fit:.2f}±{D_obscuration_err:.2f}m, '
-        f'Amp={ampl_fit:.2f}±{ampl_err:.2f}',
+        f'Amp={ampl_fit:.2f}±{ampl_err:.2f}, '
+        f'Strehl_MTF={strehl_from_free_annular_aperture_mtf:.3f}',
         fontsize=10
     )
 

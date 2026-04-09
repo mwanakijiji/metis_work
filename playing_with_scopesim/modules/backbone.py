@@ -23,6 +23,28 @@ def _save_blinkable_cookie_fyi_plot(
     title: str,
     out_path: str,
 ) -> None:
+    '''
+    Save a plot of a PSF with a scatter point and a title.
+
+    INPUTS
+    ----------
+    image_2d : np.ndarray
+        2D array of the image to plot.
+    scatter_x : float
+        X coordinate of the scatter point.
+    scatter_y : float
+        Y coordinate of the scatter point.
+    title : str
+        Title of the plot.
+    out_path : str
+        Path to save the plot to.
+
+    OUTPUTS
+    -------
+    None
+        Saves the plot to the specified path.
+    '''
+    
     fig, ax = plt.subplots(
         figsize=_COOKIE_FYI_FIGSIZE_INCH,
         dpi=_COOKIE_FYI_DPI,
@@ -39,7 +61,7 @@ def _save_blinkable_cookie_fyi_plot(
 
 @dataclass(frozen=True)
 class SinglePsfFitResult:
-    """Per-PSF outputs from Gaussian fit (native pixel coords) and optional Strehl dicts."""
+    '''Per-PSF outputs from Gaussian fit (native pixel coords) and optional Strehl dicts.'''
 
     coord_x_normsamp: float
     coord_y_normsamp: float
@@ -66,6 +88,45 @@ def process_one_psf(
     fit_annular_aperture_fixed: bool,
     fit_annular_aperture_free: bool,
 ) -> SinglePsfFitResult:
+    '''
+    Process one PSF cutout by oversampling it, centroiding it with a Gaussian fit,
+    and optionally evaluating additional Strehl estimators.
+
+    INPUTS
+    ----------
+    num_coord : int
+        Zero-based index of the PSF currently being processed.
+    num_psfs_to_process : int
+        Total number of PSFs being processed from this detector image.
+    cookie_cutout_original_this_psf : np.ndarray
+        Native-sampling square cutout containing the PSF of interest.
+    oversample_factor : int
+        Factor used to oversample the PSF cutout before centroiding and model fitting.
+    filter_name : str
+        Name of the observing filter associated with the PSF.
+    fp_mask : str
+        Focal-plane mask label used for bookkeeping and plot naming.
+    pp_mask : str
+        Pupil-plane mask label used for bookkeeping and plot naming.
+    config_observing : dict
+        Observing configuration dictionary passed to downstream fitting routines.
+    results_write_dir : str
+        Directory where diagnostic plots and fit products are written.
+    fit_method : str
+        Name of the fitting backend to use for the free annular-aperture fit.
+    fit_simmed_psf : bool
+        Whether to evaluate the ScopeSim-based Strehl workflow if enabled.
+    fit_annular_aperture_fixed : bool
+        Whether to evaluate the fixed-geometry annular-aperture Strehl fit.
+    fit_annular_aperture_free : bool
+        Whether to evaluate the free-geometry annular-aperture Strehl fit.
+
+    OUTPUTS
+    -------
+    SinglePsfFitResult
+        Dataclass containing the Gaussian-fit centroid/FWHM/amplitude values in native
+        pixel units, the Gaussian-based Strehl estimate, and any optional Strehl metrics.
+    '''
     logging.info(f"Processing PSF {num_coord} of {num_psfs_to_process}")
 
     cookie_edge_size_original = cookie_cutout_original_this_psf.shape[0]
@@ -186,22 +247,42 @@ def strehl_psfs(
     fit_method="curve_fit",
 ):
     '''
-    Find the Strehl ratio of a grid of PSFs
+    Measure Strehl-related quantities for a grid of PSFs, save the per-PSF results,
+    and generate a summary diagnostic plot over the detector frame.
 
-    INPUTS:
-    file_name: name of the file containing the grid of PSFs
-    fp_mask: focal plane mask (string)
-    pp_mask: pupil plane mask (string)
-    filter_name: name of the observing filter
-    fit_simmed_psf: whether to fit a ScopeSim-simulated PSF
-    fit_analytical_psf: whether to fit an analytical PSF
-    psfs_subset: 'all' to process all PSFs, or an integer to process only the first N PSFs
-    config_coords_guesses_file_name: name of the configuration file containing the coordinates of the PSFs
-    config_observing: name of the configuration file containing the observing parameters
+    INPUTS
+    ----------
+    file_name : str
+        Path to the FITS file containing the PSF grid to analyze.
+    fp_mask : str
+        Focal-plane mask label used for bookkeeping and output naming.
+    pp_mask : str
+        Pupil-plane mask label used for bookkeeping and output naming.
+    filter_name : str, optional
+        Name of the observing filter associated with the PSF grid.
+    fit_simmed_psf : bool, optional
+        Whether to evaluate the ScopeSim-based Strehl workflow if enabled downstream.
+    fit_annular_aperture_free : bool, optional
+        Whether to evaluate the free-geometry annular-aperture Strehl fit.
+    fit_annular_aperture_fixed : bool, optional
+        Whether to evaluate the fixed-geometry annular-aperture Strehl fit.
+    psfs_subset : str or int, optional
+        Either ``"all"`` to process the full grid or an integer giving how many PSFs
+        from the start of the centroid list to process.
+    config_coords_guesses_file_name : str, optional
+        Path to the configuration file containing initial coordinate guesses.
+    config_observing : dict, optional
+        Observing configuration dictionary passed to downstream PSF-fitting routines.
+    results_write_dir : str, optional
+        Directory where pickled results and diagnostic figures are saved.
+    fit_method : str, optional
+        Name of the fitting backend to use for the free annular-aperture fit.
 
-
-    OUTPUTS:
-    None; writes out plots and data
+    OUTPUTS
+    -------
+    None
+        Writes a pickle containing per-PSF Strehl results and a summary pass/fail flag,
+        and saves a detector-frame diagnostic plot annotated with Strehl values.
     '''
 
     edge_size_original = 21 # pixels along one side of the cutout, original pixel sampling
@@ -342,7 +423,10 @@ def strehl_psfs(
             fontsize=7,
             rotation=20,
         )
-    plt.title("PSF first-pass centroids with free-annular-aperture MTF Strehl")
+    plt.title(
+        "First-pass PSF centroids, Strehl from MTF of free-parameter annular aperture\n"
+        f"Filter={filter_name}, FP mask={fp_mask}, PP mask={pp_mask} "    
+        )
     os.makedirs(results_write_dir, exist_ok=True)
     plot_file_name = os.path.join(
         results_write_dir,
