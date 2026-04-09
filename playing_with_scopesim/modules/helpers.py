@@ -232,8 +232,8 @@ def intensity_annular_aperture(
             ax.add_patch(circle)
             fig.colorbar(im, ax=ax)
             ax.set_title(
-                f'Pinhole-footprint weights on oversampled PSF grid\n'
-                f'Blue dashed lines mark native-pixel boundaries; red circle shows pinhole diameter'
+                f'Pinhole footprint weights on oversampled PSF grid\n'
+                f'Blue: native-pixel boundaries; red: pinhole diameter'
             )
             file_name_plot = os.path.join(results_write_dir, 'pinhole_array_FYI.png')
             plt.savefig(file_name_plot)
@@ -632,6 +632,7 @@ def fit_empirical_fwhm(frame, plot_string, results_write_dir="figs_dump"):
     min_row, min_col, max_row, max_col = prop_biggest[0].bbox
     height_y = max_row - min_row   # axis-aligned y length
     width_x  = max_col - min_col   # axis-aligned x length
+    
 
     # Plot the frame
     plt.figure()
@@ -734,10 +735,10 @@ def fyi_plot_centroiding(array_to_plot, coords_to_plot, title_string=None, zscal
     plt.imshow(array_to_plot, origin='lower', vmin=vmin, vmax=vmax, cmap='gray')
     plt.scatter(coords_to_plot[:, 1], coords_to_plot[:, 0], color='red', s=10)
     if title_string is None:
-        plot_title = "First-pass centroiding diagnostic"
+        plot_title = "First-pass centroiding"
         plot_file_stub = "unnamed"
     else:
-        plot_title = f"First-pass centroiding diagnostic\n{title_string}"
+        plot_title = f"First-pass centroiding\n{title_string}"
         plot_file_stub = title_string
     plt.title(plot_title)
     plot_filename = f"fyi_plot_centroiding_{plot_file_stub}.png"

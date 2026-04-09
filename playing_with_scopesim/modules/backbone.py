@@ -158,6 +158,8 @@ def process_one_psf(
         results_write_dir=results_write_dir,
     )
 
+    logging.info(f"Gaussian-fit FWHM (x, y) (oversampled): ({fwhm_x_pix_gaussian_best_fit_cookie_oversamp:.2f}, {fwhm_y_pix_gaussian_best_fit_cookie_oversamp:.2f})")
+
 
     strehl_updates = {}
 
@@ -392,10 +394,31 @@ def strehl_psfs(
     for psf_results in strehl_results_all.values():
         pass_fail = True if psf_results[criterion_key] >= 0.8 else False
         pass_fail_list.append(pass_fail)
-    logging.info("--------------------------------")
     pass_fail_all = all(pass_fail_list)
+
+    logging.info("--------------------------------")
+    logging.info("--------------------------------")
+    logging.info(
+        "Reminder: the requirements are:\n"
+        "- Ref. Overleaf doc IMG_OPT_04_Test_Description_PSF_Image_Quality\n"
+        "\n"
+        "1. METIS-1408: Quality and alignment of the optical components within Mid-infrared ELT Imager and\n"
+        "Spectrograph (METIS) shall provide diffraction limited performance (Strehl >= 80 %)\n"
+        "at lambda > 3 um in all modes over the entire FOV.\n"
+        "2. METIS-1409: The Instrument Wavefront Error (WFE) shall satisfy the diffraction limit requirement\n"
+        "(Strehl > 0.8) at lambda = 3 um for IMG (both LM and NQ) and IMG. The minimum\n"
+        "RMS WFE below shall be satisfied over the full Field Of View (FOV) relevant to the\n"
+        "given optical path.\n"
+        "3. METIS-2864: The minimum Strehl ratio of the WCU+CFO+IMG-LM optical path shall be >80% at\n"
+        "3.3 um over the entire field of view.\n"
+        "4. METIS-3503: METIS shall be able to characterise the shape of the instrument PSF across the entire\n"
+        "FoV using the WCU."
+    )
+    logging.info("--------------------------------")
+    logging.info("--------------------------------")
     logging.info(f"Pass/fail for each PSF: {pass_fail_list}")
     logging.info(f"PASS/FAIL FOR ALL PSFs: {all(pass_fail_list)}")
+    logging.info("--------------------------------")
     logging.info("--------------------------------")
 
     
