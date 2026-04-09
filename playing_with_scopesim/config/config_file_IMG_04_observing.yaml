@@ -18,26 +18,28 @@ monochromatic_observing_filters_lm:
   HCI_M: 4.95e-6
 
 # file names of actual filter curves
-## ## TODO: MAKE THIS MORE ELEGANT LATER, WITH A SINGLE STEM
-polychromatic_observing_filters_lm:
-  short-L: '/podman-share/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_short-L.dat'
-  Lp: '/podman-share/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_Lp.dat'
-  L_spec: '/podman-share/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_L_spec.dat'
-  Mp: '/podman-share/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_Mp.dat'
-  M_spec: '/podman-share/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_M_spec.dat'
-  Br_alpha: '/podman-share/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_Br_alpha.dat'
-  Br_alpha_ref: '/podman-share/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_Br_alpha_ref.dat'
-  PAH_3.3: '/podman-share/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_PAH_3.3.dat'
-  PAH_3.3_ref: '/podman-share/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_PAH_3.3_ref.dat'
-  CO_1-0_ice: '/podman-share/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_CO_1-0_ice.dat'
-  CO_ref: '/podman-share/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_CO_ref.dat'
-  H2O-ice: '/podman-share/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_H2O-ice.dat'
-  IB_4.05: '/podman-share/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_IB_4.05.dat'
-  HCI_L_short: '/podman-share/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_HCI_L_short.dat'
-  HCI_L_long: '/podman-share/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_HCI_L_long.dat'
-  HCI_M: '/podman-share/metis_work/notebook_working_dir/inst_pkgs/METIS/filters/TC_filter_HCI_M.dat'
+# paths are pre-pended in the code with 
+# PKGS_DIR = (Path(__file__).resolve().parent / "inst_pkgs").resolve()
+polychromatic_observing_filters_lm_leaf_name:
+  short-L: '/METIS/filters/TC_filter_short-L.dat'
+  Lp: '/METIS/filters/TC_filter_Lp.dat'
+  L_spec: '/METIS/filters/TC_filter_L_spec.dat'
+  Mp: '/METIS/filters/TC_filter_Mp.dat'
+  M_spec: '/METIS/filters/TC_filter_M_spec.dat'
+  Br_alpha: '/METIS/filters/TC_filter_Br_alpha.dat'
+  Br_alpha_ref: '/METIS/filters/TC_filter_Br_alpha_ref.dat'
+  PAH_3.3: '/METIS/filters/TC_filter_PAH_3.3.dat'
+  PAH_3.3_ref: '/METIS/filters/TC_filter_PAH_3.3_ref.dat'
+  CO_1-0_ice: '/METIS/filters/TC_filter_CO_1-0_ice.dat'
+  CO_ref: '/METIS/filters/TC_filter_CO_ref.dat'
+  H2O-ice: '/METIS/filters/TC_filter_H2O-ice.dat'
+  IB_4.05: '/METIS/filters/TC_filter_IB_4.05.dat'
+  HCI_L_short: '/METIS/filters/TC_filter_HCI_L_short.dat'
+  HCI_L_long: '/METIS/filters/TC_filter_HCI_L_long.dat'
+  HCI_M: '/METIS/filters/TC_filter_HCI_M.dat'
 
 
+# units are mas/pixel
 pixel_scales:
   img_lm: 5.47
   img_n: 6.79

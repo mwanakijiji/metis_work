@@ -13,6 +13,7 @@ from scipy.optimize import curve_fit
 from scipy.ndimage import zoom
 import ipdb
 from skimage.measure import block_reduce
+from pathlib import Path
 
 from .amoeba import amoeba_minimize
 from .helpers import (
@@ -180,8 +181,10 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_cook
 
     # generate a fixed model PSF (output in 1D, for vestigial reasons); note this involves oversampled images
     if polychromatic:
-        filter_file = config_observing['polychromatic_observing_filters_lm'][filter_name]
-        logging.info(f'Making a polychromatic PSF for filter file: {filter_file}')
+        filters_stem = str((Path(__file__).resolve().parent / "inst_pkgs").resolve()) # stem path of METIS packages
+        filter_file_leaf = config_observing['polychromatic_observing_filters_lm_leaf_name'][filter_name] # leaf path of filter file name
+        filter_file_abs = os.path.join(filters_stem, filter_file_leaf)
+        logging.info(f'Making a polychromatic PSF for filter file: {os.path.basename(filter_file_abs)}')
         intensity_1d_full_1d = model_for_fit_fixed(r_rad_1d_oversamp_masked, 
                                                     D_aperture=config_observing['D_aperture']['full'], 
                                                     D_obscuration=config_observing['D_aperture']['D_obscuration'], 
@@ -191,7 +194,7 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_cook
                                                     pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
                                                     fac_oversamp=fac_oversamp,
                                                     valid_mask=valid_mask, 
-                                                    filter_file=filter_file, 
+                                                    filter_file=filter_file_abs, 
                                                     save_fyi_plot=True,
                                                     results_write_dir=results_write_dir)
     else: # monochromatic
@@ -376,7 +379,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
             shape_original_2d=shape_original_2d,
             fac_oversamp=fac_oversamp,
             pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
-            filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
+            filter_file=config_observing['polychromatic_observing_filters_lm_leaf_name'][filter_name],
             pinhole_diam_rad=pinhole_diam_rad,
             save_fyi_plot=save_fyi_plot,
             results_write_dir=results_write_dir,
@@ -425,7 +428,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
                 centroid_yx_original=(y_center_final_cookie_oversamp,x_center_final_cookie_oversamp),
                 shape_original_2d=shape_original_2d,
                 fac_oversamp=fac_oversamp,
-                filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
+                filter_file=config_observing['polychromatic_observing_filters_lm_leaf_name'][filter_name],
                 pinhole_diam_rad=pinhole_diam_rad_test
             )
 
@@ -494,7 +497,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         shape_original_2d=shape_original_2d,
         fac_oversamp=fac_oversamp,
         pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
-        filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
+        filter_file=config_observing['polychromatic_observing_filters_lm_leaf_name'][filter_name],
         pinhole_diam_rad=pinhole_diam_rad,
         save_fyi_plot=False,
         results_write_dir=results_write_dir,
@@ -508,7 +511,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         shape_original_2d=shape_original_2d,
         fac_oversamp=fac_oversamp,
         pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
-        filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
+        filter_file=config_observing['polychromatic_observing_filters_lm_leaf_name'][filter_name],
         pinhole_diam_rad=pinhole_diam_rad,
         save_fyi_plot=False,
         results_write_dir=results_write_dir,
@@ -638,7 +641,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         shape_oversamp=shape_oversampled_2d,
         fac_oversamp=fac_oversamp,
         pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
-        filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
+        filter_file=config_observing['polychromatic_observing_filters_lm_leaf_name'][filter_name],
         pinhole_diam_rad=pinhole_diam_rad,
         save_fyi_plot=False,
         results_write_dir=results_write_dir,
@@ -652,7 +655,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         shape_oversamp=shape_oversampled_2d,
         fac_oversamp=fac_oversamp,
         pixel_scale_mas=config_observing['pixel_scales']['img_lm'],
-        filter_file=config_observing['polychromatic_observing_filters_lm'][filter_name],
+        filter_file=config_observing['polychromatic_observing_filters_lm_leaf_name'][filter_name],
         pinhole_diam_rad=pinhole_diam_rad,
         save_fyi_plot=False,
         results_write_dir=results_write_dir,

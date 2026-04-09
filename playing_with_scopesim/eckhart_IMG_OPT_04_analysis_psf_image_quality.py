@@ -74,7 +74,7 @@ def main():
 
     # loop over each data state
     #ipdb.set_trace()
-    for state in data_states: # data_states[0:1]: # if just for a small test
+    for state in data_states[0:1]: # if just for a small test
         strehl_psfs(
             state["file_name"],
             fp_mask=state["fp_mask"],
