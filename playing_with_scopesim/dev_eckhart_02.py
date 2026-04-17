@@ -7,30 +7,32 @@ import yaml
 import ipdb
 
 from modules.helpers import load_config_and_pipe
-from modules.backbone import strehl_psfs
+from modules.backbone_img_02 import image_distortion
+
+
+# Make simulated data for the IMG-OPT-02 image distorition test
 
 # Reqs.:
-# - Ref. Overleaf doc IMG_OPT_04_Test_Description_PSF_Image_Quality
+# - Ref. Overleaf doc IMG_OPT_02_Test_Geometric_Distortion
 # 
-# 1. METIS-1408: Quality and alignment of the optical components within Mid-infrared ELT Imager and
-# Spectrograph (METIS) shall provide diffraction limited performance (Strehl ≥ 80 %)
-# at λ > 3μm in all modes over the entire FOV.
-# 2. METIS-1409: The Instrument Wavefront Error (WFE) shall satisfy the diffraction limit requirement
-# (Strehl>0.8) at lambda = 3 μm for IMG (both LM and NQ) and IMG. The minimum
-# RMS WFE below shall be satisfied over the full Field Of View (FOV) relevant to the
-# given optical path.
-# 3. METIS-2864: The minimum Strehl ratio of the WCU+CFO+IMG-LM optical path shall be >80% at
-# 3.3μm over the entire field of view.
-# 4. METIS-3503: METIS shall be able to characterise the shape of the instrument PSF across the entire
-# FoV using the WCU.
+# 1. METIS-1097: The Imager shall provide a pixel scale of 5.47 +0.26/-0.26 mas/pix for the LM-band and 
+#               6.79+0.25/-0.50 mas/pix for the N-band.
+# METIS-3502: After calibration, the distortions introduced by METIS shall be removed to better than
+#               0.5 mas (ca. 1/10 px for the L band imager) over the full field of view.
+# METIS-8222: The center of the H2RG chip within IMG-LM-DET shall be offset from the METIS optical axis 
+#               by 175 mas ± 25 mas on-sky PtV in the "across H2RG stripe" direction (i.e., perpendicularly 
+#               to the orientation of the 32 stripes in the H2RG detector).
+# METIS-9920: Image scale and distortion of METIS shall be constant (for each optical configuration, even after 
+#               change of observing modes) to an accuracy of 10-3 (goal: 10-4) at L/M-band and 2×10-3 (goal: 2×10-4) 
+#               at N-band with respect to the full field of view. 
 
 def main():
 
     stem = '/podman-share/metis_work/playing_with_scopesim/'
     # config file with the observing parameters
-    observing_config_file = stem + 'config/config_file_IMG_02_observing.yaml'
+    observing_config_file = stem + 'config/config_file_IMG_02_observing.yaml' # needed? TBD
     # config file with the data states (i.e., how to analyze each PSF)
-    data_states_config_file = stem + 'config/config_file_IMG_02_strehl_runs.yaml'
+    data_states_config_file = stem + 'config/config_file_IMG_02_strehl_runs.yaml' # needed? TBD
 
     now = datetime.datetime.now()
 
@@ -75,7 +77,7 @@ def main():
     # loop over each data state
     #ipdb.set_trace()
     for state in data_states: # [0:1]: # if just for a small test
-        strehl_psfs(
+        image_distortion(
             state["file_name"],
             fp_mask=state["fp_mask"],
             pp_mask=state["pp_mask"],

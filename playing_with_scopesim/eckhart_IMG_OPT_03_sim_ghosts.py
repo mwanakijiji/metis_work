@@ -4,26 +4,18 @@
 # - Ref. Overleaf doc IMG_OPT_03_In_Field_Straylight_and_Ghosts
 # 
 # 1. METIS-1189: The maximum allowed stray light irradiance from an in-field source shall be less than
-0.1 % of the peak irradiance in the focal planes of the IMG. Hereby, stray light con-
-tains scattering from opto-mechanical surfaces in Mid-infrared ELT Imager and Spec-
-trograph (METIS).
+#               0.1 % of the peak irradiance in the focal planes of the IMG. Hereby, stray light con-
+#                contains scattering from opto-mechanical surfaces in Mid-infrared ELT Imager and Spectrograph (METIS).
 # 2. 1429: The maximum allowed stray light irradiance in the CFO-FP2 plane from an in-field
-source positioned in the METIS input focal plane shall be less than 0.06 % of the peak
-irradiance.
-# 3. 9522: After data reduction and calibration, the flux in optical artefacts and ghosts shall be
-less than the 3-sigma thermal background noise for one hour of observations and for
-the respective spatial scale of the ghost, i.e. point-source-like ghosts shall contain less
-flux than the point-source sensitivity limit; extended ghosts shall contain less flux than
-the surface brightness limit for that extension. This shall hold when the brightness of
-the celestial source causing the artefact(s) corresponds to the saturation limit in the
-fastest full-frame operation.
-
-# The procedure for measuring the image quality follows that of IMG-OPT-01, but with additional exposures
-# made at positions designed to obtain fully spatially sampled imaging. A basic offset of half a pixel is used
-# for the PSF image quality measurements in this test in horizontal, vertical, and diagonal directions. We also
-# need to achieve a significantly higher SNR for accurate measurement of the FWHM, and better control of
-# calibration and flat fielding errors for measurement of the Encircled Energy. The flat field will be derived
-# from IMG-RAD-04.
+#               source positioned in the METIS input focal plane shall be less than 0.06 % of the peak
+#               irradiance.
+# 3. METIS-9522: After data reduction and calibration, the flux in optical artefacts and ghosts shall be
+#               less than the 3-sigma thermal background noise for one hour of observations and for
+#               the respective spatial scale of the ghost, i.e. point-source-like ghosts shall contain less
+#               flux than the point-source sensitivity limit; extended ghosts shall contain less flux than
+#               the surface brightness limit for that extension. This shall hold when the brightness of
+#               the celestial source causing the artefact(s) corresponds to the saturation limit in the
+#               fastest full-frame operation.
 
 import numpy as np
 from astropy.io import fits
