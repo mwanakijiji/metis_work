@@ -244,7 +244,12 @@ def expected_light_exterior(radius_arcsec, wavelength=3.3e-6, diameter=39.0, pla
     return energy_outside
 
 
-def measure_light_exterior(array_input, center_xy_pix=[1024, 1024], wavelength=3.3e-6, diameter_pupil=39.0, plate_scale=0.00547):
+def measure_light_exterior(array_input, 
+                            center_xy_pix=[1024, 1024], 
+                            wavelength=3.3e-6, 
+                            diameter_pupil=39.0, 
+                            plate_scale_mas=5.47,
+                            results_write_dir="figs_dump"):
     '''
     Measure the fraction of light exterior to range of radii in an array
 
@@ -258,8 +263,8 @@ def measure_light_exterior(array_input, center_xy_pix=[1024, 1024], wavelength=3
         Wavelength in meters (default: 3.3e-6 m).
     diameter_pupil : float, optional
         Telescope pupil diameter, in meters (default: 39.0 m).
-    plate_scale : float, optional
-        Arcsec per pixel (default: 5.47 mas/pix for LM-band).
+    plate_scale_mas : float, optional
+        Mas per pixel (default: 5.47 mas/pix for LM-band).
     
     OUTPUTS
     -------
@@ -280,15 +285,16 @@ def measure_light_exterior(array_input, center_xy_pix=[1024, 1024], wavelength=3
 
     # based on the wavelength of light, where should the first dark Airy rings be?
     dark_ring_arcsec_array = (wavelength / diameter_pupil) * 206265 * dark_ring_arcsec_array_units_ld
-    dark_ring_pix_array = dark_ring_arcsec_array / plate_scale # [pix]
+    dark_ring_pix_array = dark_ring_arcsec_array / (1e-3 * plate_scale_mas) # [pix]
 
+    # find fractions of PSF light to be expected outside each of the dark Airy rings
     exterior_fraction = expected_light_exterior(dark_ring_arcsec_array, \
         wavelength=wavelength, \
             diameter=diameter_pupil, \
-                plate_scale=plate_scale)
+                plate_scale=1e-3 * plate_scale_mas)
 
     # FYI plot to see if function is working right
-
+    '''
     plt.clf()
     lambda_over_d = (wavelength / diameter_pupil) * 206265
     steps_subarray = np.linspace(0, 10, 200)
@@ -296,28 +302,36 @@ def measure_light_exterior(array_input, center_xy_pix=[1024, 1024], wavelength=3
     test_exterior_fraction = expected_light_exterior(radius_arcsec_array, \
         wavelength=wavelength, \
             diameter=diameter_pupil, \
-                plate_scale=plate_scale)
+                plate_scale=1e-3 * plate_scale_mas)
     plt.plot(steps_subarray, test_exterior_fraction)
     plt.xlabel('Radius [lamdbda/D]')
     plt.ylabel('Fraction of energy')
     plt.yscale('log')
     plt.title('Fraction of energy exterior to radius, circular Airy pattern')
-    plt.show()
+    file_name_plot = os.path.join(results_write_dir, f"fyi_plot_exterior_fraction_vs_radius.png")
+    plt.savefig(file_name_plot)
+    logging.info(f"Saved {file_name_plot}")
     plt.close()
-
+    '''
 
     # sum over all the pixels in the array
     sum_pixels_unmasked = np.nansum(array_input)
 
     # make a circular mask in the data frame, where all the pixels within the dark ring are nans
     # Define a circular mask centered at (x_center, y_center) with radius dark_ring_rad [pixels]
-    y_indices, x_indices = np.ogrid[:array_input.shape[0], :array_input.shape[1]]
+    # Build a coordinate grid centered on center_xy_pix so (0, 0) is the PSF center.
+    y_indices, x_indices = np.ogrid[
+        -center_xy_pix[1] : array_input.shape[0] - center_xy_pix[1],
+        -center_xy_pix[0] : array_input.shape[1] - center_xy_pix[0],
+    ]
 
     ratio_exterior_measured_array = []
 
+    ipdb.set_trace()
+
     for num_ring in range(0, len(dark_ring_pix_array)):
 
-        mask_circle = (x_indices - center_xy_pix[0])**2 + (y_indices - center_xy_pix[1])**2 <= dark_ring_pix_array[num_ring]**2
+        mask_circle = x_indices**2 + y_indices**2 <= dark_ring_pix_array[num_ring]**2
         data_copy = np.copy(array_input)
 
         # mask the central region of the PSF and add pixels
@@ -332,7 +346,7 @@ def measure_light_exterior(array_input, center_xy_pix=[1024, 1024], wavelength=3
         print(f'Fraction of irradiance measured exterior to radius: {ratio_exterior_measured:.4f}')
         print(f'Fraction of irradiance expected exterior to radius: {ratio_exterior_expected:.4f}')
         print(f'Ratio of exterior pixels measured to expected: {ratio_exterior_measured:.4f} / {ratio_exterior_expected:.4f}')
-
+        
         # FYI plot
         '''
         plt.clf()
@@ -344,10 +358,18 @@ def measure_light_exterior(array_input, center_xy_pix=[1024, 1024], wavelength=3
         plt.close()
         '''
 
+    ipdb.set_trace()
+
+    ## ## CONTINUE HERE: IF RADIUS INCREASES LINEARLY AND THERE IS AN IMPERFECT BACKGROUND SUBTRACTION THAT LEAVES 
+    # A CONSTANT BACKGROUND OFFSET, THE RATE AT WHICH RESIDUALS INCREASE SHOULD BE **2 (?).
+    # SO, CHECK THE SLOPE OF THE RESIDUALS INCREASE, AS WELL AS ITS LINEARITY
+    #######  ... AND ANOTHER FUNCTION TO LOCATE DIFFUSE SHAPES
+
     ratio_exterior_measured_over_expected = np.divide(ratio_exterior_measured_array, exterior_fraction)
     print(f'Net ratio of exterior pixels measured to expected: {ratio_exterior_measured_over_expected:.4f}')
 
     return 
+
 
 
 def stray_light(
@@ -476,7 +498,7 @@ def stray_light(
         #x_cen_1st_pass_oversamp = x_cen_1st_pass_native * oversample_factor
         #y_cen_1st_pass_oversamp = y_cen_1st_pass_native * oversample_factor
 
-        ipdb.set_trace()
+        
         
         # find coordinates (and later other things?)
         centroid_results_this_psf = process_one_psf_stray_light(
@@ -506,7 +528,21 @@ def stray_light(
         '''
         # put the results from this PSF into the overall dictionary
         centroid_results_all[f'psf_num_{num_coord:02d}'] = centroid_results_this_psf
+
+        # based on the center of the PSF, measure the stray light outside of it
+        ## ## TODO: ENABLE POLYCHROMATIC PSFS IN THE BELOW
+        ipdb.set_trace()
+        measure_light_exterior(
+            array_input=grid_data,
+            center_xy_pix=[x_cen_1st_pass_native, y_cen_1st_pass_native],
+            wavelength=config_observing['monochromatic_observing_filters_lm'][filter_name],
+            diameter_pupil=config_observing['D_aperture']['full'],
+            plate_scale_mas=config_observing['pixel_scales']['img_lm'],
+            results_write_dir=results_write_dir,
+        )
     
+        ipdb.set_trace()
+
     # pass/fail placeholder: criteria for distortion requirement TBD
     pass_fail_list = []
     criterion_key = 'PLACEHOLDER'

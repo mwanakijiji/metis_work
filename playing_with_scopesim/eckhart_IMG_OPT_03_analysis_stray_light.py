@@ -7,38 +7,41 @@ import yaml
 import ipdb
 
 from modules.helpers import load_config_and_pipe
-from modules.backbone_img_02 import image_distortion
+from modules.backbone_img_03 import stray_light
 
 
-# Make simulated data for the IMG-OPT-02 image distorition test
+# Analyze data for the IMG-OPT-03 stray light test
 
 # Reqs.:
-# - Ref. Overleaf doc IMG_OPT_02_Test_Geometric_Distortion
+# - Ref. Overleaf doc IMG_OPT_03_In_Field_Straylight_and_Ghosts
 # 
-# 1. METIS-1097: The Imager shall provide a pixel scale of 5.47 +0.26/-0.26 mas/pix for the LM-band and 
-#               6.79+0.25/-0.50 mas/pix for the N-band.
-# METIS-3502: After calibration, the distortions introduced by METIS shall be removed to better than
-#               0.5 mas (ca. 1/10 px for the L band imager) over the full field of view.
-# METIS-8222: The center of the H2RG chip within IMG-LM-DET shall be offset from the METIS optical axis 
-#               by 175 mas ± 25 mas on-sky PtV in the "across H2RG stripe" direction (i.e., perpendicularly 
-#               to the orientation of the 32 stripes in the H2RG detector).
-# METIS-9920: Image scale and distortion of METIS shall be constant (for each optical configuration, even after 
-#               change of observing modes) to an accuracy of 10-3 (goal: 10-4) at L/M-band and 2×10-3 (goal: 2×10-4) 
-#               at N-band with respect to the full field of view. 
+# 1. METIS-1189: The maximum allowed stray light irradiance from an in-field source shall be less than
+#               0.1 % of the peak irradiance in the focal planes of the IMG. Hereby, stray light con-
+#                contains scattering from opto-mechanical surfaces in Mid-infrared ELT Imager and Spectrograph (METIS).
+# 2. METIS-1429: The maximum allowed stray light irradiance in the CFO-FP2 plane from an in-field
+#               source positioned in the METIS input focal plane shall be less than 0.06 % of the peak
+#               irradiance.
+# 3. METIS-9522: After data reduction and calibration, the flux in optical artefacts and ghosts shall be
+#               less than the 3-sigma thermal background noise for one hour of observations and for
+#               the respective spatial scale of the ghost, i.e. point-source-like ghosts shall contain less
+#               flux than the point-source sensitivity limit; extended ghosts shall contain less flux than
+#               the surface brightness limit for that extension. This shall hold when the brightness of
+#               the celestial source causing the artefact(s) corresponds to the saturation limit in the
+#               fastest full-frame operation.
 
 def main():
 
     stem = '/podman-share/metis_work/playing_with_scopesim/'
     # config file with the observing parameters
-    observing_config_file = stem + 'config/config_file_IMG_02_observing.yaml' # needed? TBD
+    observing_config_file = stem + 'config/config_file_IMG_03_observing.yaml' # needed? TBD
     # config file with the data states (i.e., how to analyze each PSF)
-    data_states_config_file = stem + 'config/config_file_IMG_02_strehl_runs.yaml' # needed? TBD
+    data_states_config_file = stem + 'config/config_file_IMG_03_strehl_runs.yaml' # needed? TBD
 
     now = datetime.datetime.now()
 
     # initialize logging
-    log_dir = stem + 'IMG_02_logs/'
-    log_file_name = log_dir + 'log_IMG_02_analysis_psf_image_quality_' + now.strftime('%Y-%m-%d_%H-%M-%S') + '.txt'    
+    log_dir = stem + 'IMG_03_logs/'
+    log_file_name = log_dir + 'log_IMG_03_analysis_psf_image_quality_' + now.strftime('%Y-%m-%d_%H-%M-%S') + '.txt'    
     os.makedirs(log_dir, exist_ok=True)
     logging.basicConfig(
         level=logging.INFO,
@@ -51,7 +54,7 @@ def main():
     )
     logging.info(f'Log file created at {now.strftime("%Y-%m-%d %H:%M:%S")}')
     logging.info(f'Log file name: {log_file_name}')
-    logging.info(f'Log file directory: {stem + "IMG_02_logs/"}')
+    logging.info(f'Log file directory: {stem + "IMG_03_logs/"}')
 
     # read in main config file
     observing_config = load_config_and_pipe(config_file_choice=observing_config_file, print_one_line=False)
@@ -77,7 +80,7 @@ def main():
     # loop over each data state
     #ipdb.set_trace()
     for state in data_states: # [0:1]: # if just for a small test
-        image_distortion(
+        stray_light(
             state["file_name"],
             fp_mask=state["fp_mask"],
             pp_mask=state["pp_mask"],
