@@ -31,8 +31,9 @@ def _savefig_atomic_with_retry(fig, file_name_plot, max_attempts=5, retry_sleep_
     '''
     os.makedirs(os.path.dirname(file_name_plot), exist_ok=True)
 
+    base_name, ext = os.path.splitext(file_name_plot)
     for attempt in range(1, max_attempts + 1):
-        tmp_file_name = f"{file_name_plot}.tmp-{os.getpid()}-{attempt}"
+        tmp_file_name = f"{base_name}_tmp-{os.getpid()}-{attempt}{ext}"
         try:
             fig.savefig(tmp_file_name)
             os.replace(tmp_file_name, file_name_plot)
@@ -170,7 +171,8 @@ def fit_airy_psf(cookie_cut_out_sci, data_empirical_original, obs_filter, x_cent
     #plt.show()
     os.makedirs(results_write_dir, exist_ok=True)
     file_path = os.path.join(results_write_dir, plot_filename)
-    plt.savefig(file_path)
+    _savefig_atomic_with_retry(fig, file_path)
+    plt.close(fig)
     logging.info(f'Saved {file_path}')
 
     strehl_airy_max = peak_flux_empirical / peak_flux_airy
@@ -687,7 +689,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     )
     
     file_triple = os.path.join(results_write_dir, f"free_ann_ap_data_model_resid_native_{plot_string}.png")
-    fig_triple.savefig(file_triple)
+    _savefig_atomic_with_retry(fig_triple, file_triple)
     logging.info(f"Saved {file_triple}")
     plt.close(fig_triple)
 
@@ -720,7 +722,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     )
     file_cs = os.path.join(results_write_dir, f"free_ann_ap_cross_sections_lin_log_{plot_string}.png")
     print(f"Saved {file_cs}")
-    fig_cs.savefig(file_cs)
+    _savefig_atomic_with_retry(fig_cs, file_cs)
     plt.close(fig_cs)
     print(f"Saved {file_cs}")
 
@@ -788,25 +790,23 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     strehl_from_free_annular_aperture_mtf = np.sum(fft_empirical_power_cutoff) / np.sum(fft_model_power_cutoff_norm)
     logging.info(f"Strehl from free annular aperture, MTF: {strehl_from_free_annular_aperture_mtf}")
     # plot a cross-section through the FTs of the empirical and model PSFs
-    plt.clf()
-    plt.figure(figsize=(30, 5))
-    plt.subplot(1, 1, 1)
+    fig_mtf, ax_mtf = plt.subplots(1, 1, figsize=(30, 5))
     x_mask = (fx >= -2 * cutoff_freq) & (fx <= 2 * cutoff_freq)
-    plt.plot(fx[x_mask], fft_empirical_power_cutoff[n_fft // 2][x_mask], label='Empirical')
-    plt.plot(fx[x_mask], fft_model_power_cutoff_norm[n_fft // 2][x_mask], label='Model')
-    plt.xlabel('Frequency (cycles per radian)')
-    plt.ylabel('Power (units TBD)')
-    plt.axvline(x=cutoff_freq, color='k', linestyle='--', label='Cutoff frequency', alpha=0.5)
-    plt.axvline(x=-cutoff_freq, color='k', linestyle='--', alpha=0.5)
-    plt.legend()
-    plt.title(
+    ax_mtf.plot(fx[x_mask], fft_empirical_power_cutoff[n_fft // 2][x_mask], label='Empirical')
+    ax_mtf.plot(fx[x_mask], fft_model_power_cutoff_norm[n_fft // 2][x_mask], label='Model')
+    ax_mtf.set_xlabel('Frequency (cycles per radian)')
+    ax_mtf.set_ylabel('Power (units TBD)')
+    ax_mtf.axvline(x=cutoff_freq, color='k', linestyle='--', label='Cutoff frequency', alpha=0.5)
+    ax_mtf.axvline(x=-cutoff_freq, color='k', linestyle='--', alpha=0.5)
+    ax_mtf.legend()
+    ax_mtf.set_title(
         f'Free-annular-aperture MTF comparison\n'
         f'Filter={filter_name}, Strehl from MTF={strehl_from_free_annular_aperture_mtf:.2f}'
     )
     file_name_plot = os.path.join(results_write_dir, f'mtf_free_ann_ap_{plot_string}.png')
-    plt.savefig(file_name_plot)
+    _savefig_atomic_with_retry(fig_mtf, file_name_plot)
     logging.info(f'Saved {file_name_plot}')
-    plt.close()
+    plt.close(fig_mtf)
 
     zscale = ZScaleInterval()
     vmin, vmax = zscale.get_limits(nonan_empirical_2d_oversamp)
@@ -869,9 +869,9 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
 
 
     file_name_plot = os.path.join(results_write_dir, f'free_ann_ap_best_fit_{plot_string}.png')
-    plt.savefig(file_name_plot)
+    _savefig_atomic_with_retry(fig, file_name_plot)
     logging.info(f"Saved {file_name_plot}")
-    plt.close()
+    plt.close(fig)
 
     # return dict of Strehl ratios found with different methods
     strehl_results = {
