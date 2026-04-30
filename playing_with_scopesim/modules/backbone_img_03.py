@@ -11,6 +11,7 @@ from scipy.ndimage import zoom
 from photutils.centroids import centroid_2dg, centroid_sources
 import pickle
 from scipy.special import j0, j1
+from astropy.visualization import ImageNormalize, ZScaleInterval
 
 
 
@@ -200,6 +201,7 @@ def process_one_psf_stray_light(
 def expected_light_exterior(radius_arcsec, wavelength=3.3e-6, diameter=39.0, plate_scale=0.00547):
     """
     Calculate the fraction of the total PSF (Airy pattern) energy outside a given radius [arcsec]
+
     Parameters
     ----------
     radius_arcsec : float or array-like
@@ -272,6 +274,7 @@ def measure_light_exterior(array_input,
        TBD
     '''
     # dark rings in units of lambda/D
+
     dark_ring_arcsec_array_units_ld = np.array([1.21967, 
                                                 2.233131, 
                                                 3.238315, 
@@ -283,8 +286,15 @@ def measure_light_exterior(array_input,
                                                 9.245893, 
                                                 10.246293])
 
+
+    #dark_ring_arcsec_array_units_ld = np.linspace(1, 4.5, 100)
+
     # based on the wavelength of light, where should the first dark Airy rings be?
     dark_ring_arcsec_array = (wavelength / diameter_pupil) * 206265 * dark_ring_arcsec_array_units_ld
+
+    # drop-in, debug
+    dark_ring_arcsec_array = np.linspace(0, 4.5, 100)
+    
     dark_ring_pix_array = dark_ring_arcsec_array / (1e-3 * plate_scale_mas) # [pix]
 
     # find fractions of PSF light to be expected outside each of the dark Airy rings
@@ -326,27 +336,48 @@ def measure_light_exterior(array_input,
     ]
 
     ratio_exterior_measured_array = []
+    ratio_exterior_expected_array = []
+
+    # for debugging: mask the crescent moon
+    #array_input[1250:2000,1250:2000] = array_input[0:750,0:750]
 
     ipdb.set_trace()
 
+    # loop over dark Airy ring intervals to measure the fraction of light exterior to each ring
     for num_ring in range(0, len(dark_ring_pix_array)):
 
+        # mask a circular area around the PSF
         mask_circle = x_indices**2 + y_indices**2 <= dark_ring_pix_array[num_ring]**2
         data_copy = np.copy(array_input)
 
-        # mask the central region of the PSF and add pixels
+        # mask the central region of the PSF and add remaining counts outside of that region
         data_copy[mask_circle] = np.nan
         sum_pixels_masked = np.nansum(data_copy)
 
+        # the measured power in the exterior region, normalized
         ratio_exterior_measured = sum_pixels_masked / sum_pixels_unmasked
         ratio_exterior_measured_array.append(ratio_exterior_measured) # append to array
 
+        # the expected power in the exterior region, normalized
         ratio_exterior_expected = exterior_fraction[num_ring]
+        ratio_exterior_expected_array.append(ratio_exterior_expected) # append to array
 
         print(f'Fraction of irradiance measured exterior to radius: {ratio_exterior_measured:.4f}')
         print(f'Fraction of irradiance expected exterior to radius: {ratio_exterior_expected:.4f}')
         print(f'Ratio of exterior pixels measured to expected: {ratio_exterior_measured:.4f} / {ratio_exterior_expected:.4f}')
         
+        # FYI plot
+
+        plt.clf()
+        norm = ImageNormalize(data_copy, interval=ZScaleInterval())
+        plt.imshow(data_copy, origin="lower", cmap="gray", norm=norm)
+
+        #plt.imshow(data_copy, origin='lower', cmap='gray')
+        plt.colorbar()
+        plt.show()
+        plt.savefig('junk.png')
+
+
         # FYI plot
         '''
         plt.clf()
@@ -357,6 +388,7 @@ def measure_light_exterior(array_input,
         plt.show()
         plt.close()
         '''
+        ipdb.set_trace()
 
     ipdb.set_trace()
 
@@ -365,7 +397,7 @@ def measure_light_exterior(array_input,
     # SO, CHECK THE SLOPE OF THE RESIDUALS INCREASE, AS WELL AS ITS LINEARITY
     #######  ... AND ANOTHER FUNCTION TO LOCATE DIFFUSE SHAPES
 
-    ratio_exterior_measured_over_expected = np.divide(ratio_exterior_measured_array, exterior_fraction)
+    ratio_exterior_measured_over_expected = np.divide(ratio_exterior_measured_array, ratio_exterior_expected_array)
     print(f'Net ratio of exterior pixels measured to expected: {ratio_exterior_measured_over_expected:.4f}')
 
     return 
@@ -531,7 +563,7 @@ def stray_light(
 
         # based on the center of the PSF, measure the stray light outside of it
         ## ## TODO: ENABLE POLYCHROMATIC PSFS IN THE BELOW
-        ipdb.set_trace()
+
         measure_light_exterior(
             array_input=grid_data,
             center_xy_pix=[x_cen_1st_pass_native, y_cen_1st_pass_native],

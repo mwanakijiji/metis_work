@@ -21,6 +21,40 @@ import ipdb
 
 
 
+def setup_logging(log_dir, log_file_name, now=None):
+    '''
+    Initialize logging with a file + console handler and pipe basic metadata.
+
+    INPUTS
+    ----------
+    log_dir : str
+        Directory where the log file should be written.
+    log_file_name : str
+        Full path to the output log file.
+    now : datetime.datetime, optional
+        Timestamp used for the "created at" log line. If None, that line is skipped.
+
+    OUTPUTS
+    -------
+    None
+        Configures the root logger and writes startup log lines.
+    '''
+    os.makedirs(log_dir, exist_ok=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file_name),
+            logging.StreamHandler()
+        ],
+        force=True
+    )
+    if now is not None:
+        logging.info(f'Log file created at {now.strftime("%Y-%m-%d %H:%M:%S")}')
+    logging.info(f'Log file name: {log_file_name}')
+    logging.info(f'Log file directory: {log_dir}')
+
+
 def load_config_and_pipe(config_file_choice, print_one_line=False):
     '''
     Load a YAML configuration file and pipe its contents to the log.

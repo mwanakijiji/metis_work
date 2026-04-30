@@ -6,8 +6,8 @@ import logging
 import yaml
 import ipdb
 
-from modules.helpers import load_config_and_pipe
-from modules.backbone import strehl_psfs
+from modules.helpers import load_config_and_pipe, setup_logging
+from modules.backbone_img_04 import strehl_psfs
 
 # Reqs.:
 # - Ref. Overleaf doc IMG_OPT_04_Test_Description_PSF_Image_Quality
@@ -37,19 +37,7 @@ def main():
     # initialize logging
     log_dir = stem + 'IMG_04_logs/'
     log_file_name = log_dir + 'log_IMG_04_analysis_psf_image_quality_' + now.strftime('%Y-%m-%d_%H-%M-%S') + '.txt'    
-    os.makedirs(log_dir, exist_ok=True)
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_file_name),
-            logging.StreamHandler()
-        ],
-        force=True
-    )
-    logging.info(f'Log file created at {now.strftime("%Y-%m-%d %H:%M:%S")}')
-    logging.info(f'Log file name: {log_file_name}')
-    logging.info(f'Log file directory: {stem + "IMG_04_logs/"}')
+    setup_logging(log_dir=log_dir, log_file_name=log_file_name, now=now)
 
     # read in main config file
     observing_config = load_config_and_pipe(config_file_choice=observing_config_file, print_one_line=False)
