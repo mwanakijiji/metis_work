@@ -130,8 +130,6 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
 
     logging.info('Closing WCU BB aperture first to get a background ...')
     wcu.set_bb_aperture(value = 0.0)
-
-    ipdb.set_trace()
     
     metis.observe()
 

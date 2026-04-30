@@ -741,6 +741,119 @@ def fit_gaussian(frame, center_guess):
     return fitted_array, x_center_pix, y_center_pix, fwhm_x_pix, fwhm_y_pix, sigma_x_pix, sigma_y_pix, angle_theta_deg, amplitude_counts
 
 
+def fit_psf_gaussian_from_native_array(
+    original_array,
+    oversample_factor,
+    coords_xy_1st_pass_normsamp=None,
+    edge_size_oversamp=30,
+):
+    '''
+    Oversample a PSF image, fit a 2D Gaussian on an oversampled cutout, and map
+    fitted centroid/FWHM values back to native sampling.
+
+    INPUTS
+    ----------
+    original_array : np.ndarray
+        Native-sampled 2D PSF image.
+    oversample_factor : int or float
+        Oversampling factor.
+    coords_xy_1st_pass_normsamp : sequence of 2 floats, optional
+        First-pass centroid guess in native sampling as [x, y]. If None, the image
+        center is used.
+    edge_size_oversamp : int or None, optional
+        Cutout size (in oversampled pixels). If None, the full oversampled array is
+        used for fitting.
+
+    OUTPUTS
+    -------
+    dict
+        Dictionary containing oversampled arrays, fitted Gaussian products, and
+        centroid/FWHM/amplitude values in both oversampled and native sampling.
+    '''
+    oversampled_array = zoom(original_array, oversample_factor, order=3)
+
+    if coords_xy_1st_pass_normsamp is None:
+        coords_xy_1st_pass_normsamp = [
+            original_array.shape[1] / 2,
+            original_array.shape[0] / 2,
+        ]
+    coords_xy_1st_pass_oversamp_fullarray = oversample_factor * np.array(
+        [coords_xy_1st_pass_normsamp[0], coords_xy_1st_pass_normsamp[1]]
+    )
+
+    if edge_size_oversamp is None:
+        idx_cutout_oversamp_x1 = 0
+        idx_cutout_oversamp_y1 = 0
+        cookie_cut_out_sci_oversamp = oversampled_array
+        coords_guess_xy_cutout_oversamp = [
+            coords_xy_1st_pass_oversamp_fullarray[0],
+            coords_xy_1st_pass_oversamp_fullarray[1],
+        ]
+    else:
+        idx_cutout_oversamp_x1 = int(
+            coords_xy_1st_pass_oversamp_fullarray[0] - edge_size_oversamp / 2
+        )
+        idx_cutout_oversamp_x2 = int(
+            coords_xy_1st_pass_oversamp_fullarray[0] + edge_size_oversamp / 2
+        )
+        idx_cutout_oversamp_y1 = int(
+            coords_xy_1st_pass_oversamp_fullarray[1] - edge_size_oversamp / 2
+        )
+        idx_cutout_oversamp_y2 = int(
+            coords_xy_1st_pass_oversamp_fullarray[1] + edge_size_oversamp / 2
+        )
+        cookie_cut_out_sci_oversamp = oversampled_array[
+            idx_cutout_oversamp_y1:idx_cutout_oversamp_y2,
+            idx_cutout_oversamp_x1:idx_cutout_oversamp_x2,
+        ]
+        coords_guess_xy_cutout_oversamp = [
+            coords_xy_1st_pass_oversamp_fullarray[0] - idx_cutout_oversamp_x1,
+            coords_xy_1st_pass_oversamp_fullarray[1] - idx_cutout_oversamp_y1,
+        ]
+
+    (
+        cookie_cut_out_best_fit,
+        x_center_pix_oversamp_cutout,
+        y_center_pix_oversamp_cutout,
+        fwhm_x_pix_oversamp_cutout,
+        fwhm_y_pix_oversamp_cutout,
+        sigma_x_pix_oversamp_cutout,
+        sigma_y_pix_oversamp_cutout,
+        angle_theta_deg,
+        amplitude_counts_oversamp_cutout,
+    ) = fit_gaussian(
+        cookie_cut_out_sci_oversamp,
+        center_guess=coords_guess_xy_cutout_oversamp,
+    )
+
+    x_center_pix_fullarray_oversamp = x_center_pix_oversamp_cutout + idx_cutout_oversamp_x1
+    y_center_pix_fullarray_oversamp = y_center_pix_oversamp_cutout + idx_cutout_oversamp_y1
+
+    x_center_pix_fullarray_normsamp = x_center_pix_fullarray_oversamp / oversample_factor
+    y_center_pix_fullarray_normsamp = y_center_pix_fullarray_oversamp / oversample_factor
+    fwhm_x_pix_fullarray_normsamp = fwhm_x_pix_oversamp_cutout / oversample_factor
+    fwhm_y_pix_fullarray_normsamp = fwhm_y_pix_oversamp_cutout / oversample_factor
+
+    return {
+        "oversampled_array": oversampled_array,
+        "coords_xy_1st_pass_oversamp_fullarray": coords_xy_1st_pass_oversamp_fullarray,
+        "cookie_cut_out_sci_oversamp": cookie_cut_out_sci_oversamp,
+        "cookie_cut_out_best_fit": cookie_cut_out_best_fit,
+        "x_center_pix_fullarray_oversamp": x_center_pix_fullarray_oversamp,
+        "y_center_pix_fullarray_oversamp": y_center_pix_fullarray_oversamp,
+        "fwhm_x_pix_cookie_oversamp": fwhm_x_pix_oversamp_cutout,
+        "fwhm_y_pix_cookie_oversamp": fwhm_y_pix_oversamp_cutout,
+        "amplitude_counts_cookie_oversamp": amplitude_counts_oversamp_cutout,
+        "x_center_pix_fullarray_normsamp": x_center_pix_fullarray_normsamp,
+        "y_center_pix_fullarray_normsamp": y_center_pix_fullarray_normsamp,
+        "fwhm_x_pix_fullarray_normsamp": fwhm_x_pix_fullarray_normsamp,
+        "fwhm_y_pix_fullarray_normsamp": fwhm_y_pix_fullarray_normsamp,
+        "sigma_x_pix_oversamp_cutout": sigma_x_pix_oversamp_cutout,
+        "sigma_y_pix_oversamp_cutout": sigma_y_pix_oversamp_cutout,
+        "angle_theta_deg": angle_theta_deg,
+    }
+
+
 def fyi_plot_centroiding(array_to_plot, coords_to_plot, title_string=None, zscale=False, results_write_dir="figs_dump"):
     '''
     Make a FYI plot of the centroiding results.

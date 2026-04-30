@@ -3,11 +3,11 @@ import os
 from dataclasses import dataclass
 import ipdb
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
-from .helpers import fit_gaussian_psf, fit_simmed_psfs, load_config_and_pipe
+from .helpers import fit_psf_gaussian_from_native_array, fit_simmed_psfs, load_config_and_pipe
 from .psf_grid_prep import load_grid_data_from_fits, prepare_psf_grid
 from .strehl_fcns import fit_annular_aperture_fixed_parameters, fit_annular_aperture_free_parameters
-from scipy.ndimage import zoom
 from photutils.centroids import centroid_2dg, centroid_sources
 import pickle
 
@@ -129,34 +129,20 @@ def process_one_psf(
     '''
     logging.info(f"Processing PSF {num_coord} of {num_psfs_to_process}")
 
-    cookie_edge_size_original = cookie_cutout_original_this_psf.shape[0]
-
-    # now oversample the cutout
-    cookie_cutout_this_psf_oversamp = zoom(cookie_cutout_original_this_psf, oversample_factor, order=3)
-
-    # consider the center of the frame to be the first guess for the 2nd-pass centroid 
-    # (remember, the 1st-pass was used to cut out the PSF in the first place)
-    x_cen_oversamp = cookie_cutout_this_psf_oversamp.shape[1] / 2
-    y_cen_oversamp = cookie_cutout_this_psf_oversamp.shape[0] / 2
-
-    # centroid the oversampled cutout with a Gaussian fit
-    (
-        x_center_pix_gaussian_best_fit_cookie_oversamp,
-        y_center_pix_gaussian_best_fit_cookie_oversamp,
-        fwhm_x_pix_gaussian_best_fit_cookie_oversamp,
-        fwhm_y_pix_gaussian_best_fit_cookie_oversamp,
-        amplitude_counts_gaussian_best_fit_cookie_oversamp,
-        gaussian_based_strehl,
-    ) = fit_gaussian_psf(
-        cookie_cutout_this_psf_oversamp,
-        obs_filter=filter_name,
-        fp_mask=fp_mask,
-        pp_mask=pp_mask,
-        coords_guess=[x_cen_oversamp, y_cen_oversamp],
-        plot_string=f"num_coord_{num_coord}_fpmask_{fp_mask}_ppmask_{pp_mask}_filter_{filter_name}",
-        fac_oversamp=oversample_factor,
-        results_write_dir=results_write_dir,
+    gaussian_fit_outputs = fit_psf_gaussian_from_native_array(
+        original_array=cookie_cutout_original_this_psf,
+        oversample_factor=oversample_factor,
+        coords_xy_1st_pass_normsamp=None,
+        edge_size_oversamp=None,
     )
+    cookie_cutout_this_psf_oversamp = gaussian_fit_outputs["cookie_cut_out_sci_oversamp"]
+    cookie_cutout_best_fit = gaussian_fit_outputs["cookie_cut_out_best_fit"]
+    x_center_pix_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs["x_center_pix_fullarray_oversamp"]
+    y_center_pix_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs["y_center_pix_fullarray_oversamp"]
+    fwhm_x_pix_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs["fwhm_x_pix_cookie_oversamp"]
+    fwhm_y_pix_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs["fwhm_y_pix_cookie_oversamp"]
+    amplitude_counts_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs["amplitude_counts_cookie_oversamp"]
+    gaussian_based_strehl = np.max(cookie_cutout_this_psf_oversamp) / np.max(cookie_cutout_best_fit)
 
     logging.info(f"Gaussian-fit FWHM (x, y) (oversampled): ({fwhm_x_pix_gaussian_best_fit_cookie_oversamp:.2f}, {fwhm_y_pix_gaussian_best_fit_cookie_oversamp:.2f})")
 
@@ -218,10 +204,10 @@ def process_one_psf(
         )
         strehl_updates.update(strehl_annular_aperture_free)
 
-    x_center_pix_gaussian_best_fit_normsamp = x_center_pix_gaussian_best_fit_cookie_oversamp / oversample_factor
-    y_center_pix_gaussian_best_fit_normsamp = y_center_pix_gaussian_best_fit_cookie_oversamp / oversample_factor
-    fwhm_x_pix_gaussian_best_fit_normsamp = fwhm_x_pix_gaussian_best_fit_cookie_oversamp / oversample_factor
-    fwhm_y_pix_gaussian_best_fit_normsamp = fwhm_y_pix_gaussian_best_fit_cookie_oversamp / oversample_factor
+    x_center_pix_gaussian_best_fit_normsamp = gaussian_fit_outputs["x_center_pix_fullarray_normsamp"]
+    y_center_pix_gaussian_best_fit_normsamp = gaussian_fit_outputs["y_center_pix_fullarray_normsamp"]
+    fwhm_x_pix_gaussian_best_fit_normsamp = gaussian_fit_outputs["fwhm_x_pix_fullarray_normsamp"]
+    fwhm_y_pix_gaussian_best_fit_normsamp = gaussian_fit_outputs["fwhm_y_pix_fullarray_normsamp"]
 
     return SinglePsfFitResult(
         coord_x_normsamp=float(x_center_pix_gaussian_best_fit_normsamp),

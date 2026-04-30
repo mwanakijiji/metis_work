@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 
 import numpy as np
 import matplotlib
@@ -21,6 +22,42 @@ from .helpers import (
     model_for_fit_fixed,
     mtf_arrays,
 )
+
+
+def _savefig_atomic_with_retry(fig, file_name_plot, max_attempts=5, retry_sleep_s=0.25):
+    '''
+    Save a figure robustly on shared filesystems by writing to a temporary file
+    and atomically replacing the final target, with retries on errno 35.
+    '''
+    os.makedirs(os.path.dirname(file_name_plot), exist_ok=True)
+
+    for attempt in range(1, max_attempts + 1):
+        tmp_file_name = f"{file_name_plot}.tmp-{os.getpid()}-{attempt}"
+        try:
+            fig.savefig(tmp_file_name)
+            os.replace(tmp_file_name, file_name_plot)
+            return
+        except OSError as exc:
+            if os.path.exists(tmp_file_name):
+                try:
+                    os.remove(tmp_file_name)
+                except OSError:
+                    pass
+
+            if exc.errno == 35 and attempt < max_attempts:
+                logging.warning(
+                    f"savefig retry {attempt}/{max_attempts} for {file_name_plot} after errno 35"
+                )
+                time.sleep(retry_sleep_s)
+                continue
+            raise
+        except Exception:
+            if os.path.exists(tmp_file_name):
+                try:
+                    os.remove(tmp_file_name)
+                except OSError:
+                    pass
+            raise
 
 def fit_airy_psf(cookie_cut_out_sci, data_empirical_original, obs_filter, x_center_pix_gaussian_best_fit_oversamp, y_center_pix_gaussian_best_fit_oversamp, fac_oversamp, config_observing, plot_string=None, results_write_dir="figs_dump"):
     '''
@@ -300,52 +337,49 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_cook
     strehl_from_fixed_annular_aperture_mtf = np.sum(fft_empirical_power_cutoff) / np.sum(fft_model_power_cutoff_norm)
 
     # plots subplots of the empirical, normalized model PSF, and residuals
-    plt.clf()
-    plt.figure(figsize=(15, 5))
-    plt.subplot(1, 3, 1)
-    plt.imshow(cookie_cut_out_sci_oversamp, origin='lower', cmap='gray_r')
-    plt.title(f'Empirical oversampled PSF\nFilter={filter_name}, oversampling={fac_oversamp:.2f}')
-    plt.colorbar()
-    plt.subplot(1, 3, 2)
-    plt.imshow(model_annular_2d_oversamp_norm, origin='lower', cmap='gray_r')
-    plt.title('Fixed-annular-aperture model\nNormalized to empirical total power')
-    plt.colorbar()
-    plt.subplot(1, 3, 3)
-    plt.imshow(cookie_cut_out_sci_oversamp - model_annular_2d_oversamp_norm, origin='lower', cmap='gray_r')
-    plt.title('Residuals: empirical minus fixed model')
-    plt.suptitle(
+    fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+    im0 = axs[0].imshow(cookie_cut_out_sci_oversamp, origin='lower', cmap='gray_r')
+    axs[0].set_title(f'Empirical oversampled PSF\nFilter={filter_name}, oversampling={fac_oversamp:.2f}')
+    fig.colorbar(im0, ax=axs[0])
+    im1 = axs[1].imshow(model_annular_2d_oversamp_norm, origin='lower', cmap='gray_r')
+    axs[1].set_title('Fixed-annular-aperture model\nNormalized to empirical total power')
+    fig.colorbar(im1, ax=axs[1])
+    im2 = axs[2].imshow(cookie_cut_out_sci_oversamp - model_annular_2d_oversamp_norm, origin='lower', cmap='gray_r')
+    axs[2].set_title('Residuals: empirical minus fixed model')
+    fig.colorbar(im2, ax=axs[2])
+    fig.suptitle(
         f"Fixed annular aperture\n"
         f"Fixed: D_aperture={config_observing['D_aperture']['full']:.2f} m, "
         f"D_obscuration={config_observing['D_aperture']['D_obscuration']:.2f} m\n"
         f"Strehl from max: {strehl_from_fixed_annular_aperture_max:.2f}\n"
         f"Strehl from enclosed power: {strehl_from_fixed_annular_aperture_power_enclosed:.2f}"
     )
-    plt.colorbar()
-    #plt.show()
+    fig.tight_layout()
     os.makedirs(results_write_dir, exist_ok=True)
     file_name_plot = os.path.join(results_write_dir, f'intensity_1d_full_2d_{plot_string}.png')
-    plt.savefig(file_name_plot)
+    _savefig_atomic_with_retry(fig, file_name_plot)
+    plt.close(fig)
     logging.info(f'Saved {file_name_plot}')
 
     # plot a cross-section through the FTs of the empirical and model PSFs
-    plt.clf()
-    plt.figure(figsize=(15, 5))
-    plt.subplot(1, 1, 1)
+    fig, ax = plt.subplots(1, 1, figsize=(15, 5))
     # Restrict x-range to ±2 * cutoff_freq
     x_mask = (fx >= -2*cutoff_freq) & (fx <= 2*cutoff_freq)
-    plt.plot(fx[x_mask], fft_empirical_power_cutoff[n_fft//2][x_mask], label='Empirical')
-    plt.plot(fx[x_mask], fft_model_power_cutoff_norm[n_fft//2][x_mask], label='Model')
-    plt.xlabel('Frequency (cycles per radian)')
-    plt.ylabel('Power (units TBD)')
-    plt.axvline(x=cutoff_freq, color='k', linestyle='--', label='Cutoff frequency', alpha=0.5)
-    plt.axvline(x=-cutoff_freq, color='k', linestyle='--', alpha=0.5)
-    plt.legend()
-    plt.title(
+    ax.plot(fx[x_mask], fft_empirical_power_cutoff[n_fft//2][x_mask], label='Empirical')
+    ax.plot(fx[x_mask], fft_model_power_cutoff_norm[n_fft//2][x_mask], label='Model')
+    ax.set_xlabel('Frequency (cycles per radian)')
+    ax.set_ylabel('Power (units TBD)')
+    ax.axvline(x=cutoff_freq, color='k', linestyle='--', label='Cutoff frequency', alpha=0.5)
+    ax.axvline(x=-cutoff_freq, color='k', linestyle='--', alpha=0.5)
+    ax.legend()
+    ax.set_title(
         f'Fixed-annular-aperture MTF comparison\n'
         f'Filter={filter_name}, Strehl from MTF={strehl_from_fixed_annular_aperture_mtf:.2f}'
     )
+    fig.tight_layout()
     file_name_plot = os.path.join(results_write_dir, f'mtf_fixed_ann_ap_{plot_string}.png')
-    plt.savefig(file_name_plot)
+    _savefig_atomic_with_retry(fig, file_name_plot)
+    plt.close(fig)
     logging.info(f'Saved {file_name_plot}')
 
     logging.info(f"Strehl from fixed annular aperture, max: {strehl_from_fixed_annular_aperture_max}")

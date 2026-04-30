@@ -4,10 +4,9 @@ from dataclasses import dataclass
 import ipdb
 import numpy as np
 import matplotlib.pyplot as plt
-from .helpers import fit_gaussian, fit_simmed_psfs, load_config_and_pipe
+from .helpers import fit_psf_gaussian_from_native_array, fit_simmed_psfs, load_config_and_pipe
 from .psf_grid_prep import load_grid_data_from_fits, prepare_psf_grid
 from .strehl_fcns import fit_annular_aperture_fixed_parameters, fit_annular_aperture_free_parameters
-from scipy.ndimage import zoom
 from photutils.centroids import centroid_2dg, centroid_sources
 import pickle
 
@@ -86,51 +85,23 @@ def process_one_psf_image_distortion(
 
     #cookie_edge_size_original = original_array.shape[0]
 
-    # oversample the entire array
-    oversampled_array = zoom(original_array, oversample_factor, order=3) # kidn of redundant, but needed for debugging plots
-    coords_xy_1st_pass_oversamp_fullarray = oversample_factor * np.array([coords_xy_1st_pass_normsamp[0], coords_xy_1st_pass_normsamp[1]])
-
-    # make a cutout around the oversampled PSF so rest of array is neglected
-    edge_size_oversamp = 30
-    idx_cutout_oversamp_x1 = int(coords_xy_1st_pass_oversamp_fullarray[0] - edge_size_oversamp/2)
-    idx_cutout_oversamp_x2 = int(coords_xy_1st_pass_oversamp_fullarray[0] + edge_size_oversamp/2)
-    idx_cutout_oversamp_y1 = int(coords_xy_1st_pass_oversamp_fullarray[1] - edge_size_oversamp/2)
-    idx_cutout_oversamp_y2 = int(coords_xy_1st_pass_oversamp_fullarray[1] + edge_size_oversamp/2)
-    cookie_cut_out_sci_oversamp = oversampled_array[idx_cutout_oversamp_y1:idx_cutout_oversamp_y2, idx_cutout_oversamp_x1:idx_cutout_oversamp_x2]
-    # fit_gaussian currently expects center_guess ordered as [x, y]
-    coords_guess_xy_cutout_oversamp = [
-        coords_xy_1st_pass_oversamp_fullarray[0] - idx_cutout_oversamp_x1,
-        coords_xy_1st_pass_oversamp_fullarray[1] - idx_cutout_oversamp_y1,
-    ]
-
-    (
-        cookie_cut_out_best_fit,
-        x_center_pix_oversamp_cutout,
-        y_center_pix_oversamp_cutout,
-        fwhm_x_pix_oversamp_cutout,
-        fwhm_y_pix_oversamp_cutout,
-        sigma_x_pix_oversamp_cutout,
-        sigma_y_pix_oversamp_cutout,
-        angle_theta_deg,
-        amplitude_counts_oversamp_cutout,
-    ) = fit_gaussian(
-        cookie_cut_out_sci_oversamp,
-        center_guess=coords_guess_xy_cutout_oversamp
+    gaussian_fit_outputs = fit_psf_gaussian_from_native_array(
+        original_array=original_array,
+        oversample_factor=oversample_factor,
+        coords_xy_1st_pass_normsamp=coords_xy_1st_pass_normsamp,
+        edge_size_oversamp=30,
     )
-
-    # convert cutout fit outputs back to full-array oversampled coordinates
-    x_center_pix_gaussian_best_fit_fullarray_oversamp = x_center_pix_oversamp_cutout + idx_cutout_oversamp_x1
-    y_center_pix_gaussian_best_fit_fullarray_oversamp = y_center_pix_oversamp_cutout + idx_cutout_oversamp_y1
-    fwhm_x_pix_gaussian_best_fit_cookie_oversamp = fwhm_x_pix_oversamp_cutout
-    fwhm_y_pix_gaussian_best_fit_cookie_oversamp = fwhm_y_pix_oversamp_cutout
-    amplitude_counts_gaussian_best_fit_cookie_oversamp = amplitude_counts_oversamp_cutout
-    #gaussian_based_strehl = np.max(cookie_cut_out_sci_oversamp) / np.max(cookie_cut_out_best_fit)
-
-    # scale back to native sampling
-    x_center_pix_gaussian_best_fit_fullarray_normsamp = x_center_pix_gaussian_best_fit_fullarray_oversamp / oversample_factor
-    y_center_pix_gaussian_best_fit_fullarray_normsamp = y_center_pix_gaussian_best_fit_fullarray_oversamp / oversample_factor
-    fwhm_x_pix_gaussian_best_fit_fullarray_normsamp = fwhm_x_pix_gaussian_best_fit_cookie_oversamp / oversample_factor
-    fwhm_y_pix_gaussian_best_fit_fullarray_normsamp = fwhm_y_pix_gaussian_best_fit_cookie_oversamp / oversample_factor
+    oversampled_array = gaussian_fit_outputs["oversampled_array"]
+    coords_xy_1st_pass_oversamp_fullarray = gaussian_fit_outputs["coords_xy_1st_pass_oversamp_fullarray"]
+    x_center_pix_gaussian_best_fit_fullarray_oversamp = gaussian_fit_outputs["x_center_pix_fullarray_oversamp"]
+    y_center_pix_gaussian_best_fit_fullarray_oversamp = gaussian_fit_outputs["y_center_pix_fullarray_oversamp"]
+    fwhm_x_pix_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs["fwhm_x_pix_cookie_oversamp"]
+    fwhm_y_pix_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs["fwhm_y_pix_cookie_oversamp"]
+    amplitude_counts_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs["amplitude_counts_cookie_oversamp"]
+    x_center_pix_gaussian_best_fit_fullarray_normsamp = gaussian_fit_outputs["x_center_pix_fullarray_normsamp"]
+    y_center_pix_gaussian_best_fit_fullarray_normsamp = gaussian_fit_outputs["y_center_pix_fullarray_normsamp"]
+    fwhm_x_pix_gaussian_best_fit_fullarray_normsamp = gaussian_fit_outputs["fwhm_x_pix_fullarray_normsamp"]
+    fwhm_y_pix_gaussian_best_fit_fullarray_normsamp = gaussian_fit_outputs["fwhm_y_pix_fullarray_normsamp"]
 
     # consider the center of the frame to be the first guess for the 2nd-pass centroid 
     # (remember, the 1st-pass was used to cut out the PSF in the first place)
