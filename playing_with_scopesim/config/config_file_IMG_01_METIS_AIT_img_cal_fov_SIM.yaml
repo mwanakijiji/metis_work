@@ -1,0 +1,33 @@
+# FOV simulation run configurations
+# Paths are relative to the project stem
+# Each run inherits defaults; override only what differs
+
+defaults:
+  pp_mask: PPS-CFO2
+  config_coords_guesses_file_name: config/config_file_IMG_01_coords.yaml
+  results_write_dir: IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_data/
+
+simulation_configs:
+  - obs_filter_name: Br_alpha
+    obs_filter_file_name: '/METIS/filters/Br_alpha.dat'
+    fpmask: pinhole_lm
+    pp_mask: PPS-CFO2
+    nd_filter: null
+    dit: 0.065
+    ndit: 2
+    exptime: np.nan
+    obs_mode: wcu_img_lm
+    use_exp_time_only: False
+    file_name: IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_data/IMG_OPT_01_METIS_AIT_img_cal_fov_filter_Br_alpha_simmed.fits
+
+  - obs_filter_name: N2
+    obs_filter_file_name: '/METIS/filters/TC_filter_N2.dat'
+    fpmask: pinhole_n
+    pp_mask: PPS-CFO2
+    nd_filter: ND_OD2
+    dit: 0.3
+    ndit: 2
+    exptime: np.nan
+    obs_mode: wcu_img_n
+    use_exp_time_only: False
+    file_name: IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_data/IMG_OPT_01_METIS_AIT_img_cal_fov_filter_N2_simmed.fits

@@ -36,6 +36,7 @@ import sys
 import logging
 
 import scopesim as sim
+from modules.helpers import pipe_2_log
 
 # Edit this path if you have a custom install directory, otherwise comment it out. [For ReadTheDocs only]
 sim.link_irdb("../../../")
@@ -45,34 +46,6 @@ sim.link_irdb("../../../")
 
 # print versions of things
 sim.bug_report()
-
-
-def pipe_2_log(callable_func, msg="Output"):
-    '''
-    Capture stdout from any ScopeSim callable and write each line to the log.
-
-    INPUTS:
-    - callable_func: callable (no args) that prints to stdout when invoked
-    - msg: string header to add to the log
-
-    OUTPUTS:
-    - None; writes out to log
-
-    Example:
-        pipe_2_log(lambda m=metis: m.effects.pprint_all(), msg="Optical train effects")
-    '''
-    buffer = io.StringIO()
-    old_stdout = sys.stdout
-    try:
-        sys.stdout = buffer
-        callable_func()
-        output = buffer.getvalue()
-    finally:
-        sys.stdout = old_stdout
-    logging.info('--------------------------------')
-    logging.info(msg)
-    for line in output.rstrip().splitlines():
-        logging.info(line)
 
 
 def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode, angle_array, dit=1, ndit=1, exptime=0.01, use_exp_time_only=False, out_dir=None):
