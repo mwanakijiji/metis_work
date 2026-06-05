@@ -140,10 +140,6 @@ def main():
     # read in the observing configurations
     #dict_config = read_simulation_configurations(observing_config_file)
 
-    ipdb.set_trace()
-    ## ## QUESTION: IS wcu_img_lm THE RIGHT MODE FOR N FILTERS?
-    ## ## QUESTION: DO WE REALLY NEED THIS MANY PARAMETERS?
-
     # read in the simulation configurations
     #instrument_configs = read_simulation_configurations(simulation_config_file = stem + 'config/config_file_IMG_01_METIS_AIT_img_cal_fov_SIM.yaml')
 
@@ -154,25 +150,25 @@ def main():
 
     # to set up the data states, merge config data state defaults with overrides that are specific for each run
     sim_states = []
+
     for entry in runs:
         merged = {**defaults, **entry}
         # Prepend stem to relative file paths
-        fname = merged["file_name"]
-        if not fname.startswith("/"):
-            merged["file_name"] = stem + fname
-        results_write_dir = merged["results_write_dir"]
-        if not results_write_dir.startswith("/"):
-            merged["results_write_dir"] = stem + results_write_dir
+        fname = merged["file_name_abs_trunc"]
+        #if not fname.startswith("/"):
+        #    merged["file_name"] = stem + fname
+        #results_write_dir = merged["results_write_dir"]
+        #if not results_write_dir.startswith("/"):
+        #    merged["results_write_dir"] = stem + results_write_dir
         sim_states.append(merged)
 
 
-    ipdb.set_trace()
+
     # dictionary of all observing configurations
     logging.info('Number of observing configurations: ' + str(len(sim_states)))
     for idx, config in enumerate(sim_states):
         obs_name = f"obs{idx}"
         logging.info(f"\n{obs_name}: {config}")
-        ipdb.set_trace()
 
     # fpmasks_list = ["open", "pinhole_lm", "pinhole_n", "grid_lm"]
 
@@ -187,12 +183,10 @@ def main():
         # each filter in filter_list = ["Mp", "Lp"]
         # each fpmasks_list = ["open", "pinhole_lm", "pinhole_n", "grid_lm"]
 
-        ## ## CONTINUE HERE: ADD DITHERING
-        dither_positions = [0]
+        dither_positions = np.array([[3.0, 3.0], [-3.0, 3.0], [-3.0, -3.0], [3.0, -3.0]])  # arcsec; absolute position (x,y)
 
-        for pos_dither in range(len(dither_positions)):
-
-            ipdb.set_trace()
+        for i, pos_dither in enumerate(dither_positions):
+            logging.info(f'Dither {i}: pos={pos_dither} arcsec')
 
             logging.info('--------------------------------')
             logging.info('Running config: ' + str(config_params))
@@ -208,11 +202,10 @@ def main():
             nd_filter = config_params.get('nd_filter')
             exptime = config_params.get('exptime')
             use_exp_time_only = config_params.get('use_exp_time_only', False)
-            out_dir = config_params['results_write_dir']
-            file_name = config_params['file_name']
+            #out_dir = config_params['results_write_dir']
+            file_name_abs = str(config_params['file_name_abs_trunc']) + str(i) + '.fits'
 
             # set up instrument for imaging (same property keys as IMG_OPT_03)
-            ipdb.set_trace()
             if nd_filter is not None:
                 cmd = sim.UserCommands(
                     use_instrument='METIS',
@@ -236,6 +229,14 @@ def main():
                 )
 
             metis = sim.OpticalTrain(cmd)
+            #metis["chop_nod"].include = True
+            #metis["chop_nod"].meta["chop_offsets"] = dither_positions
+
+
+            metis["wcu_source"].set_fpmask(
+                shift=pos_dither,
+                angle=0.0,
+            )
             metis['pupil_masks'].change_mask(pp_mask)
             logging.info('OBS filter: ' + str(metis.cmds.get("!OBS.filter_name")))
             logging.info('WCU FP mask: ' + str(metis.cmds.get("!WCU.current_fpmask")))
@@ -276,7 +277,6 @@ def main():
                 logging.info(f"  {key}: {value}")
 
             # compile the observation
-            ipdb.set_trace()
             logging.info('Compiling the observation.')
             metis.observe()
 
@@ -338,7 +338,7 @@ def main():
             bckgd_subted = raw_sci_readout - background
             
             # write
-            abs_file_name_write = file_name
+            abs_file_name_write = file_name_abs
             os.makedirs(os.path.dirname(abs_file_name_write) or '.', exist_ok=True)
 
 
@@ -365,8 +365,6 @@ def main():
             
             hdul_new.writeto(abs_file_name_write, overwrite=True)
             logging.info('Saved background-subtracted readout without aberrations to ' + abs_file_name_write)
-
-            ipdb.set_trace()
 
             # display (for debugging)
             '''

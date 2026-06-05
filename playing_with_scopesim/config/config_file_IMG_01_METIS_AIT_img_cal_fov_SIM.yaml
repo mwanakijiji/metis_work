@@ -17,8 +17,10 @@ simulation_configs:
     ndit: 2
     exptime: np.nan
     obs_mode: wcu_img_lm
+    illuminated_pixels_x: 1920 # pixel length of active on-sky area of detector
+    illuminated_pixels_y: 1920
     use_exp_time_only: False
-    file_name: IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_data/IMG_OPT_01_METIS_AIT_img_cal_fov_filter_Br_alpha_simmed.fits
+    file_name_abs_trunc: /podman-share/metis_work/playing_with_scopesim/IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_data/IMG_OPT_01_METIS_AIT_img_cal_fov_filter_Br_alpha_simmed_ # suffix will include the dither index
 
   - obs_filter_name: N2
     obs_filter_file_name: '/METIS/filters/TC_filter_N2.dat'
@@ -29,5 +31,7 @@ simulation_configs:
     ndit: 2
     exptime: np.nan
     obs_mode: wcu_img_n
+    illuminated_pixels_x: 1990 # pixel length of active on-sky area of detector
+    illuminated_pixels_y: 1990
     use_exp_time_only: False
-    file_name: IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_data/IMG_OPT_01_METIS_AIT_img_cal_fov_filter_N2_simmed.fits
+    file_name_abs_trunc: /podman-share/metis_work/playing_with_scopesim/IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_data/IMG_OPT_01_METIS_AIT_img_cal_fov_filter_N2_simmed_
