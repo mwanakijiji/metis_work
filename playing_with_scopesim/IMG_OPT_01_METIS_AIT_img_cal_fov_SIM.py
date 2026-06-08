@@ -33,7 +33,7 @@ import yaml
 
 import scopesim as sim
 
-from modules.helpers import pipe_2_log, setup_logging, load_config_and_pipe #, read_observing_configurations
+from modules.helpers import pipe_2_log, setup_logging, load_config_and_pipe
 
 
 def read_simulation_configurations(simulation_config_file):
@@ -53,11 +53,8 @@ def main():
     now = datetime.datetime.now()
     log_dir = stem + 'IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_logs/'
     log_file_name = log_dir + 'log_IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_' + now.strftime('%Y-%m-%d_%H-%M-%S') + '.txt'
-    #out_dir = stem + 'IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_data/' # directory to write the simulated data to
     
     # initialize logging
-    #log_dir = stem + 'IMG_03_logs/'
-    #log_file_name = log_dir + 'log_IMG_03_analysis_psf_image_quality_' + now.strftime('%Y-%m-%d_%H-%M-%S') + '.txt'    
     setup_logging(log_dir=log_dir, log_file_name=log_file_name, now=now)
 
     pipe_2_log(lambda: sim.bug_report(), msg="ScopeSim bug report")
@@ -150,19 +147,10 @@ def main():
 
     # to set up the data states, merge config data state defaults with overrides that are specific for each run
     sim_states = []
-
     for entry in runs:
         merged = {**defaults, **entry}
-        # Prepend stem to relative file paths
         fname = merged["file_name_abs_trunc"]
-        #if not fname.startswith("/"):
-        #    merged["file_name"] = stem + fname
-        #results_write_dir = merged["results_write_dir"]
-        #if not results_write_dir.startswith("/"):
-        #    merged["results_write_dir"] = stem + results_write_dir
         sim_states.append(merged)
-
-
 
     # dictionary of all observing configurations
     logging.info('Number of observing configurations: ' + str(len(sim_states)))
@@ -171,11 +159,6 @@ def main():
         logging.info(f"\n{obs_name}: {config}")
 
     # fpmasks_list = ["open", "pinhole_lm", "pinhole_n", "grid_lm"]
-
-
-    # TODO: ADD other config.
-    #cmd_2 = sim.UserCommands(use_instrument="METIS", set_modes=["img_lm"],
-    #                    properties={"!OBS.filter_name": "Mp", "!OBS.exptime": 100., "!DET.dit": 200})
 
     # loop over each configuration
     for config_params in sim_states:
@@ -288,29 +271,6 @@ def main():
                 outhdul_off = metis.readout(ndit=ndit, dit=dit, reset=False)[0]
             outhdul_off.info()
 
-            # save to FITS file (for debugging)
-            '''
-            outhdul_off.writeto('junk.fits', overwrite=True)
-            file_name1 = 'test1.png'
-            plt.clf()
-            plt.imshow(outhdul[1].data, origin='lower')
-            plt.title(config_params)
-            plt.show()
-            ipdb.set_trace()
-            #plt.savefig('/podman-share/' + file_name1)
-            #logging.info('Saved ' + file_name1)
-            '''
-
-            '''
-            file_name2 = 'test2.png'
-            plt.clf()
-            plt.hist(outhdul_off[1].data.ravel(), bins=200)
-            plt.title('Counts in background exposure\n' + config_params)
-            plt.show()
-            #plt.savefig('/podman-share/' + file_name2)
-            #logging.info('Saved ' + file_name2)
-            '''
-
             #########################################################
             # Set the WCU Flux Controlling Mask to "OPEN".
             logging.info('Setting the wcu bb aperture to OPEN')
@@ -341,7 +301,6 @@ def main():
             abs_file_name_write = file_name_abs
             os.makedirs(os.path.dirname(abs_file_name_write) or '.', exist_ok=True)
 
-
             # Copy the primary header
             primary_hdu = fits.PrimaryHDU(header=outhdul_on[0].header)
             # Add background-subtracted readout as first extension
@@ -365,15 +324,6 @@ def main():
             
             hdul_new.writeto(abs_file_name_write, overwrite=True)
             logging.info('Saved background-subtracted readout without aberrations to ' + abs_file_name_write)
-
-            # display (for debugging)
-            '''
-            plt.clf()
-            plt.hist(outhdul[1].data.ravel(), bins=200)
-            plt.title('Counts in science exposure\n' + config_params)
-            plt.show()
-            ipdb.set_trace()
-            '''
 
 
 if __name__ == "__main__":

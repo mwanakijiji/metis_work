@@ -50,16 +50,11 @@ def main():
     runs = data_states_config.get("runs", [])
 
     # to set up the data states, merge config data state defaults with overrides that are specific for each run
+    # 'data state' is defined as the set of parameters and the collection of images corresponding to that set of parameters
+    # (the only difference between the images is the dither position)
     data_states = []
     for entry in runs:
         merged = {**defaults, **entry}
-        # Prepend stem to relative file paths
-        fname = merged["file_name"]
-        if not fname.startswith("/"):
-            merged["file_name"] = stem + fname
-        results_write_dir = merged["results_write_dir"]
-        if not results_write_dir.startswith("/"):
-            merged["results_write_dir"] = stem + results_write_dir
         data_states.append(merged)
 
     # loop over each data state
