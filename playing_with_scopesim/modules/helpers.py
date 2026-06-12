@@ -285,6 +285,13 @@ def intensity_annular_aperture(
     return I_r
 
 
+def intensity_annular_aperture_eso():
+
+    
+
+    return I_r
+
+
 def gaussian_2d(xy_mesh, amplitude, xo, yo, sigma_x_pix, sigma_y_pix, theta):
     '''
     Calculate a 2D Gaussian function.

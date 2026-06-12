@@ -7,7 +7,7 @@ import yaml
 import ipdb
 
 from modules.helpers import load_config_and_pipe, setup_logging
-from modules.backbone_img_04 import strehl_psfs
+from modules.backbone_img_03 import strehl_psfs
 
 # Reqs.:
 # - Ref. Overleaf doc IMG_OPT_04_Test_Description_PSF_Image_Quality

@@ -7,7 +7,7 @@ import yaml
 import ipdb
 
 from modules.helpers import load_config_and_pipe, setup_logging
-from modules.backbone_img_03 import stray_light
+from modules.backbone_img_04 import stray_light
 
 
 # Analyze data for the IMG-OPT-03 stray light test

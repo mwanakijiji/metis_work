@@ -1,0 +1,11 @@
+# Point-source field catalog for IMG-OPT-01 FOV 
+#
+# NAME: source label
+# RA_deg: right ascension, decimal degrees (ICRS)
+# DEC_deg: declination, decimal degrees (ICRS)
+#
+NAME,RA_deg,DEC_deg
+PSF_corner_NE,,
+PSF_corner_NW,,
+PSF_corner_SW,,
+PSF_corner_SE,,

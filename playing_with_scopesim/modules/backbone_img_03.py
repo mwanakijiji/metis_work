@@ -3,36 +3,81 @@ import os
 from dataclasses import dataclass
 import ipdb
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 from .helpers import fit_psf_gaussian_from_native_array, fit_simmed_psfs, load_config_and_pipe
 from .psf_grid_prep import load_grid_data_from_fits, prepare_psf_grid
 from .strehl_fcns import fit_annular_aperture_fixed_parameters, fit_annular_aperture_free_parameters
 from photutils.centroids import centroid_2dg, centroid_sources
 import pickle
-from scipy.special import j0, j1
-from astropy.visualization import ImageNormalize, ZScaleInterval
 
+# Fixed canvas for oversampled vs native FYI PNGs (same pixel size for blink comparison).
+_COOKIE_FYI_FIGSIZE_INCH = (7.0, 6.25)
+_COOKIE_FYI_DPI = 120
+
+
+def _save_blinkable_cookie_fyi_plot(
+    image_2d: np.ndarray,
+    scatter_x: float,
+    scatter_y: float,
+    title: str,
+    out_path: str,
+) -> None:
+    '''
+    Save a plot of a PSF with a scatter point and a title.
+
+    INPUTS
+    ----------
+    image_2d : np.ndarray
+        2D array of the image to plot.
+    scatter_x : float
+        X coordinate of the scatter point.
+    scatter_y : float
+        Y coordinate of the scatter point.
+    title : str
+        Title of the plot.
+    out_path : str
+        Path to save the plot to.
+
+    OUTPUTS
+    -------
+    None
+        Saves the plot to the specified path.
+    '''
+    
+    fig, ax = plt.subplots(
+        figsize=_COOKIE_FYI_FIGSIZE_INCH,
+        dpi=_COOKIE_FYI_DPI,
+        constrained_layout=True,
+    )
+    im = ax.imshow(image_2d, origin="lower", cmap="gray_r")
+    ax.scatter(scatter_x, scatter_y, color="red", s=10)
+    ax.set_title(title, fontsize=10)
+    fig.colorbar(im, ax=ax, fraction=0.055, pad=0.02)
+    # No bbox_inches="tight" — keeps identical width×height in pixels across plots.
+    fig.savefig(out_path, dpi=_COOKIE_FYI_DPI)
+    plt.close(fig)
 
 
 @dataclass(frozen=True)
 class SinglePsfFitResult:
     '''Per-PSF outputs from Gaussian fit (native pixel coords) and optional Strehl dicts.'''
 
-    #coord_x_fullarray_normsamp: float
-    #coord_y_fullarray_normsamp: float
-    #fwhm_x_fullarray_normsamp: float
-    #fwhm_y_fullarray_normsamp: float
-    #amplitude_counts: float
-    centroid_results: dict
+    coord_x_normsamp: float
+    coord_y_normsamp: float
+    fwhm_x_normsamp: float
+    fwhm_y_normsamp: float
+    amplitude_counts: float
+    gaussian_based_strehl: float
+    strehl_updates: dict
 
 
-def process_one_psf_stray_light(
+def process_one_psf(
     num_coord: int,
     num_psfs_to_process: int,
     *,
-    original_array: np.ndarray,
+    cookie_cutout_original_this_psf: np.ndarray,
     oversample_factor: int,
-    coords_xy_1st_pass_normsamp: list[float, float],
     filter_name: str,
     fp_mask: str,
     pp_mask: str,
@@ -53,12 +98,10 @@ def process_one_psf_stray_light(
         Zero-based index of the PSF currently being processed.
     num_psfs_to_process : int
         Total number of PSFs being processed from this detector image.
-    original_array : np.ndarray
-        Native-sampling 2D array
+    cookie_cutout_original_this_psf : np.ndarray
+        Native-sampling square cutout containing the PSF of interest.
     oversample_factor : int
         Factor used to oversample the PSF cutout before centroiding and model fitting.
-    coords_1st_pass_oversamp : list[float, float]
-        X and Y coordinates of the 1st-pass centroid in oversampled pixel coordinates (using the full 2D array)
     filter_name : str
         Name of the observing filter associated with the PSF.
     fp_mask : str
@@ -86,296 +129,98 @@ def process_one_psf_stray_light(
     '''
     logging.info(f"Processing PSF {num_coord} of {num_psfs_to_process}")
 
-    #cookie_edge_size_original = original_array.shape[0]
-
     gaussian_fit_outputs = fit_psf_gaussian_from_native_array(
-        original_array=original_array,
+        original_array=cookie_cutout_original_this_psf,
         oversample_factor=oversample_factor,
-        coords_xy_1st_pass_normsamp=coords_xy_1st_pass_normsamp,
-        edge_size_oversamp=30,
+        coords_xy_1st_pass_normsamp=None,
+        edge_size_oversamp=None,
     )
-    oversampled_array = gaussian_fit_outputs["oversampled_array"]
-    coords_xy_1st_pass_oversamp_fullarray = gaussian_fit_outputs["coords_xy_1st_pass_oversamp_fullarray"]
-    x_center_pix_gaussian_best_fit_fullarray_oversamp = gaussian_fit_outputs["x_center_pix_fullarray_oversamp"]
-    y_center_pix_gaussian_best_fit_fullarray_oversamp = gaussian_fit_outputs["y_center_pix_fullarray_oversamp"]
+    cookie_cutout_this_psf_oversamp = gaussian_fit_outputs["cookie_cut_out_sci_oversamp"]
+    cookie_cutout_best_fit = gaussian_fit_outputs["cookie_cut_out_best_fit"]
+    x_center_pix_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs["x_center_pix_fullarray_oversamp"]
+    y_center_pix_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs["y_center_pix_fullarray_oversamp"]
     fwhm_x_pix_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs["fwhm_x_pix_cookie_oversamp"]
     fwhm_y_pix_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs["fwhm_y_pix_cookie_oversamp"]
     amplitude_counts_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs["amplitude_counts_cookie_oversamp"]
-    x_center_pix_gaussian_best_fit_fullarray_normsamp = gaussian_fit_outputs["x_center_pix_fullarray_normsamp"]
-    y_center_pix_gaussian_best_fit_fullarray_normsamp = gaussian_fit_outputs["y_center_pix_fullarray_normsamp"]
-    fwhm_x_pix_gaussian_best_fit_fullarray_normsamp = gaussian_fit_outputs["fwhm_x_pix_fullarray_normsamp"]
-    fwhm_y_pix_gaussian_best_fit_fullarray_normsamp = gaussian_fit_outputs["fwhm_y_pix_fullarray_normsamp"]
+    gaussian_based_strehl = np.max(cookie_cutout_this_psf_oversamp) / np.max(cookie_cutout_best_fit)
 
-    # consider the center of the frame to be the first guess for the 2nd-pass centroid 
-    # (remember, the 1st-pass was used to cut out the PSF in the first place)
-    #x_cen_oversamp = cookie_cutout_this_psf_oversamp.shape[1] / 2
-    #y_cen_oversamp = cookie_cutout_this_psf_oversamp.shape[0] / 2
-
-    logging.info(f"Gaussian-fit FWHM (x, y) (native sampling): ({fwhm_x_pix_gaussian_best_fit_fullarray_normsamp:.2f}, {fwhm_y_pix_gaussian_best_fit_fullarray_normsamp:.2f})")
-    logging.info(f"Gaussian-fit centroid (x, y) (native sampling): ({x_center_pix_gaussian_best_fit_fullarray_normsamp:.2f}, {y_center_pix_gaussian_best_fit_fullarray_normsamp:.2f})")
+    logging.info(f"Gaussian-fit FWHM (x, y) (oversampled): ({fwhm_x_pix_gaussian_best_fit_cookie_oversamp:.2f}, {fwhm_y_pix_gaussian_best_fit_cookie_oversamp:.2f})")
 
 
-    # save an FYI plot of oversampled region around PSF
-    plt.clf()
-    edge_size_oversamp = 20
-    idx_cutout_x1 = int(x_center_pix_gaussian_best_fit_fullarray_oversamp - edge_size_oversamp/2)
-    idx_cutout_x2 = int(x_center_pix_gaussian_best_fit_fullarray_oversamp + edge_size_oversamp/2)
-    idx_cutout_y1 = int(y_center_pix_gaussian_best_fit_fullarray_oversamp - edge_size_oversamp/2)
-    idx_cutout_y2 = int(y_center_pix_gaussian_best_fit_fullarray_oversamp + edge_size_oversamp/2)
-    plt.figure(figsize=(12, 12))
-    plt.imshow(oversampled_array[idx_cutout_y1:idx_cutout_y2, idx_cutout_x1:idx_cutout_x2], origin="lower", cmap="gray_r")
-    plt.scatter(
-        coords_xy_1st_pass_oversamp_fullarray[0] - idx_cutout_x1,
-        coords_xy_1st_pass_oversamp_fullarray[1] - idx_cutout_y1,
-        color="red",
-        s=50,
-        marker='x',
-        label='1st pass',
-        alpha=1,
-    )
-    plt.scatter(
-        x_center_pix_gaussian_best_fit_fullarray_oversamp - idx_cutout_x1,
-        y_center_pix_gaussian_best_fit_fullarray_oversamp - idx_cutout_y1,
-        color="green",
-        s=50,
-        marker='+',
-        label='2nd pass',
-        alpha=1,
-    )
-    plt.title(f"Oversampled region around PSF {num_coord} of {num_psfs_to_process}")
-    plt.legend()
-    file_name_plot = os.path.join(results_write_dir, f"fyi_plot_oversampled_region_around_psf_{num_coord}.png")
-    plt.savefig(file_name_plot)
-    logging.info(f"Saved {file_name_plot}")
-    plt.close()
+    strehl_updates = {}
 
-    centroid_results = {
-        "coord_x_fullarray_normsamp": float(x_center_pix_gaussian_best_fit_fullarray_normsamp),
-        "coord_y_fullarray_normsamp": float(y_center_pix_gaussian_best_fit_fullarray_normsamp),
-        "fwhm_x_fullarray_normsamp": float(fwhm_x_pix_gaussian_best_fit_fullarray_normsamp),
-        "fwhm_y_fullarray_normsamp": float(fwhm_y_pix_gaussian_best_fit_fullarray_normsamp),
-        "amplitude_counts": float(amplitude_counts_gaussian_best_fit_cookie_oversamp),
-    }
-
+    # fit a ScopeSim PSF functionality currently disabled; can reinsert later if needed
     '''
+    if fit_simmed_psf:
+        logging.info(f"Fitting ScopeSim PSF {num_coord} of {num_psfs_to_process}")
+        strehl_simmed_psf = fit_simmed_psfs(
+            cookie_cut_out_sci_oversamp = cookie_cutout_this_psf_oversamp,
+            obs_filter=filter_name,
+            fp_mask=fp_mask,
+            pp_mask=pp_mask,
+            x_center_final_oversamp = x_center_pix_gaussian_best_fit_cookie_oversamp,
+            y_center_final_oversamp = y_center_pix_gaussian_best_fit_cookie_oversamp,
+            fac_oversamp=oversample_factor,
+            config_observing=config_observing,
+            results_write_dir=results_write_dir,
+        )
+        strehl_updates.update(strehl_simmed_psf)
+    '''
+
+    # fit an annular aperture model with fixed aperture
+    if fit_annular_aperture_fixed:
+        logging.info(
+            f"Calculating Strehl from annular aperture {num_coord} of {num_psfs_to_process}"
+        )
+
+        strehl_annular_aperture_fixed = fit_annular_aperture_fixed_parameters(
+            cookie_cut_out_sci_oversamp = cookie_cutout_this_psf_oversamp,
+            data_cookie_empirical_original = cookie_cutout_original_this_psf,
+            filter_name=filter_name,
+            plot_string=f"num_coord_{num_coord}_fpmask_{fp_mask}_ppmask_{pp_mask}_filter_{filter_name}",
+            x_center_2nd_pass_cookie_oversamp = x_center_pix_gaussian_best_fit_cookie_oversamp,
+            y_center_2nd_pass_cookie_oversamp = y_center_pix_gaussian_best_fit_cookie_oversamp,
+            config_observing=config_observing,
+            fac_oversamp=oversample_factor,
+            polychromatic=True,
+            results_write_dir=results_write_dir,
+        )
+        strehl_updates.update(strehl_annular_aperture_fixed)
+
+    # fit an annular aperture model with free aperture radii
+    if fit_annular_aperture_free:
+        logging.info(f"Fitting analytical PSF {num_coord} of {num_psfs_to_process}")
+        strehl_annular_aperture_free = fit_annular_aperture_free_parameters(
+            cookie_cut_out_sci_oversamp = cookie_cutout_this_psf_oversamp,
+            cookie_cut_out_sci_original = cookie_cutout_original_this_psf,
+            filter_name = filter_name,
+            plot_string = f"num_coord_{num_coord}_fpmask_{fp_mask}_ppmask_{pp_mask}_filter_{filter_name}",
+            x_center_final_cookie_oversamp = x_center_pix_gaussian_best_fit_cookie_oversamp,
+            y_center_final_cookie_oversamp = y_center_pix_gaussian_best_fit_cookie_oversamp,
+            config_observing = config_observing,
+            fac_oversamp = oversample_factor,
+            fit_method = fit_method,
+            results_write_dir=results_write_dir,
+        )
+        strehl_updates.update(strehl_annular_aperture_free)
+
+    x_center_pix_gaussian_best_fit_normsamp = gaussian_fit_outputs["x_center_pix_fullarray_normsamp"]
+    y_center_pix_gaussian_best_fit_normsamp = gaussian_fit_outputs["y_center_pix_fullarray_normsamp"]
+    fwhm_x_pix_gaussian_best_fit_normsamp = gaussian_fit_outputs["fwhm_x_pix_fullarray_normsamp"]
+    fwhm_y_pix_gaussian_best_fit_normsamp = gaussian_fit_outputs["fwhm_y_pix_fullarray_normsamp"]
+
     return SinglePsfFitResult(
-        coord_x_fullarray_normsamp=float(x_center_pix_gaussian_best_fit_fullarray_normsamp),
-        coord_y_fullarray_normsamp=float(y_center_pix_gaussian_best_fit_fullarray_normsamp),
-        fwhm_x_fullarray_normsamp=float(fwhm_x_pix_gaussian_best_fit_fullarray_normsamp),
-        fwhm_y_fullarray_normsamp=float(fwhm_y_pix_gaussian_best_fit_fullarray_normsamp),
+        coord_x_normsamp=float(x_center_pix_gaussian_best_fit_normsamp),
+        coord_y_normsamp=float(y_center_pix_gaussian_best_fit_normsamp),
+        fwhm_x_normsamp=float(fwhm_x_pix_gaussian_best_fit_normsamp),
+        fwhm_y_normsamp=float(fwhm_y_pix_gaussian_best_fit_normsamp),
         amplitude_counts=float(amplitude_counts_gaussian_best_fit_cookie_oversamp),
+        gaussian_based_strehl=float(gaussian_based_strehl),
+        strehl_updates=strehl_updates,
     )
-    '''
-    return centroid_results
 
 
-def expected_light_exterior(radius_arcsec, wavelength=3.3e-6, diameter=39.0, plate_scale=0.00547):
-    """
-    Calculate the fraction of the total PSF (Airy pattern) energy outside a given radius [arcsec]
-
-    Parameters
-    ----------
-    radius_arcsec : float or array-like
-        Radius or radii (in arcseconds) at which to compute the exterior energy fraction.
-    wavelength : float, optional
-        Wavelength in meters (default: 3.3e-6 m).
-    diameter : float, optional
-        Telescope pupil diameter, in meters (default: 39.0 m).
-    plate_scale : float, optional
-        Arcsec per pixel (default: 5.47 mas/pix for LM-band).
-        
-    Returns
-    -------
-    energy_outside : float or np.ndarray
-        Fraction of the total energy lying outside of specified radius. Value between 0 and 1.
-    """    
-
-    # Convert radius in arcsec to radians
-    radius_arcsec = np.atleast_1d(radius_arcsec)
-    radius_rad = np.deg2rad(radius_arcsec / 3600.)
-
-    lambda_over_d = (wavelength / diameter) * 206265
-
-    # Airy pattern argument
-    # alpha = (pi * D / lambda) * sin(theta) ≈ (pi * D / lambda) * theta, for small angles
-    alpha = (np.pi * diameter / wavelength) * radius_rad
-
-    # Fractional encircled energy within radius r:
-    # E(<r) = 1 - J0^2(alpha) - J1^2(alpha)
-    J0 = j0(alpha)
-    J1 = j1(alpha)
-    encircled = 1 - J0**2 - J1**2
-
-    # The fraction of energy outside radius is 1 - encircled
-    energy_outside = 1 - encircled
-
-    # Example usage:
-    # At 0.1 arcsec from the center (e.g.)
-    # exterior_fraction = expected_light_exterior(0.1)
-    # print(f"Fraction of PSF energy outside 0.1 arcsec: {exterior_fraction:.4f}")
-
-    return energy_outside
-
-
-def measure_light_exterior(array_input, 
-                            center_xy_pix=[1024, 1024], 
-                            wavelength=3.3e-6, 
-                            diameter_pupil=39.0, 
-                            plate_scale_mas=5.47,
-                            results_write_dir="figs_dump"):
-    '''
-    Measure the fraction of light exterior to range of radii in an array
-
-    INPUTS
-    ----------
-    array_input : np.ndarray
-        Array to measure the light exterior to a given radius in.
-    center_xy_pix : list[float, float], optional
-        X and Y coordinates of the center of the array, in pixels (default: [1024, 1024]).
-    wavelength : float, optional
-        Wavelength in meters (default: 3.3e-6 m).
-    diameter_pupil : float, optional
-        Telescope pupil diameter, in meters (default: 39.0 m).
-    plate_scale_mas : float, optional
-        Mas per pixel (default: 5.47 mas/pix for LM-band).
-    
-    OUTPUTS
-    -------
-    ratio_exterior_measured_over_expected : float
-       TBD
-    '''
-    # dark rings in units of lambda/D
-
-    dark_ring_arcsec_array_units_ld = np.array([1.21967, 
-                                                2.233131, 
-                                                3.238315, 
-                                                4.241063, 
-                                                5.242764, 
-                                                6.243922, 
-                                                7.244760, 
-                                                8.245395, 
-                                                9.245893, 
-                                                10.246293])
-
-
-    #dark_ring_arcsec_array_units_ld = np.linspace(1, 4.5, 100)
-
-    # based on the wavelength of light, where should the first dark Airy rings be?
-    dark_ring_arcsec_array = (wavelength / diameter_pupil) * 206265 * dark_ring_arcsec_array_units_ld
-
-    # drop-in, debug
-    dark_ring_arcsec_array = np.linspace(0, 4.5, 100)
-    
-    dark_ring_pix_array = dark_ring_arcsec_array / (1e-3 * plate_scale_mas) # [pix]
-
-    # find fractions of PSF light to be expected outside each of the dark Airy rings
-    exterior_fraction = expected_light_exterior(dark_ring_arcsec_array, \
-        wavelength=wavelength, \
-            diameter=diameter_pupil, \
-                plate_scale=1e-3 * plate_scale_mas)
-
-    # FYI plot to see if function is working right
-    '''
-    plt.clf()
-    lambda_over_d = (wavelength / diameter_pupil) * 206265
-    steps_subarray = np.linspace(0, 10, 200)
-    radius_arcsec_array = lambda_over_d * steps_subarray
-    test_exterior_fraction = expected_light_exterior(radius_arcsec_array, \
-        wavelength=wavelength, \
-            diameter=diameter_pupil, \
-                plate_scale=1e-3 * plate_scale_mas)
-    plt.plot(steps_subarray, test_exterior_fraction)
-    plt.xlabel('Radius [lamdbda/D]')
-    plt.ylabel('Fraction of energy')
-    plt.yscale('log')
-    plt.title('Fraction of energy exterior to radius, circular Airy pattern')
-    file_name_plot = os.path.join(results_write_dir, f"fyi_plot_exterior_fraction_vs_radius.png")
-    plt.savefig(file_name_plot)
-    logging.info(f"Saved {file_name_plot}")
-    plt.close()
-    '''
-
-    # sum over all the pixels in the array
-    sum_pixels_unmasked = np.nansum(array_input)
-
-    # make a circular mask in the data frame, where all the pixels within the dark ring are nans
-    # Define a circular mask centered at (x_center, y_center) with radius dark_ring_rad [pixels]
-    # Build a coordinate grid centered on center_xy_pix so (0, 0) is the PSF center.
-    y_indices, x_indices = np.ogrid[
-        -center_xy_pix[1] : array_input.shape[0] - center_xy_pix[1],
-        -center_xy_pix[0] : array_input.shape[1] - center_xy_pix[0],
-    ]
-
-    ratio_exterior_measured_array = []
-    ratio_exterior_expected_array = []
-
-    # for debugging: mask the crescent moon
-    #array_input[1250:2000,1250:2000] = array_input[0:750,0:750]
-
-    ipdb.set_trace()
-
-    # loop over dark Airy ring intervals to measure the fraction of light exterior to each ring
-    for num_ring in range(0, len(dark_ring_pix_array)):
-
-        # mask a circular area around the PSF
-        mask_circle = x_indices**2 + y_indices**2 <= dark_ring_pix_array[num_ring]**2
-        data_copy = np.copy(array_input)
-
-        # mask the central region of the PSF and add remaining counts outside of that region
-        data_copy[mask_circle] = np.nan
-        sum_pixels_masked = np.nansum(data_copy)
-
-        # the measured power in the exterior region, normalized
-        ratio_exterior_measured = sum_pixels_masked / sum_pixels_unmasked
-        ratio_exterior_measured_array.append(ratio_exterior_measured) # append to array
-
-        # the expected power in the exterior region, normalized
-        ratio_exterior_expected = exterior_fraction[num_ring]
-        ratio_exterior_expected_array.append(ratio_exterior_expected) # append to array
-
-        print(f'Fraction of irradiance measured exterior to radius: {ratio_exterior_measured:.4f}')
-        print(f'Fraction of irradiance expected exterior to radius: {ratio_exterior_expected:.4f}')
-        print(f'Ratio of exterior pixels measured to expected: {ratio_exterior_measured:.4f} / {ratio_exterior_expected:.4f}')
-        
-        # FYI plot
-
-        plt.clf()
-        norm = ImageNormalize(data_copy, interval=ZScaleInterval())
-        plt.imshow(data_copy, origin="lower", cmap="gray", norm=norm)
-
-        #plt.imshow(data_copy, origin='lower', cmap='gray')
-        plt.colorbar()
-        plt.show()
-        plt.savefig('junk.png')
-
-
-        # FYI plot
-        '''
-        plt.clf()
-        plt.imshow(data_copy, origin='lower', cmap='gray')
-        circle = plt.Circle((x_center, y_center), dark_ring_pix_array[num_ring], color='red', fill=False, linewidth=2)
-        plt.gca().add_patch(circle)
-        plt.colorbar()
-        plt.show()
-        plt.close()
-        '''
-        ipdb.set_trace()
-
-    ipdb.set_trace()
-
-    ## ## CONTINUE HERE: IF RADIUS INCREASES LINEARLY AND THERE IS AN IMPERFECT BACKGROUND SUBTRACTION THAT LEAVES 
-    # A CONSTANT BACKGROUND OFFSET, THE RATE AT WHICH RESIDUALS INCREASE SHOULD BE **2 (?).
-    # SO, CHECK THE SLOPE OF THE RESIDUALS INCREASE, AS WELL AS ITS LINEARITY
-    #######  ... AND ANOTHER FUNCTION TO LOCATE DIFFUSE SHAPES
-
-    ratio_exterior_measured_over_expected = np.divide(ratio_exterior_measured_array, ratio_exterior_expected_array)
-    print(f'Net ratio of exterior pixels measured to expected: {ratio_exterior_measured_over_expected:.4f}')
-
-    return 
-
-
-
-def stray_light(
+def strehl_psfs(
     file_name,
     fp_mask,
     pp_mask,
@@ -390,7 +235,8 @@ def stray_light(
     fit_method="curve_fit",
 ):
     '''
-    Measure strehl light within the array, using an image with a single PSF in the middle
+    Measure Strehl-related quantities for a grid of PSFs, save the per-PSF results,
+    and generate a summary diagnostic plot over the detector frame.
 
     INPUTS
     ----------
@@ -427,7 +273,7 @@ def stray_light(
         and saves a detector-frame diagnostic plot annotated with Strehl values.
     '''
 
-    #edge_size_original = 21 # pixels along one side of the cutout, original pixel sampling
+    edge_size_original = 21 # pixels along one side of the cutout, original pixel sampling
     oversample_factor = 3  # try to keep odd to facilitate centering
     logging.info(f"PSF oversampling factor: {oversample_factor}")
 
@@ -482,34 +328,30 @@ def stray_light(
         amplitude_counts_array,
         gaussian_based_strehl_array,
     ) = (np.zeros(total_psfs) for _ in range(9))
-    centroid_results_all = {} # to contain info from all the PSFs
-
-    # oversample the grid data
-    #grid_data_oversamp = zoom(grid_data, oversample_factor, order=3)
+    strehl_results_all = {} # to contain info from all the PSFs
 
     # loop over all PSFs that we want to process from this one detector readout
     for num_coord in range(num_psfs_to_process):
 
-        #centroid_results_this_psf = {} # to contain info from this PSF alone
+        strehl_results_this_psf = {} # to contain info from this PSF alone
         # make cutout of the PSF from the original array, using the closest int to the 1st pass centroids
 
         # 1-st pass coords of the PSF in the original array
         x_cen_1st_pass_native = coords_centroided_1st_pass_all_native[num_coord][1]
         y_cen_1st_pass_native = coords_centroided_1st_pass_all_native[num_coord][0]
 
-        # convert to oversampled coordinates
-        #x_cen_1st_pass_oversamp = x_cen_1st_pass_native * oversample_factor
-        #y_cen_1st_pass_oversamp = y_cen_1st_pass_native * oversample_factor
-
+        # cut out the PSF
+        grid_data_original_cutout_this_psf = grid_data_original[
+            int(x_cen_1st_pass_native - 0.5*edge_size_original):int(x_cen_1st_pass_native + 0.5*edge_size_original),
+            int(y_cen_1st_pass_native - 0.5*edge_size_original):int(y_cen_1st_pass_native + 0.5*edge_size_original)
+        ]
         
-        
-        # find coordinates (and later other things?)
-        centroid_results_this_psf = process_one_psf_stray_light(
+        # find strehls
+        result = process_one_psf(
             num_coord,
             num_psfs_to_process,
-            original_array=grid_data,
+            cookie_cutout_original_this_psf=grid_data_original_cutout_this_psf,
             oversample_factor=oversample_factor,
-            coords_xy_1st_pass_normsamp=[x_cen_1st_pass_native, y_cen_1st_pass_native],
             filter_name=filter_name,
             fp_mask=fp_mask,
             pp_mask=pp_mask,
@@ -521,81 +363,87 @@ def stray_light(
             fit_annular_aperture_free=fit_annular_aperture_free,
         )
 
-        '''
-        # for each coord value in result, put it in centroid_results_this_psf as a key-value pair
-        for key, value in result.centroid_results.items():
-            centroid_results_this_psf[key] = value
+        # for each strehl value in result, put it in strehl_results_this_psf as a key-value pair
+        for key, value in result.strehl_updates.items():
+            strehl_results_this_psf[key] = value
         # also include the 1st-pass centroid coordinates
-        centroid_results_this_psf['x_cen_1st_pass_native'] = x_cen_1st_pass_native
-        centroid_results_this_psf['y_cen_1st_pass_native'] = y_cen_1st_pass_native
-        '''
+        strehl_results_this_psf['x_cen_1st_pass_native'] = x_cen_1st_pass_native
+        strehl_results_this_psf['y_cen_1st_pass_native'] = y_cen_1st_pass_native
+
         # put the results from this PSF into the overall dictionary
-        centroid_results_all[f'psf_num_{num_coord:02d}'] = centroid_results_this_psf
-
-        # based on the center of the PSF, measure the stray light outside of it
-        ## ## TODO: ENABLE POLYCHROMATIC PSFS IN THE BELOW
-
-        measure_light_exterior(
-            array_input=grid_data,
-            center_xy_pix=[x_cen_1st_pass_native, y_cen_1st_pass_native],
-            wavelength=config_observing['monochromatic_observing_filters_lm'][filter_name],
-            diameter_pupil=config_observing['D_aperture']['full'],
-            plate_scale_mas=config_observing['pixel_scales']['img_lm'],
-            results_write_dir=results_write_dir,
-        )
+        strehl_results_all[f'psf_num_{num_coord:02d}'] = strehl_results_this_psf
     
-        ipdb.set_trace()
-
-    # pass/fail placeholder: criteria for distortion requirement TBD
+    # pass/fail: for each PSF, is the Strehl values greater than 0.8?
+    # user criterion: strehl_free_ann_ap_mtf
     pass_fail_list = []
-    criterion_key = 'PLACEHOLDER'
-    for psf_results in centroid_results_all.values():
-        #pass_fail = True if psf_results[criterion_key] >= 0.8 else False
-        #pass_fail_list.append(pass_fail)
-        pass_fail_list.append(False)
+    criterion_key = 'strehl_free_ann_ap_mtf'
+    for psf_results in strehl_results_all.values():
+        pass_fail = True if psf_results[criterion_key] >= 0.8 else False
+        pass_fail_list.append(pass_fail)
     pass_fail_all = all(pass_fail_list)
 
     logging.info("--------------------------------")
     logging.info("--------------------------------")
     logging.info(
-        "Reqs (Ref. Overleaf doc IMG_OPT_03_Test_Description_In_Field_Straylight_and_Ghosts):\n"
-        "1) METIS-1189:\n"
-        "   Max stray-light irradiance from an in-field source < 0.1% of the\n"
-        "   peak irradiance in IMG focal planes.\n"
-        "   (Stray light here includes scattering from METIS opto-mechanical surfaces.)\n"
-        "2) METIS-1429:\n"
-        "   Max stray-light irradiance in the CFO-FP2 plane, from an in-field\n"
-        "   source positioned in the METIS input focal plane, < 0.06% of peak irradiance.\n"
-        "3) METIS-9522:\n"
-        "   After data reduction and calibration, flux in optical artefacts and ghosts\n"
-        "   must be below the 3-sigma thermal background noise (1 hour observation),\n"
-        "   at the respective ghost spatial scale:\n"
-        "   - point-source-like ghosts: below point-source sensitivity limit\n"
-        "   - extended ghosts: below surface-brightness limit for that extension\n"
-        "   This must hold when the source brightness causing the artefact(s) matches\n"
-        "   the saturation limit in the fastest full-frame operation."
+        "Reminder: the requirements are:\n"
+        "- Ref. Overleaf doc IMG_OPT_04_Test_Description_PSF_Image_Quality\n"
+        "\n"
+        "1. METIS-1408: Quality and alignment of the optical components within Mid-infrared ELT Imager and\n"
+        "Spectrograph (METIS) shall provide diffraction limited performance (Strehl >= 80 %)\n"
+        "at lambda > 3 um in all modes over the entire FOV.\n"
+        "2. METIS-1409: The Instrument Wavefront Error (WFE) shall satisfy the diffraction limit requirement\n"
+        "(Strehl > 0.8) at lambda = 3 um for IMG (both LM and NQ) and IMG. The minimum\n"
+        "RMS WFE below shall be satisfied over the full Field Of View (FOV) relevant to the\n"
+        "given optical path.\n"
+        "3. METIS-2864: The minimum Strehl ratio of the WCU+CFO+IMG-LM optical path shall be >80% at\n"
+        "3.3 um over the entire field of view.\n"
+        "4. METIS-3503: METIS shall be able to characterise the shape of the instrument PSF across the entire\n"
+        "FoV using the WCU."
     )
     logging.info("--------------------------------")
     logging.info("--------------------------------")
-    logging.info(f"PIXEL SCALE CALCULATION MACHINERY TBD")
-    logging.info("--------------------------------")
-    logging.info("--------------------------------")
-    logging.info(f"DISTORTION CALCULATION MACHINERY TBD")
-    logging.info("--------------------------------")
-    logging.info("--------------------------------")
-    logging.info(f"CENTERING CALCULATION MACHINERY TBD")
-    logging.info("--------------------------------")
-    logging.info("--------------------------------")
-    logging.info(f"PASS/FAIL TBD: {all(pass_fail_list)}")
+    logging.info(f"Pass/fail for each PSF: {pass_fail_list}")
+    logging.info(f"PASS/FAIL FOR ALL PSFs: {all(pass_fail_list)}")
     logging.info("--------------------------------")
     logging.info("--------------------------------")
 
+    
     # pickle the results
-    basename_file_name_pickle = f"centroid_results_all_{fp_mask}_{pp_mask}_{filter_name}.pkl"
+    basename_file_name_pickle = f"strehl_results_all_{fp_mask}_{pp_mask}_{filter_name}.pkl"
     abs_file_name_pickle = os.path.join(results_write_dir, basename_file_name_pickle)
     with open(abs_file_name_pickle, 'wb') as f:
-        pickle.dump({"centroid_results_all": centroid_results_all, "pass_fail_all": pass_fail_all}, f)
-    logging.info(f"Saved centroid results to {abs_file_name_pickle}")
+        pickle.dump({'strehl_results_all': strehl_results_all, 'pass_fail_all': pass_fail_all}, f)
+    logging.info(f"Saved strehl results to {abs_file_name_pickle}")
+
+    # plot the grid_data and annotate it with the best-fit fwhm in x and y for each PSF
+    plt.clf()
+    plt.figure(figsize=(18, 12))
+    plt.imshow(grid_data, origin="lower", cmap="gray_r")
+    for psf_results in strehl_results_all.values():
+        x_cen = psf_results['x_cen_1st_pass_native']
+        y_cen = psf_results['y_cen_1st_pass_native']
+        strehl_free_ann_ap_mtf = psf_results.get('strehl_free_ann_ap_mtf', np.nan)
+        plt.scatter(x_cen, y_cen, color="red", s=10)
+        plt.text(
+            x_cen - 125,
+            y_cen + 10,
+            f"{strehl_free_ann_ap_mtf:.3f}",
+            color="k",
+            fontsize=7,
+            rotation=20,
+        )
+    plt.title(
+        "First-pass PSF centroids, Strehl from MTF of free-parameter annular aperture\n"
+        f"Filter={filter_name}, FP mask={fp_mask}, PP mask={pp_mask} "    
+        )
+    os.makedirs(results_write_dir, exist_ok=True)
+    plot_file_name = os.path.join(
+        results_write_dir,
+        f"fyi_plot_strehl_free_ann_ap_mtf_{fp_mask}_{pp_mask}_{filter_name}.png",
+    )
+    plt.savefig(plot_file_name, bbox_inches="tight")
+    logging.info(f"Saved {plot_file_name}")
+    plt.close()
 
 
-    return  # centroid_results_all
+    return  # strehl_results_all
