@@ -12,7 +12,7 @@ defaults:
   psfs_subset: 2
   # fit_method: 'curve_fit' (default) or 'amoeba' for annular aperture free-parameter fit
   fit_method: curve_fit
-  config_coords_guesses_file_name: config/config_file_IMG_03_coords_ver11.yaml
+  config_coords_guesses_file_name: config/config_file_IMG_04_coords_ver11.yaml
   results_write_dir: IMG_03_analysis_results/
 
 runs:

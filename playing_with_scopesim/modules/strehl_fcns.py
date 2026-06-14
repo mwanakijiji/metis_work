@@ -23,6 +23,135 @@ from .helpers import (
     mtf_arrays,
 )
 
+def strehl_from_eso_def(data_empirical, model):
+    ## ## TODO: make the mask around the psf within which we sum the flux more circular, maybe larger
+    if data_empirical.shape != model.shape:
+        raise ValueError("Data and model must have the same shape")
+    ratio_img = np.max(data_empirical) / np.sum(data_empirical)
+    ratio_psf = np.max(model) / np.sum(model)
+    return ratio_img/ratio_psf
+
+
+def debug_fit_model_scale_and_offset(
+    empirical_2d,
+    model_2d,
+    plot_string="",
+    results_write_dir="figs_dump",
+):
+    '''
+    Debug helper: match native annular model to empirical cookie with
+    data ≈ scale * model + additive_offset (no spatial shifts).
+
+    INPUTS
+    ----------
+    empirical_2d : ndarray
+        Native-sampling empirical PSF cutout.
+    model_2d : ndarray
+        Native-sampling best-fit annular-aperture model (same shape).
+    plot_string : str, optional
+        Suffix for saved diagnostic plot filenames.
+    results_write_dir : str, optional
+        Directory for diagnostic output.
+
+    OUTPUTS
+    -------
+    dict
+        Best-fit scale, additive_offset, RSS, and adjusted model/residual arrays.
+    '''
+    data = np.asarray(empirical_2d, dtype=float)
+    model = np.asarray(model_2d, dtype=float)
+    if data.shape != model.shape:
+        raise ValueError(
+            f"empirical_2d shape {data.shape} must match model_2d shape {model.shape}"
+        )
+
+    design = np.column_stack([model.ravel(), np.ones(model.size)])
+    scale, additive_offset = np.linalg.lstsq(design, data.ravel(), rcond=None)[0]
+
+    model_adjusted = scale * model + additive_offset
+    residuals_adjusted = data - model_adjusted
+    rss_before = np.sum((data - model) ** 2)
+    rss_after = np.sum(residuals_adjusted ** 2)
+
+    logging.info("--------------------------------")
+    logging.info("Debug fit: scale + additive offset on native annular model")
+    logging.info(f"  scale            = {scale:.6f}")
+    logging.info(f"  additive_offset  = {additive_offset:.6f}")
+    logging.info(f"  RSS before       = {rss_before:.6f}")
+    logging.info(f"  RSS after        = {rss_after:.6f}")
+    logging.info("--------------------------------")
+
+    os.makedirs(results_write_dir, exist_ok=True)
+    zscale = ZScaleInterval()
+    vmin_d, vmax_d = zscale.get_limits(data)
+    vmin_r, vmax_r = zscale.get_limits(residuals_adjusted)
+    vlim = max(abs(vmin_r), abs(vmax_r))
+    if not np.isfinite(vlim) or vlim == 0:
+        vlim = 1e-15
+
+    ny, nx = data.shape
+    center_y = ny // 2
+    center_x = nx // 2
+
+    x_pix = np.arange(nx)
+    y_pix = np.arange(ny)
+
+    def _plot_center_cross_sections(ax, model_compare, title):
+        ax.plot(x_pix, data[center_y, :], label="Horizontal: data")
+        ax.plot(
+            x_pix, model_compare[center_y, :], label="Horizontal: model", linestyle="--"
+        )
+        ax.plot(y_pix, data[:, center_x], label="Vertical: data")
+        ax.plot(
+            y_pix, model_compare[:, center_x], label="Vertical: model", linestyle="--"
+        )
+        ax.set_xlabel("Pixel index")
+        ax.set_ylabel("Counts")
+        ax.set_title(title)
+        ax.legend(fontsize=8)
+
+    fig, axs = plt.subplots(2, 3, figsize=(18, 10), constrained_layout=True)
+    axs[0, 0].imshow(data, origin="lower", cmap="gray_r", vmin=vmin_d, vmax=vmax_d)
+    axs[0, 0].set_title("Empirical cookie")
+    axs[0, 1].imshow(model_adjusted, origin="lower", cmap="gray_r", vmin=vmin_d, vmax=vmax_d)
+    axs[0, 1].set_title(f"Model: {scale:.4f}×PSF + {additive_offset:.2f}")
+    axs[0, 2].imshow(
+        residuals_adjusted, origin="lower", cmap="RdBu_r", vmin=-vlim, vmax=vlim
+    )
+    axs[0, 2].set_title("Residuals after debug fit")
+    _plot_center_cross_sections(
+        axs[1, 0],
+        model,
+        f"Before scale/offset\nrow y={center_y}, col x={center_x}",
+    )
+    _plot_center_cross_sections(
+        axs[1, 1],
+        model_adjusted,
+        f"After scale/offset\nrow y={center_y}, col x={center_x}",
+    )
+    axs[1, 2].axis("off")
+
+    fig.suptitle(
+        f"Debug scale + offset fit {plot_string}\n"
+        f"scale={scale:.6f}, offset={additive_offset:.6f}, RSS={rss_after:.2e}",
+        fontsize=10,
+    )
+    out_path = os.path.join(
+        results_write_dir, f"debug_scale_offset_fit_{plot_string}.png"
+    )
+    _savefig_atomic_with_retry(fig, out_path)
+    plt.close(fig)
+    logging.info(f"Saved {out_path}")
+
+    return {
+        "debug_scale": scale,
+        "debug_additive_offset": additive_offset,
+        "debug_rss": rss_after,
+        "debug_rss_before": rss_before,
+        "debug_model_adjusted_2d": model_adjusted,
+        "debug_residuals_2d": residuals_adjusted,
+    }
+
 
 def _savefig_atomic_with_retry(fig, file_name_plot, max_attempts=5, retry_sleep_s=0.25):
     '''
@@ -338,6 +467,17 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_cook
     fft_model_power_cutoff_norm = fft_model_power_cutoff * np.nanmax(fft_empirical_power_cutoff) / np.nanmax(fft_model_power_cutoff)
     strehl_from_fixed_annular_aperture_mtf = np.sum(fft_empirical_power_cutoff) / np.sum(fft_model_power_cutoff_norm)
 
+    # strehl in the way ESO does it (hdrl_strehl.c): 
+    
+    '''
+    ratio_img = ipeak.data / iflux.data;   // observed peak / observed flux
+    ratio_psf = ppeak / pflux.data;        // synthetic PSF peak / synthetic PSF flux
+    strehl = ratio_img / ratio_psf;        // final Strehl
+    double strehl = ratio_img / ratio_psf;
+    '''
+
+    strehl_from_fixed_annular_aperture_eso = strehl_from_eso_def(data_empirical = data_cookie_empirical_original, model = model_annular_2d_oversamp_norm_native)
+
     # plots subplots of the empirical, normalized model PSF, and residuals
     fig, axs = plt.subplots(1, 3, figsize=(15, 5))
     im0 = axs[0].imshow(cookie_cut_out_sci_oversamp, origin='lower', cmap='gray_r')
@@ -354,7 +494,9 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_cook
         f"Fixed: D_aperture={config_observing['D_aperture']['full']:.2f} m, "
         f"D_obscuration={config_observing['D_aperture']['D_obscuration']:.2f} m\n"
         f"Strehl from max: {strehl_from_fixed_annular_aperture_max:.2f}\n"
-        f"Strehl from enclosed power: {strehl_from_fixed_annular_aperture_power_enclosed:.2f}"
+        f"Strehl from enclosed power: {strehl_from_fixed_annular_aperture_power_enclosed:.2f}\n"
+        f"Strehl from ESO def: {strehl_from_fixed_annular_aperture_eso:.2f}\n"
+        f"Strehl from MTF: {strehl_from_fixed_annular_aperture_mtf:.2f}"
     )
     fig.tight_layout()
     os.makedirs(results_write_dir, exist_ok=True)
@@ -387,6 +529,7 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_cook
     logging.info(f"Strehl from fixed annular aperture, max: {strehl_from_fixed_annular_aperture_max}")
     logging.info(f"Strehl from fixed annular aperture, enclosed power: {strehl_from_fixed_annular_aperture_power_enclosed}")
     logging.info(f"Strehl from fixed annular aperture, MTF: {strehl_from_fixed_annular_aperture_mtf}")
+    logging.info(f"Strehl from fixed annular aperture, ESO def: {strehl_from_fixed_annular_aperture_eso}")
 
     # strehls based on 
     # 1. max of the empirical and model PSFs
@@ -396,7 +539,8 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_cook
     strehl_results = {
         'strehl_fix_ann_ap_max': strehl_from_fixed_annular_aperture_max,
         'strehl_fix_ann_ap_pow': strehl_from_fixed_annular_aperture_power_enclosed,
-        'strehl_fix_ann_ap_mtf': strehl_from_fixed_annular_aperture_mtf
+        'strehl_fix_ann_ap_mtf': strehl_from_fixed_annular_aperture_mtf,
+        'strehl_fix_ann_ap_eso': strehl_from_fixed_annular_aperture_eso
     }
     return strehl_results
 
@@ -405,7 +549,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         x_center_final_cookie_oversamp, y_center_final_cookie_oversamp, fac_oversamp, config_observing, fit_method, pinhole_diam_rad=1e-8,
         results_write_dir="figs_dump"):
     '''
-    Fit an analytical 2D PSF model to a given science frame.
+    Fit an analytical 2D PSF model to a given science frame. If the frame is oversampled, the fit is done to that oversampled image.
 
     INPUTS
     ----------
@@ -612,6 +756,14 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
 
     data_original_2d = np.asarray(cookie_cut_out_sci_original, dtype=float)
     residuals_fit_native_2d = data_original_2d - best_fit_model_2d
+
+    debug_fit_results = debug_fit_model_scale_and_offset(
+        empirical_2d=data_original_2d,
+        model_2d=best_fit_model_2d,
+        plot_string=plot_string,
+        results_write_dir=results_write_dir,
+    )
+
     zscale_native = ZScaleInterval()
     vmin_n, vmax_n = zscale_native.get_limits(data_original_2d)
 
@@ -634,16 +786,17 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     )
     ax_triple[0, 1].set_title("Best-fit free-annular-aperture model")
 
-    # Bottom-left: residuals image
-    rmax = np.nanmax(np.abs(residuals_fit_native_2d))
-    if not np.isfinite(rmax) or rmax == 0:
-        rmax = 1e-15
+    # Bottom-left: residuals image (symmetric z-scale for diverging colormap)
+    vmin_r, vmax_r = zscale_native.get_limits(residuals_fit_native_2d)
+    vlim = max(abs(vmin_r), abs(vmax_r))
+    if not np.isfinite(vlim) or vlim == 0:
+        vlim = 1e-15
     im_res = ax_triple[1, 0].imshow(
         residuals_fit_native_2d,
         origin="lower",
         cmap="RdBu_r",
-        vmin=-25000,
-        vmax=25000,
+        vmin=-vlim,
+        vmax=vlim,
     )
     ax_triple[1, 0].set_title("Residuals: native empirical minus best-fit model")
 
@@ -789,6 +942,16 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     )
     strehl_from_free_annular_aperture_mtf = np.sum(fft_empirical_power_cutoff) / np.sum(fft_model_power_cutoff_norm)
     logging.info(f"Strehl from free annular aperture, MTF: {strehl_from_free_annular_aperture_mtf}")
+
+    # ESO Strehl (peak/total flux ratio): use the native detector grid, matching
+    # fit_annular_aperture_fixed_parameters. The spline-zoomed oversampled empirical
+    # array does not conserve flux and its total can even go negative after background
+    # subtraction, so ESO values become unstable when fac_oversamp changes.
+    strehl_from_free_annular_aperture_eso = strehl_from_eso_def(
+        data_empirical=data_original_2d,
+        model=best_fit_model_2d,
+    )
+    logging.info(f"Strehl from free annular aperture, ESO def: {strehl_from_free_annular_aperture_eso}")
     # plot a cross-section through the FTs of the empirical and model PSFs
     fig_mtf, ax_mtf = plt.subplots(1, 1, figsize=(30, 5))
     x_mask = (fx >= -2 * cutoff_freq) & (fx <= 2 * cutoff_freq)
@@ -875,7 +1038,10 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
 
     # return dict of Strehl ratios found with different methods
     strehl_results = {
-        'strehl_free_ann_ap_mtf': strehl_from_free_annular_aperture_mtf
+        'strehl_free_ann_ap_mtf': strehl_from_free_annular_aperture_mtf,
+        'debug_scale': debug_fit_results['debug_scale'],
+        'debug_additive_offset': debug_fit_results['debug_additive_offset'],
+        'debug_rss': debug_fit_results['debug_rss'],
     }
 
     return strehl_results

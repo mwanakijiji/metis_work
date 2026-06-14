@@ -28,15 +28,15 @@ def main():
 
     stem = '/podman-share/metis_work/playing_with_scopesim/'
     # config file with the observing parameters
-    observing_config_file = stem + 'config/config_file_IMG_04_observing.yaml'
+    observing_config_file = stem + 'config/config_file_IMG_03_observing.yaml'
     # config file with the data states (i.e., how to analyze each PSF)
-    data_states_config_file = stem + 'config/config_file_IMG_04_strehl_runs.yaml'
+    data_states_config_file = stem + 'config/config_file_IMG_03_strehl_runs_v2.yaml'
 
     now = datetime.datetime.now()
 
     # initialize logging
-    log_dir = stem + 'IMG_04_logs/'
-    log_file_name = log_dir + 'log_IMG_04_analysis_psf_image_quality_' + now.strftime('%Y-%m-%d_%H-%M-%S') + '.txt'    
+    log_dir = stem + 'IMG_03_logs/'
+    log_file_name = log_dir + 'log_IMG_03_analysis_psf_image_quality_' + now.strftime('%Y-%m-%d_%H-%M-%S') + '.txt'    
     setup_logging(log_dir=log_dir, log_file_name=log_file_name, now=now)
 
     # read in main config file
@@ -49,6 +49,7 @@ def main():
 
     # to set up the data states, merge config data state defaults with overrides that are specific for each run
     data_states = []
+    ipdb.set_trace()
     for entry in runs:
         merged = {**defaults, **entry}
         # Prepend stem to relative file paths
@@ -60,9 +61,8 @@ def main():
             merged["results_write_dir"] = stem + results_write_dir
         data_states.append(merged)
 
-    # loop over each data state
-    #ipdb.set_trace()
-    for state in data_states: # [0:1]: # if just for a small test
+    # loop over each data state (which likely means a single input FITS file; but that file can include multiple PSFs)
+    for state in data_states[0:1]: # if just for a small test
         strehl_psfs(
             state["file_name"],
             fp_mask=state["fp_mask"],

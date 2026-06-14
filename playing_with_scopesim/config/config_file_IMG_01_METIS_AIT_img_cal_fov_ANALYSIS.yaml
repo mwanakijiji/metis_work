@@ -1,0 +1,56 @@
+# Strehl analysis run configurations
+# Paths are relative to the project stem
+# Each run inherits defaults; override only what differs
+
+defaults:
+  fp_mask: grid_lm
+  pp_mask: PPS-CFO2
+  fit_simmed_psf: false
+  fit_annular_aperture_free: true
+  fit_annular_aperture_fixed: true
+  # psfs_subset: 'all' to process all PSFs, or an integer to process only the first N PSFs
+  psfs_subset: 2
+  # fit_method: 'curve_fit' (default) or 'amoeba' for annular aperture free-parameter fit
+  fit_method: curve_fit
+  results_write_dir: IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS_results/
+
+runs:
+  - filter_name: Br_alpha
+    pp_mask: PPS-CFO2
+    distances_corner_psfs_arcsec: 6 # arcsec between corner PSFs
+    illuminated_pixels_x: 1920 # pixel length of active on-sky area of detector
+    illuminated_pixels_y: 1920
+    detector: LM
+    dithers:
+      - guess_x: 1575
+        guess_y: 1574
+        file_name: /podman-share/metis_work/playing_with_scopesim/IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_data/IMG_OPT_01_METIS_AIT_img_cal_fov_filter_Br_alpha_simmed_0.fits
+      - guess_x: 478
+        guess_y: 1574
+        file_name: /podman-share/metis_work/playing_with_scopesim/IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_data/IMG_OPT_01_METIS_AIT_img_cal_fov_filter_Br_alpha_simmed_1.fits
+      - guess_x: 478
+        guess_y: 477
+        file_name: /podman-share/metis_work/playing_with_scopesim/IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_data/IMG_OPT_01_METIS_AIT_img_cal_fov_filter_Br_alpha_simmed_2.fits
+      - guess_x: 1575
+        guess_y: 477
+        file_name: /podman-share/metis_work/playing_with_scopesim/IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_data/IMG_OPT_01_METIS_AIT_img_cal_fov_filter_Br_alpha_simmed_3.fits
+
+  - filter_name: N2
+    pp_mask: PPS-CFO2
+    distances_corner_psfs_arcsec: 6 # arcsec between corner PSFs
+    illuminated_pixels_x: 1920 # pixel length of active on-sky area of detector
+    illuminated_pixels_y: 1920
+    detector: N
+    dithers:
+      - guess_x: 1468
+        guess_y: 1467
+        file_name: /podman-share/metis_work/playing_with_scopesim/IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_data/IMG_OPT_01_METIS_AIT_img_cal_fov_filter_N2_simmed_0.fits
+      - guess_x: 585
+        guess_y: 1467
+        file_name: /podman-share/metis_work/playing_with_scopesim/IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_data/IMG_OPT_01_METIS_AIT_img_cal_fov_filter_N2_simmed_1.fits
+      - guess_x: 584
+        guess_y: 584
+        file_name: /podman-share/metis_work/playing_with_scopesim/IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_data/IMG_OPT_01_METIS_AIT_img_cal_fov_filter_N2_simmed_2.fits
+      - guess_x: 1467
+        guess_y: 584
+        file_name: /podman-share/metis_work/playing_with_scopesim/IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_data/IMG_OPT_01_METIS_AIT_img_cal_fov_filter_N2_simmed_3.fits

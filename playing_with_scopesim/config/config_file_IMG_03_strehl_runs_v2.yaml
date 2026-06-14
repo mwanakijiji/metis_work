@@ -1,0 +1,135 @@
+# Strehl analysis run configurations
+# Paths are relative to the project stem
+# Each run inherits defaults; override only what differs
+
+defaults:
+  fp_mask: grid_lm
+  pp_mask: open
+  fit_simmed_psf: false
+  fit_annular_aperture_free: true
+  fit_annular_aperture_fixed: true
+  psfs_subset: 1
+  # fit_method: 'curve_fit' (default) or 'amoeba' for annular aperture free-parameter fit
+  fit_method: curve_fit
+  config_coords_guesses_file_name: config/config_file_IMG_04_coords_ver11.yaml
+  results_write_dir: IMG_03_analysis_results/
+
+runs:
+  - filter_name: Br_alpha
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+    pp_mask: PPS-CFO2
+    fit_method: curve_fit
+    fit_annular_aperture_fixed: false
+    fit_annular_aperture_free: true
+
+  - filter_name: Br_alpha
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+    pp_mask: PPS-CFO2
+    fit_method: curve_fit
+    fit_annular_aperture_fixed: false
+    fit_annular_aperture_free: true
+
+  - filter_name: Br_alpha_ref
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+    pp_mask: PPS-CFO2
+    fit_method: curve_fit
+    fit_annular_aperture_fixed: false
+    fit_annular_aperture_free: true
+
+  - filter_name: Lp
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+    pp_mask: PPS-CFO2
+    fit_method: curve_fit
+    fit_annular_aperture_fixed: false
+    fit_annular_aperture_free: true
+
+  - filter_name: H2O-ice
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+    pp_mask: PPS-CFO2
+    fit_method: curve_fit
+    fit_annular_aperture_fixed: false
+    fit_annular_aperture_free: true
+
+  - filter_name: PAH_3.3
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+    pp_mask: PPS-CFO2
+    fit_method: curve_fit
+    fit_annular_aperture_fixed: false
+    fit_annular_aperture_free: true
+
+  - filter_name: PAH_3.3_ref
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+    pp_mask: PPS-CFO2
+    fit_method: curve_fit
+    fit_annular_aperture_fixed: false
+    fit_annular_aperture_free: true
+
+  - filter_name: short-L
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+    pp_mask: PPS-CFO2
+    fit_method: curve_fit
+    fit_annular_aperture_fixed: false
+    fit_annular_aperture_free: true
+
+  - filter_name: IB_4.05
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+    pp_mask: PPS-CFO2
+    fit_method: curve_fit
+    fit_annular_aperture_fixed: false
+    fit_annular_aperture_free: true
+
+  - filter_name: HCI_L_short
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+    pp_mask: PPS-CFO2
+    fit_method: curve_fit
+    fit_annular_aperture_fixed: false
+    fit_annular_aperture_free: true
+
+  - filter_name: HCI_L_long
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+    pp_mask: PPS-CFO2
+    fit_method: curve_fit
+    fit_annular_aperture_fixed: false
+    fit_annular_aperture_free: true
+
+  - filter_name: Mp
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+    pp_mask: PPS-CFO2
+    fit_method: curve_fit
+    fit_annular_aperture_fixed: false
+    fit_annular_aperture_free: true
+
+  - filter_name: CO_1-0_ice
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+    pp_mask: PPS-CFO2
+    fit_method: curve_fit
+    fit_annular_aperture_fixed: false
+    fit_annular_aperture_free: true
+
+  - filter_name: CO_ref
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+    pp_mask: PPS-CFO2
+    fit_method: curve_fit
+    fit_annular_aperture_fixed: false
+    fit_annular_aperture_free: true
+
+  - filter_name: HCI_M
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+    pp_mask: PPS-CFO2
+    fit_method: curve_fit
+    fit_annular_aperture_fixed: false
+    fit_annular_aperture_free: true
+
+  - filter_name: L_spec
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+    pp_mask: PPS-CFO2
+    fit_method: curve_fit
+    fit_annular_aperture_fixed: false
+    fit_annular_aperture_free: true
+
+  - filter_name: M_spec
+    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+    pp_mask: PPS-CFO2
+    fit_method: curve_fit
+    fit_annular_aperture_fixed: false
+    fit_annular_aperture_free: true

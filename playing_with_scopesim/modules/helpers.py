@@ -207,7 +207,7 @@ def intensity_annular_aperture(
 
     eps_ = D_obscuration / D_aperture # unitless
     
-    # see Eqn. 43 in 'E-REP-MPIA-1203 0-1 xx-10-2024'
+    # see Eqn. 43 in 'E-REP-MPIA-1203 0-1 xx-10-2024', or Eqn. 1 in Tschunko 1974, Appl Opt
     I_r = (1/(1-eps_**2)**2) * ( (2*jinc(nu_)) - eps_**2 * (2*jinc(nu_*eps_)) ) ** 2
 
     # convolve with a pinhole, if we're using one of finite size
@@ -281,13 +281,6 @@ def intensity_annular_aperture(
 
     # normalize to the amplitude
     I_r = ampl * I_r / np.nanmax(I_r)
-
-    return I_r
-
-
-def intensity_annular_aperture_eso():
-
-    
 
     return I_r
 
@@ -460,7 +453,6 @@ def model_for_fit_fixed(
         fac_oversamp=fac_oversamp,
         units='radians',
     )
-
 
 
     # generate model intensities on oversampled array
