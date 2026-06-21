@@ -48,9 +48,11 @@ D_aperture:
   full: 34.6878
   D_obscuration: 12.8502
 
-# p. 8 in E-REP-ULG-MET-1033 1-0 01/08/2022:
+# ELT EXIT PUPIL GEOMETRY
+# Ref. p. 8 in E-REP-ULG-MET-1033 1-0 01/08/2022:
 #  full: 36.876
 #  D_obscuration: 10.053
 # based on numbers from RvB, 2 Mar 2026:
 #  full: 34.6878
 #  D_obscuration: 12.8502
+# corresponding to PPS-CFO2 mask:

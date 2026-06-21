@@ -334,7 +334,7 @@ def strehl_psfs(
 
     # loop over all PSFs that we want to process from this one detector readout
     for num_coord in range(num_psfs_to_process):
-        ipdb.set_trace()
+        ipdb.set_trace(context=10)
 
         strehl_results_this_psf = {} # to contain info from this PSF alone
         # make cutout of the PSF from the original array, using the closest int to the 1st pass centroids
@@ -349,7 +349,6 @@ def strehl_psfs(
             int(y_cen_1st_pass_native - 0.5*edge_size_original):int(y_cen_1st_pass_native + 0.5*edge_size_original)
         ]
         
-        ipdb.set_trace()
         # find strehls
         result = process_one_psf(
             num_coord,
@@ -366,7 +365,6 @@ def strehl_psfs(
             fit_annular_aperture_fixed=fit_annular_aperture_fixed,
             fit_annular_aperture_free=fit_annular_aperture_free,
         )
-        ipdb.set_trace()
 
         # for each strehl value in result, put it in strehl_results_this_psf as a key-value pair
         for key, value in result.strehl_updates.items():

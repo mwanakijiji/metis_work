@@ -388,6 +388,8 @@ def fit_annular_aperture_fixed_parameters(cookie_cut_out_sci_oversamp, data_cook
         filter_file_leaf = config_observing['polychromatic_observing_filters_lm_leaf_name'][filter_name] # leaf path of filter file name
         filter_file_abs = os.path.join(filters_stem, filter_file_leaf)
         logging.info(f'Making a polychromatic PSF for filter file: {os.path.basename(filter_file_abs)}')
+        print('Pinhole machinery still missing from this function; implement first before using')
+        exit
         intensity_1d_full_1d = model_for_fit_fixed(r_rad_1d_oversamp_masked, 
                                                     D_aperture=config_observing['D_aperture']['full'], 
                                                     D_obscuration=config_observing['D_aperture']['D_obscuration'], 
@@ -767,9 +769,9 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     zscale_native = ZScaleInterval()
     vmin_n, vmax_n = zscale_native.get_limits(data_original_2d)
 
-    # Native-grid summary: original, model, residuals, and 1D cross-section
+    # Native-grid summary: original, model, residuals, and 1D cross-sections
     fig_triple, ax_triple = plt.subplots(
-        2, 2, figsize=(10, 8), constrained_layout=True
+        2, 3, figsize=(14, 8), constrained_layout=True
     )
     for ax in ax_triple.flat:
         ax.set_box_aspect(1)
@@ -785,6 +787,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         best_fit_model_2d, origin="lower", cmap="gray_r", vmin=vmin_n, vmax=vmax_n
     )
     ax_triple[0, 1].set_title("Best-fit free-annular-aperture model")
+    ax_triple[0, 2].axis("off")
 
     # Bottom-left: residuals image (symmetric z-scale for diverging colormap)
     vmin_r, vmax_r = zscale_native.get_limits(residuals_fit_native_2d)
@@ -800,18 +803,29 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     )
     ax_triple[1, 0].set_title("Residuals: native empirical minus best-fit model")
 
-    # Bottom-right: 1D cross-section through the center row
+    # Bottom-middle/right: 1D cross-sections through center row and center column
     ny, nx = data_original_2d.shape
     center_y = ny // 2
+    center_x = nx // 2
     x_pix = np.arange(nx)
-    cross_data = data_original_2d[center_y, :]
-    cross_model = best_fit_model_2d[center_y, :]
-    ax_triple[1, 1].plot(x_pix, cross_data, label="Data")
-    ax_triple[1, 1].plot(x_pix, cross_model, label="Model", linestyle="--")
-    ax_triple[1, 1].set_xlabel("Pixel")
+    y_pix = np.arange(ny)
+    cross_data_row = data_original_2d[center_y, :]
+    cross_model_row = best_fit_model_2d[center_y, :]
+    ax_triple[1, 1].plot(x_pix, cross_data_row, label="Data")
+    ax_triple[1, 1].plot(x_pix, cross_model_row, label="Model", linestyle="--")
+    ax_triple[1, 1].set_xlabel("Pixel (x)")
     ax_triple[1, 1].set_ylabel("Counts")
     ax_triple[1, 1].set_title("Native center-row cross-section\nEmpirical vs best-fit model")
     ax_triple[1, 1].legend()
+
+    cross_data_col = data_original_2d[:, center_x]
+    cross_model_col = best_fit_model_2d[:, center_x]
+    ax_triple[1, 2].plot(y_pix, cross_data_col, label="Data")
+    ax_triple[1, 2].plot(y_pix, cross_model_col, label="Model", linestyle="--")
+    ax_triple[1, 2].set_xlabel("Pixel (y)")
+    ax_triple[1, 2].set_ylabel("Counts")
+    ax_triple[1, 2].set_title("Native center-column cross-section\nEmpirical vs best-fit model")
+    ax_triple[1, 2].legend()
 
     # Colorbars
     cbar_data = fig_triple.colorbar(
@@ -850,15 +864,15 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
         1, 2, figsize=(12, 4), sharex=True, constrained_layout=True
     )
     # Linear
-    ax_lin.plot(x_pix, cross_data, label="Data")
-    ax_lin.plot(x_pix, cross_model, label="Model", linestyle="--")
+    ax_lin.plot(x_pix, cross_data_row, label="Data")
+    ax_lin.plot(x_pix, cross_model_row, label="Model", linestyle="--")
     ax_lin.set_xlabel("Pixel")
     ax_lin.set_ylabel("Counts")
     ax_lin.set_title("Center-row cross-section (linear scale)")
     ax_lin.legend()
     # Log: avoid non-positive values
-    cross_data_log = cross_data.copy()
-    cross_model_log = cross_model.copy()
+    cross_data_log = cross_data_row.copy()
+    cross_model_log = cross_model_row.copy()
     cross_data_log[cross_data_log <= 0] = np.nan
     cross_model_log[cross_model_log <= 0] = np.nan
     ax_log.plot(x_pix, cross_data_log, label="Data")
@@ -1000,6 +1014,7 @@ def fit_annular_aperture_free_parameters(cookie_cut_out_sci_oversamp, cookie_cut
     axs[1,1].plot(cross_empirical, label="Empirical")
     axs[1,1].plot(cross_best_fit, label="Best fit")
     axs[1,1].set_yscale('log')
+    axs[1,1].set_ylim([1e0, 1e5])
     axs[1,1].set_title("Center-row cross-section (log)")
     axs[1,1].legend()
 

@@ -49,7 +49,7 @@ def main():
 
     # to set up the data states, merge config data state defaults with overrides that are specific for each run
     data_states = []
-    ipdb.set_trace()
+
     for entry in runs:
         merged = {**defaults, **entry}
         # Prepend stem to relative file paths
@@ -62,7 +62,7 @@ def main():
         data_states.append(merged)
 
     # loop over each data state (which likely means a single input FITS file; but that file can include multiple PSFs)
-    for state in data_states[0:1]: # if just for a small test
+    for state in data_states[0:1]: # [0:1]: if just for a small test
         strehl_psfs(
             state["file_name"],
             fp_mask=state["fp_mask"],

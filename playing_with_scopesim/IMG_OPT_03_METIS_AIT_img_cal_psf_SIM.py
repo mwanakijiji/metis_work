@@ -56,7 +56,7 @@ sim.link_irdb("../../../")
 sim.bug_report()
 
 
-def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode, angle_array, dit=1, ndit=1, exptime=0.01, use_exp_time_only=False, out_dir=None):
+def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode, angle_array, dit=1, ndit=1, exptime=0.01, use_exp_time_only=False, out_dir=None, intrapixel_capacitance=True):
     '''
     Generate simulated data for the IMG-OPT-04 PSF image quality test
     
@@ -85,6 +85,15 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
         cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": obs_filter, "!WCU.current_fpmask": fp_mask})
 
     metis = sim.OpticalTrain(cmd)
+    #metis['ipc'].included = False # turn off inter-pixel capacitance for now
+    ipdb.set_trace()
+
+    if not intrapixel_capacitance:
+        #metis['ipc'].update(alpha_edge=0.0, alpha_corner=0.0, alpha_aniso=0.0) # turn off inter-pixel capacitance for now
+        metis["ipc"].include = False
+        logging.info('Turning off inter-pixel capacitance for now')
+    else:
+        logging.info('Using default inter-pixel capacitance')
 
     # Generate a circularly-symmetric PSF from an annular aperture
     metis['pupil_masks'].change_mask(pp_mask)
@@ -306,7 +315,8 @@ def main():
             dit=config["dit"],
             ndit=config["ndit"],
             exptime=config["exptime"],
-            out_dir=out_dir
+            out_dir=out_dir,
+            intrapixel_capacitance=False
         )
 
 
