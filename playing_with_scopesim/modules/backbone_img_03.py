@@ -275,7 +275,7 @@ def strehl_psfs(
         and saves a detector-frame diagnostic plot annotated with Strehl values.
     '''
 
-    edge_size_original = 21 # pixels along one side of the cutout, original pixel sampling
+    edge_size_original = 31 # pixels along one side of the cutout, original pixel sampling
     oversample_factor = 3  # try to keep odd to facilitate centering
     logging.info(f"PSF oversampling factor: {oversample_factor}")
 

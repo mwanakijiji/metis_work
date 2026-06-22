@@ -16,8 +16,8 @@ defaults:
 
 runs:
   - filter_name: Br_alpha
-    file_name: IMG_04_simmed_data/IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha_w_intrapixel_capacitance.fits
-    pp_mask: PPS-CFO2
+    file_name: IMG_04_simmed_data/noiseless_IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-LM_filter_Br_alpha.fits
+    pp_mask: PPS-LM
     fit_method: curve_fit
     fit_annular_aperture_fixed: false
     fit_annular_aperture_free: true

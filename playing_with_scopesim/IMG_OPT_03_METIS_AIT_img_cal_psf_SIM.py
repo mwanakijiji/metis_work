@@ -79,14 +79,24 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     # set up instrument
 
     cmd = None # reset
+
     if nd_filter is not None:
-        cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": obs_filter, "!WCU.current_fpmask": fp_mask, "!OBS.pupil_mask": pp_mask, "!OBS.nd_filter_name": nd_filter})
+        cmd = sim.UserCommands(
+                            use_instrument='METIS', 
+                            set_modes=[obs_mode], 
+                            properties={"!OBS.filter_name": obs_filter, "!WCU.current_fpmask": fp_mask, "!OBS.pupil_mask": pp_mask, "!OBS.nd_filter_name": nd_filter},
+                            #ignore_effects=["shot_noise", "readout_noise", "dark_current", "ipc"]
+                            )
     else:
-        cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": obs_filter, "!WCU.current_fpmask": fp_mask})
+        cmd = sim.UserCommands(
+                            use_instrument='METIS', 
+                            set_modes=[obs_mode], 
+                            properties={"!OBS.filter_name": obs_filter, "!WCU.current_fpmask": fp_mask},
+                            #ignore_effects=["shot_noise", "readout_noise", "dark_current", "ipc"]
+                            )
 
     metis = sim.OpticalTrain(cmd)
     #metis['ipc'].included = False # turn off inter-pixel capacitance for now
-    ipdb.set_trace()
 
     if not intrapixel_capacitance:
         #metis['ipc'].update(alpha_edge=0.0, alpha_corner=0.0, alpha_aniso=0.0) # turn off inter-pixel capacitance for now
@@ -269,7 +279,8 @@ def main():
     # LM filters
     # dict_keys(['open', 'Lp', 'short-L', 'L_spec', 'Mp', 'M_spec', 'Br_alpha', 'Br_alpha_ref', 'PAH_3.3', 'PAH_3.3_ref', 'CO_1-0_ice', 'CO_ref', 'H2O-ice', 'IB_4.05', 'HCI_L_short', 'HCI_L_long', 'HCI_M'])
     lm_obs_configs = [
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Br_alpha",     "nd_filter": None,      "dit": 0.065, "ndit": 2, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        #{"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Br_alpha",     "nd_filter": None,      "dit": 0.065, "ndit": 2, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "PPS-LM", "obs_filter": "Br_alpha",     "nd_filter": "ND_OD1",      "dit": 0.3, "ndit": 2, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
         {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Br_alpha_ref", "nd_filter": "ND_OD1",  "dit": 0.4, "ndit": 5, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
         {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Lp",           "nd_filter": "ND_OD2",  "dit": float(3/8), "ndit": 3, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
         {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "H2O-ice",      "nd_filter": "ND_OD1",      "dit": 0.06, "ndit": 1, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False}, 
@@ -316,7 +327,7 @@ def main():
             ndit=config["ndit"],
             exptime=config["exptime"],
             out_dir=out_dir,
-            intrapixel_capacitance=False
+            intrapixel_capacitance=True
         )
 
 
