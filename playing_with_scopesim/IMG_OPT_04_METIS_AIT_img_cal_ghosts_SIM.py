@@ -1,344 +1,236 @@
-# Maked simulated data for the IMG-OPT-04 PSF image quality test
-
-# Reqs.:
-# - Ref. Overleaf doc IMG_OPT_03_In_Field_Straylight_and_Ghosts
-# 
-# 1. METIS-1189: The maximum allowed stray light irradiance from an in-field source shall be less than
-#               0.1 % of the peak irradiance in the focal planes of the IMG. Hereby, stray light con-
-#                contains scattering from opto-mechanical surfaces in Mid-infrared ELT Imager and Spectrograph (METIS).
-# 2. METIS-1429: The maximum allowed stray light irradiance in the CFO-FP2 plane from an in-field
-#               source positioned in the METIS input focal plane shall be less than 0.06 % of the peak
-#               irradiance.
-# 3. METIS-9522: After data reduction and calibration, the flux in optical artefacts and ghosts shall be
-#               less than the 3-sigma thermal background noise for one hour of observations and for
-#               the respective spatial scale of the ghost, i.e. point-source-like ghosts shall contain less
-#               flux than the point-source sensitivity limit; extended ghosts shall contain less flux than
-#               the surface brightness limit for that extension. This shall hold when the brightness of
-#               the celestial source causing the artefact(s) corresponds to the saturation limit in the
-#               fastest full-frame operation.
-
-import numpy as np
 from astropy.io import fits
-from astropy import units as u
-from astropy.wcs import WCS
-
-import scipy
-
-from matplotlib import pyplot as plt
-from matplotlib import colors
+import numpy as np
+import matplotlib.pyplot as plt
+from astropy.convolution import convolve, Gaussian2DKernel
+from scipy.signal import convolve2d
+from matplotlib.colors import LogNorm
 from astropy.visualization import ZScaleInterval
 
-from scipy import ndimage
 
-import time
-import ipdb
-import datetime
-import io
-import os
-import sys
-import logging
+def random_contiguous_stray_light(
+    shape,
+    n_shapes=(3, 8),
+    seed=None,
+    pixels_per_shape=(80, 600),
+    growth_p=0.65,
+    intensity_range=(5.0, 60.0),
+    smooth_edges=False,
+):
+    """
+    Generate random contiguous stray-light shapes on a 2D detector frame.
 
-import scopesim as sim
-from modules.helpers import pipe_2_log
+    Parameters
+    ----------
+    shape : tuple[int, int]
+        (ny, nx) detector shape.
+    n_shapes : int or tuple[int, int]
+        Number of shapes, or (min, max) inclusive.
+    seed : int or None
+        RNG seed.
+    pixels_per_shape : tuple[int, int]
+        Target number of pixels per shape (min, max).
+    growth_p : float
+        Probability to grow from existing frontier pixel vs random frontier pixel.
+    intensity_range : tuple[float, float]
+        Per-shape constant intensity (ADU) sampled uniformly in this range.
+    smooth_edges : bool
+        If True, apply a tiny averaging blur to soften jagged boundaries.
 
+    Returns
+    -------
+    stray : ndarray
+        2D array with random contiguous shapes.
+    label_map : ndarray[int]
+        Integer map of shape IDs (0 background, 1..N shapes).
+    """
+    rng = np.random.default_rng(seed)
+    ny, nx = shape
+    stray = np.zeros((ny, nx), dtype=float)
+    label_map = np.zeros((ny, nx), dtype=int)
 
-# Edit this path if you have a custom install directory, otherwise comment it out. [For ReadTheDocs only]
-sim.link_irdb("../../../")
-
-# simulate observations with METIS (comment this out if packages already exist)
-#sim.download_packages(["METIS", "ELT", "Armazones"])
-
-# print versions of things
-sim.bug_report()
-
-
-def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode, angle_array, dit=1, ndit=1, exptime=0.01, use_exp_time_only=False, out_dir=None):
-    '''
-    Generate simulated data for the IMG-OPT-04 PSF image quality test
-    
-    INPUTS:
-    - fp_mask: focal plane mask
-    - pp_mask: pupil plane mask
-    - nd_filter: ND filter
-    - obs_filter: observing filter
-    - obs_mode: observing mode
-    - angle_array: array of clocking angles
-    - dit: dit time
-    - ndit: number of dithered exposures
-    - exptime: exposure time
-    - use_exp_time_only: if True, only use the exposure time to set the exposure time; but this will be broken down into dit and ndit to avoid saturation, so integration parameters may change accordingly
-
-    OUTPUTS:
-    - None; writes out files
-    '''
-
-    # make the out_dir if it doesn't exist
-    os.makedirs(out_dir, exist_ok=True)
-    logging.info(f'Writing to directory: {out_dir}')
-
-    # set up instrument
-
-    cmd = None # reset
-    if nd_filter is not None:
-        cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": obs_filter, "!WCU.current_fpmask": fp_mask, "!OBS.pupil_mask": pp_mask, "!OBS.nd_filter_name": nd_filter})
+    if isinstance(n_shapes, int):
+        n_obj = n_shapes
     else:
-        cmd = sim.UserCommands(use_instrument='METIS', set_modes=[obs_mode], properties={"!OBS.filter_name": obs_filter, "!WCU.current_fpmask": fp_mask})
+        n_obj = int(rng.integers(n_shapes[0], n_shapes[1] + 1))
 
-    metis = sim.OpticalTrain(cmd)
+    # 8-neighborhood
+    nbrs = [(-1, -1), (-1, 0), (-1, 1),
+            ( 0, -1),          ( 0, 1),
+            ( 1, -1), ( 1, 0), ( 1, 1)]
 
-    # Generate a circularly-symmetric PSF from an annular aperture
-    metis['pupil_masks'].change_mask(pp_mask)
-    metis['psf'].update(pupil_mask=pp_mask+"_WCU")
-    logging.info('Setting WCU PP mask to be: ' + str(pp_mask+"_WCU"))
+    occupied = np.zeros((ny, nx), dtype=bool)
 
-    wcu = metis['wcu_source']
+    for obj_id in range(1, n_obj + 1):
+        target = int(rng.integers(pixels_per_shape[0], pixels_per_shape[1] + 1))
+        intensity = float(rng.uniform(*intensity_range))
+
+        # pick seed in free space
+        free = np.argwhere(~occupied)
+        if free.size == 0:
+            break
+        sy, sx = free[rng.integers(len(free))]
+
+        pixels = {(int(sy), int(sx))}
+        frontier = {(int(sy), int(sx))}
+
+        while len(pixels) < target and frontier:
+            # choose growth source
+            if rng.random() < growth_p:
+                cy, cx = list(frontier)[rng.integers(len(frontier))]
+            else:
+                cy, cx = list(frontier)[rng.integers(len(frontier))]
+
+            # collect candidate neighbors
+            cands = []
+            for dy, dx in nbrs:
+                yy, xx = cy + dy, cx + dx
+                if 0 <= yy < ny and 0 <= xx < nx and not occupied[yy, xx] and (yy, xx) not in pixels:
+                    cands.append((yy, xx))
+
+            if not cands:
+                frontier.discard((cy, cx))
+                continue
+
+            yy, xx = cands[rng.integers(len(cands))]
+            pixels.add((yy, xx))
+            frontier.add((yy, xx))
+
+            # if source is boxed in now, drop it
+            has_free_nbr = any(
+                0 <= cy + dy < ny and 0 <= cx + dx < nx and
+                (not occupied[cy + dy, cx + dx]) and ((cy + dy, cx + dx) not in pixels)
+                for dy, dx in nbrs
+            )
+            if not has_free_nbr:
+                frontier.discard((cy, cx))
+
+        # paint shape
+        for yy, xx in pixels:
+            stray[yy, xx] += intensity
+            label_map[yy, xx] = obj_id
+            occupied[yy, xx] = True
+
+    if smooth_edges:
+        # small 3x3 mean filter without scipy dependency
+        pad = np.pad(stray, 1, mode="edge")
+        out = np.zeros_like(stray)
+        for j in range(ny):
+            for i in range(nx):
+                out[j, i] = pad[j:j+3, i:i+3].mean()
+        stray = out
+
+    return stray, label_map
 
 
-    bb_temp = 1000 * u.K
+# crescent shape
+def add_crescent(detector_array, center, width, height, angle, amplitude=0.5):
+    """
+    Add a crescent shape to the detector array.
 
-    pipe_2_log(lambda m=metis: m.effects.pprint_all(), msg="Optical train effects (initial)")
+    The crescent is the set difference of two disks of equal radius
+    (moon-phase geometry).
 
-    #########################################################
-    # BACKGROUND
+    Parameters
+    ----------
+    detector_array : ndarray
+        2D image to which the crescent is added (not modified in place).
+    center : tuple[float, float]
+        (x, y) pixel coordinates of the crescent center.
+    width : float
+        Outer radius of the crescent in pixels.
+    height : float
+        Approximate thickness of the bright crescent arc in pixels.
+    angle : float
+        Orientation of the crescent opening, in radians
+        (0 opens toward +x).
+    amplitude : float
+        Constant intensity added inside the crescent mask.
 
-    logging.info('Closing WCU BB aperture first to get a background ...')
-    wcu.set_bb_aperture(value = 0.0)
+    Returns
+    -------
+    ndarray
+        Copy of ``detector_array`` with the crescent added.
+    """
+    out = np.array(detector_array, dtype=float, copy=True)
+    ny, nx = out.shape
+    cx, cy = float(center[0]), float(center[1])
+
+    yy, xx = np.indices((ny, nx))
+    r_outer = float(width)
+    thickness = max(1.0, float(height))
+
+    # Cutting disk: same radius as outer, shifted so the leftover arc
+    # has characteristic thickness ~height.
+    offset = max(0.0, r_outer - thickness)
+    cut_cx = cx + offset * np.cos(angle)
+    cut_cy = cy + offset * np.sin(angle)
+
+    in_outer = (xx - cx) ** 2 + (yy - cy) ** 2 <= r_outer ** 2
+    in_cut = (xx - cut_cx) ** 2 + (yy - cut_cy) ** 2 <= r_outer ** 2
+    mask = in_outer & ~in_cut
+
+    out[mask] += amplitude
+    return out
     
-    metis.observe()
-
-    pipe_2_log(lambda m=metis: m.effects.pprint_all(), msg="Optical train effects (background)")
-
-    if use_exp_time_only:
-        # Method 1 for setting exposure times: exptime alone
-        outhdul_off = metis.readout(exptime = exptime, reset=False)[0]
-    else:
-        # Method 2 for setting exposure times: use ndit and dit together
-        outhdul_off = metis.readout(ndit = ndit, dit = dit, reset=False)[0]
-
-    logging.info('--------------------------------')
-    logging.info('Background readout:')
-    logging.info('OBS filter: ' + str(metis.cmds.get("!OBS.filter_name")))
-    logging.info('WCU FP mask: ' + str(metis.cmds.get("!WCU.current_fpmask")))
-    logging.info('OBS PP mask: ' + str(metis.cmds.get("!OBS.pupil_mask")))
-    logging.info('OBS ND filter: ' + str(metis.cmds.get("!OBS.nd_filter_name")))
-    logging.info('NDIT: ' + str(metis.cmds["!OBS.ndit"]))
-    logging.info('DIT: ' + str(metis.cmds["!OBS.dit"]))
-    logging.info('WCU source state:')
-    pipe_2_log(lambda m=metis: metis["wcu_source"].info(), msg="Optical train effects (background)")
-
-    # sanity check that user inputs really are the same as what the instrument is using
-    def sanity_check_user_inputs(metis, obs_filter, fp_mask, pp_mask):
-        if metis.cmds.get("!OBS.filter_name") != obs_filter:
-            logging.error('! ------- OBS filter: ' + str(metis.cmds.get("!OBS.filter_name")) + ' does not match user input: ' + str(obs_filter))
-            exit()
-        if metis.cmds.get("!WCU.current_fpmask") != fp_mask:
-            logging.error('! ------- WCU FP mask: ' + str(metis.cmds.get("!WCU.current_fpmask")) + ' does not match user input: ' + str(fp_mask))
-            exit()
-        if metis.cmds.get("!OBS.pupil_mask") != pp_mask:
-            logging.error('! ------- OBS PP mask: ' + str(metis.cmds.get("!OBS.pupil_mask")) + ' does not match user input: ' + str(pp_mask))
-            exit()
-        else:
-            logging.info('User filter inputs match instrument inputs')
-        return
-
-    # check for background-taking
-    #sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask, pp_mask=pp_mask)
-    background = outhdul_off[1].data
-
-    #########################################################
-    # SCIENCE FRAME
-
-    logging.info('Re-opening WCU BB aperture to get a PSF ...')
-    wcu.set_bb_aperture(value = 1.0) # open BB source
-    metis.observe()
-    # print the ingredients of the PSF generation
-    # pipe_2_log(lambda m=metis: [print(f"{k}: {v}") for k, v in vars(m["psf"]).items()], msg="PSF ingredients") # this prints EVERYTHING
-    logging.info('PSF model wavel range: ' + str(vars(metis['psf'])['_waveset']))
-    logging.info('PSF model kernel shape: ' + str(vars(metis['psf'])['kernel'].shape))
-    logging.info('PSF model kernel file name: ' + str(vars(metis['psf'])['meta']['filename']))
-    pipe_2_log(lambda m=metis: str(vars(m['psf'])['_waveset']), msg="PSF model wavel range")
-
-    # Get perfect PSF - no detector noise
-    #hdul_perfect = metis.image_planes[0].hdu
-
-    pipe_2_log(lambda m=metis: m.effects.pprint_all(), msg="Optical train effects (science)")
-
-    if use_exp_time_only:
-        # Method 1 for setting exposure times: exptime alone
-        outhdul_on = metis.readout(exptime = exptime, reset=False)[0]
-    else:
-        # Method 2 for setting exposure times: use ndit and dit together
-        outhdul_on = metis.readout(ndit = ndit, dit = dit, reset=False)[0]
-    logging.info('--------------------------------')
-    logging.info('Science readout:')
-    logging.info('OBS filter: ' + str(metis.cmds.get("!OBS.filter_name")))
-    logging.info('WCU FP mask: ' + str(metis.cmds.get("!WCU.current_fpmask")))
-    logging.info('OBS PP mask: ' + str(metis.cmds.get("!OBS.pupil_mask")))
-    logging.info('OBS ND filter: ' + str(metis.cmds.get("!OBS.nd_filter_name")))
-    logging.info('NDIT:' + str(metis.cmds["!OBS.ndit"]))
-    logging.info('DIT:' + str(metis.cmds["!OBS.dit"]))
-    logging.info('WCU source state:')
-    pipe_2_log(lambda m=metis: metis["wcu_source"].info(), msg="Optical train effects (background)")
-
-    # check for science-taking
-    #sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask, pp_mask=pp_mask)
-    #hdul_perfect = metis.image_planes[0].hdu
-
-    # background-subtract
-    raw_sci_readout = outhdul_on[1].data
-    bckgd_subted = raw_sci_readout - background
-    
-    basename_file_name_write = 'IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '.fits'
-    abs_file_name_write = out_dir + basename_file_name_write
-
-
-    # Copy the primary header
-    primary_hdu = fits.PrimaryHDU(header=outhdul_on[0].header)
-    # Add background-subtracted readout as first extension
-    hdu_bckgd_subted = fits.ImageHDU(data=bckgd_subted, name='BCKGD_SUBTED')
-    # Add raw science readout as second extension
-    hdu_raw_readout = fits.ImageHDU(data=raw_sci_readout, name='RAW_READOUT')
-    # Add background as third extension
-    hdu_background = fits.ImageHDU(data=background, name='BACKGROUND')
-    hdul_new = fits.HDUList([primary_hdu, hdu_bckgd_subted, hdu_raw_readout, hdu_background])
-
-    # add some stuff to the header, some of which may be redundant
-    hdul_new[0].header['FILTER'] = (obs_filter, 'Observing filter')
-    hdul_new[0].header['WCU_FP'] = (fp_mask, 'WCU focal plane mask')
-    hdul_new[0].header['WCU_PP'] = (pp_mask, 'WCU pupil plane mask')
-    hdul_new[0].header['BB_TEMP'] = (bb_temp.value, 'BB temperature')
-    if ndit is not None:
-        hdul_new[0].header['NDIT'] = (ndit, 'Number of dithered exposures')
-        hdul_new[0].header['DIT'] = (dit, 'Det integration time')
-    else:
-        hdul_new[0].header['EXPTIME'] = (exptime, 'Exposure time')
-    
-    hdul_new.writeto(abs_file_name_write, overwrite=True)
-    logging.info('Saved background-subtracted readout without aberrations to ' + abs_file_name_write)
-
-    logging.info('--------------------------------')
-    logging.info(f'Median of raw science readout: {np.median(raw_sci_readout):.4f}')
-    logging.info(f'Median of background: {np.median(background):.4f}')
-    logging.info(f'Median of background-subtracted readout: {np.median(bckgd_subted):.4f}')
-
-
-def stamp_stray_light_into_data(indir, outdir):
-    '''
-    Stamp stray light into the data
-    '''
-    # read in the 'perfect' simulated images
-    for file in os.listdir(indir):
-        if file.endswith('.fits'):
-            hdul = fits.open(indir + file)
-            data = hdul[1].data
-
-            # generate some fake stray light: a crescent moon-shaped pattern
-            y, x = np.indices(data.shape)
-            moon_mask = (x - data.shape[1] * 0.75)**2 + (y - data.shape[0] * 0.75)**2 < 100**2
-            # Subtract a second, displaced moon to make a crescent shape
-            del_x = -30
-            moon_mask2 = (x - data.shape[1] * 0.75 - del_x)**2 + (y - data.shape[0] * 0.75)**2 < 100**2
-            crescent_mask = moon_mask & (~moon_mask2)
-   
-            stray_light = np.random.poisson(100, data.shape) * crescent_mask
-            data += stray_light
-
-            hdul[1].data = data
-            hdul.writeto(outdir + file, overwrite=True)
-            # add stray light to the data
-            hdul.close()
-            logging.info(f'Saved stray-light-added image to {outdir + file}')
-
-    return
-
 
 def main():
 
-    stem = '/podman-share/metis_work/playing_with_scopesim/'
+    # generate a detector image with a Gaussian PSF in the middle
+    detector_array = np.zeros((2048, 2048))
 
-    now = datetime.datetime.now()
-    log_dir = stem + 'IMG_03_logs/'
-    log_file_name = log_dir + 'log_IMG_03_simulation_psf_image_quality_' + now.strftime('%Y-%m-%d_%H-%M-%S') + '.txt'
-    out_dir = stem + 'IMG_03_simmed_data/' # directory to write the simulated data to
-    
+    # Define the PSF parameters
+    fwhm_pix = 20.0  # Full Width at Half Maximum in pixels
+    sigma_pix = fwhm_pix / (2.0 * np.sqrt(2.0 * np.log(2.0)))  # Convert FWHM to sigma
+    #mu = 20
 
-    # Ensure log directory exists and force config in case handlers already set
-    os.makedirs(log_dir, exist_ok=True)
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_file_name),
-            logging.StreamHandler()
-        ],
-        force=True
+    detector_array_xx, detector_array_yy = np.meshgrid(np.arange(2048), np.arange(2048))
+
+    # Create a 2D Gaussian PSF
+    center_x, center_y = 1024, 1024  # Center of the array
+    dst = np.sqrt((detector_array_xx - center_x) ** 2 + (detector_array_yy - center_y) ** 2)
+
+    # Normalization for a 2D Gaussian
+    normal = 1 / (2 * np.pi * sigma_pix**2)
+
+    # Calculate Gaussian filter centered in the array
+    exp_part = np.exp(-((dst) ** 2) / (2.0 * sigma_pix**2))
+    detector_array = 1 * exp_part/np.max(exp_part) + 0.01 * np.random.randn(2048, 2048)
+
+    #########################################################
+    # Fake readout with blotches on the array
+
+    # same shape as detector/readout
+    stray_rand, labels = random_contiguous_stray_light(
+        shape=detector_array.shape,
+        n_shapes=(4, 10),
+        seed=123,
+        pixels_per_shape=(100, 1200),
+        intensity_range=(0.01, 0.3),
     )
-    os.makedirs(out_dir, exist_ok=True)
 
-    logging.info(f'Log file created at {now.strftime("%Y-%m-%d %H:%M:%S")}')
-    logging.info(f'Log file name: {log_file_name}')
-    logging.info(f'Log file directory: {stem + "IMG_03_logs/"}')
-    logging.info(f'Log file directory: {stem + "IMG_03_logs/"}')
-    logging.info(f'Simmed file output directory: {out_dir}')
+    # dots
+    net_readout_dots = detector_array + stray_rand
+    #########################################################
 
-    # clocking angles for the PSF
-    #angle_array = [0, 45, 60]
-    angle_array = [0] # can be implemented later
+    #########################################################
+    # Fake readout with a crescent on the array
 
-    # LM filters
-    # dict_keys(['open', 'Lp', 'short-L', 'L_spec', 'Mp', 'M_spec', 'Br_alpha', 'Br_alpha_ref', 'PAH_3.3', 'PAH_3.3_ref', 'CO_1-0_ice', 'CO_ref', 'H2O-ice', 'IB_4.05', 'HCI_L_short', 'HCI_L_long', 'HCI_M'])
-    lm_obs_configs = [
-        {"fp_mask": "pinhole_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Br_alpha",     "nd_filter": None,      "dit": 0.065, "ndit": 2, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "pinhole_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Br_alpha_ref", "nd_filter": "ND_OD1",  "dit": 0.4, "ndit": 5, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "pinhole_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Lp",           "nd_filter": "ND_OD2",  "dit": float(3/8), "ndit": 3, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "pinhole_lm", "pp_mask": "PPS-CFO2", "obs_filter": "H2O-ice",      "nd_filter": "ND_OD1",      "dit": 0.06, "ndit": 1, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False}, 
-        {"fp_mask": "pinhole_lm", "pp_mask": "PPS-CFO2", "obs_filter": "short-L",      "nd_filter": "ND_OD2",  "dit": 0.375, "ndit": 4, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "pinhole_lm", "pp_mask": "PPS-CFO2", "obs_filter": "PAH_3.3",      "nd_filter": "ND_OD1",  "dit": 0.1875, "ndit": 7, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "pinhole_lm", "pp_mask": "PPS-CFO2", "obs_filter": "PAH_3.3_ref",  "nd_filter": "ND_OD1",  "dit": 0.1875, "ndit": 8, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "pinhole_lm", "pp_mask": "PPS-CFO2", "obs_filter": "IB_4.05",      "nd_filter": "ND_OD1",  "dit": float(1/6), "ndit": 12, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "pinhole_lm", "pp_mask": "PPS-CFO2", "obs_filter": "HCI_L_short",  "nd_filter": "ND_OD2",  "dit": float(5/6), "ndit": 3, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "pinhole_lm", "pp_mask": "PPS-CFO2", "obs_filter": "HCI_L_long",   "nd_filter": "ND_OD1",  "dit": 0.06, "ndit": 25, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "pinhole_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Mp",           "nd_filter": "ND_OD2",  "dit": 0.5, "ndit": 5, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "pinhole_lm", "pp_mask": "PPS-CFO2", "obs_filter": "CO_1-0_ice",   "nd_filter": "ND_OD1",  "dit": float(2/21), "ndit": 21, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "pinhole_lm", "pp_mask": "PPS-CFO2", "obs_filter": "CO_ref",       "nd_filter": "ND_OD1",  "dit": float(2/21), "ndit": 21, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "pinhole_lm", "pp_mask": "PPS-CFO2", "obs_filter": "HCI_M",        "nd_filter": "ND_OD1",  "dit": float(1/11), "ndit": 22, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "pinhole_lm", "pp_mask": "PPS-CFO2", "obs_filter": "L_spec",       "nd_filter": "ND_OD2",  "dit": 0.12, "ndit": 11, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "pinhole_lm", "pp_mask": "PPS-CFO2", "obs_filter": "M_spec",       "nd_filter": "ND_OD2",  "dit": float(2/7), "ndit": 7, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-    ]
+    # add a crescent
+    net_readout_crescent = add_crescent(detector_array, (400, 1024), 100, 10, 0.1)
+    #########################################################
 
-    # for debug
-    '''
-    ipdb.set_trace()
-    for config in lm_obs_configs:
-        #_ = debug_mwe(fp_mask = "pinhole_lm", pp_mask = "Open", nd_filter = None, obs_filter = "Br_alpha", obs_mode = "wcu_img_lm", exptime = 0.1)
-        #ipdb.set_trace()
-        _ = debug_mwe(fp_mask = 'open', pp_mask= config["pp_mask"], nd_filter = "ND_OD3", obs_filter= config["obs_filter"], obs_mode= config["obs_mode"], exptime=config["exptime"])
-        _ = debug_mwe(fp_mask = config["fp_mask"], pp_mask= config["pp_mask"], nd_filter = "ND_OD3", obs_filter= config["obs_filter"], obs_mode= config["obs_mode"], exptime=config["exptime"])
-        exit()
-        #ipdb.set_trace()
-    ipdb.set_trace()
-    '''
+    # plot stuff
+    plt.clf()
+    plt.imshow(net_readout_dots, origin='lower')
+    plt.title('Stray light 1')
+    plt.colorbar()
+    plt.show()
 
-    for config in lm_obs_configs: # [0:1]: # if just for a small test
-
-        # below line is kludge for testing just one combo
-        #config = {"fp_mask": "pinhole_lm", "pp_mask": "Open", "obs_filter": "Mp",           "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True}
-
-        generate_psf_image_quality_data(
-            fp_mask=config["fp_mask"],
-            pp_mask=config["pp_mask"],
-            nd_filter=config["nd_filter"],
-            obs_filter=config["obs_filter"],
-            obs_mode=config["obs_mode"],
-            angle_array=angle_array,
-            dit=config["dit"],
-            ndit=config["ndit"],
-            exptime=config["exptime"],
-            out_dir = out_dir + 'temp/' # put these into temp directory, because the files are modified next
-        )
-
-        # read in 'perfect' simulated images and add stray light to them
-        stamp_stray_light_into_data(indir = out_dir + 'temp/', outdir = out_dir)
+    plt.clf()
+    plt.imshow(net_readout_crescent, origin='lower')
+    plt.title('Stray light 1')
+    plt.colorbar()
+    plt.show()
 
 
 if __name__ == "__main__":
