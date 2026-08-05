@@ -42,6 +42,8 @@ import os
 import sys
 import logging
 
+import modules.backbone_img_04_stray_light as backbone
+
 import scopesim as sim
 from modules.helpers import pipe_2_log
 
@@ -66,6 +68,7 @@ def generate_stray_light_data(
     ndit=1,
     exptime=0.01,
     use_exp_time_only=False,
+    artifact_type='random_contiguous_stray_light',
     out_dir=None,
     intrapixel_capacitance=True
 ):
@@ -222,11 +225,34 @@ def generate_stray_light_data(
 
     # background-subtract
     raw_sci_readout = outhdul_on[1].data
-    bckgd_subted = raw_sci_readout - background
-    
-    basename_file_name_write = 'IMG_OPT_03_stray_light_bckgrnd_subted_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '.fits'
-    abs_file_name_write = out_dir + basename_file_name_write
 
+    # generate the artifact
+    if artifact_type == 'random_contiguous_stray_light':
+        stray_light, label_map = backbone.make_random_contiguous_stray_light(
+            raw_sci_readout.shape,
+            n_shapes=5,            
+            seed=None,              
+            pixels_per_shape=(600, 2000), 
+            growth_p=0.65,                  
+            intensity_range=(1000.0, 20000.0),     
+            smooth_edges=True              
+        )
+    elif artifact_type == 'crescent':
+        stray_light = backbone.make_crescent(
+            shape=raw_sci_readout.shape,
+            center=(300,400),
+            width=100,
+            height=30,
+            angle=0.0,
+            amplitude=10000
+        )
+   
+
+    # add the artifact
+    raw_sci_readout = raw_sci_readout + stray_light
+
+    # background-subtract
+    bckgd_subted = raw_sci_readout - background
 
     # Copy the primary header
     primary_hdu = fits.PrimaryHDU(header=outhdul_on[0].header)
@@ -248,6 +274,9 @@ def generate_stray_light_data(
         hdul_new[0].header['DIT'] = (dit, 'Det integration time')
     else:
         hdul_new[0].header['EXPTIME'] = (exptime, 'Exposure time')
+
+    basename_file_name_write = 'IMG_OPT_04_stray_light_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '.fits'
+    abs_file_name_write = out_dir + basename_file_name_write
     
     hdul_new.writeto(abs_file_name_write, overwrite=True)
     logging.info('Saved background-subtracted readout without aberrations to ' + abs_file_name_write)
@@ -322,7 +351,6 @@ def main():
 
 
     for config in obs_configs:
-        ipdb.set_trace()
 
         # below line is kludge for testing just one combo
         #config = {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Mp",           "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True}
@@ -337,6 +365,7 @@ def main():
             dit=config["dit"],
             ndit=config["ndit"],
             exptime=config["exptime"],
+            artifact_type = 'random_contiguous_stray_light', # can be 'crescent' or 'random_contiguous_stray_light'
             out_dir=out_dir,
             intrapixel_capacitance=True
         )
