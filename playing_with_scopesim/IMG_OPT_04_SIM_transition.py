@@ -1,7 +1,7 @@
 # Make simulated data for the IMG-OPT-03 PSF image quality test
 
 # Reqs.:
-# - Ref. Overleaf doc IMG_OPT_04_Test_Description_PSF_Image_Quality
+# - Ref. Overleaf doc IMG_OPT_04_Test_Description_In_Field_Straylight_and_Ghosts
 # 
 # 1. METIS-1189: The maximum allowed stray light irradiance from an in-field source shall be less than
 # 0.1 % of the peak irradiance in the focal planes of the IMG. Hereby, stray light contains scattering 
@@ -224,7 +224,7 @@ def generate_stray_light_data(
     raw_sci_readout = outhdul_on[1].data
     bckgd_subted = raw_sci_readout - background
     
-    basename_file_name_write = 'IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '.fits'
+    basename_file_name_write = 'IMG_OPT_03_stray_light_bckgrnd_subted_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '.fits'
     abs_file_name_write = out_dir + basename_file_name_write
 
 
@@ -264,9 +264,9 @@ def main():
     stem = '/podman-share/metis_work/playing_with_scopesim/'
 
     now = datetime.datetime.now()
-    log_dir = stem + 'IMG_04_logs/'
-    log_file_name = log_dir + 'log_IMG_04_simulation_psf_image_quality_' + now.strftime('%Y-%m-%d_%H-%M-%S') + '.txt'
-    out_dir = stem + 'IMG_04_simmed_data/' # directory to write the simulated data to
+    log_dir = stem + 'IMG_04_simmed_stray_light_logs/'
+    log_file_name = log_dir + 'log_IMG_04_simmed_stray_light_' + now.strftime('%Y-%m-%d_%H-%M-%S') + '.txt'
+    out_dir = stem + 'IMG_04_simmed_stray_light_data/' # directory to write the simulated data to
     
 
     # Ensure log directory exists and force config in case handlers already set
@@ -284,8 +284,8 @@ def main():
 
     logging.info(f'Log file created at {now.strftime("%Y-%m-%d %H:%M:%S")}')
     logging.info(f'Log file name: {log_file_name}')
-    logging.info(f'Log file directory: {stem + "IMG_04_logs/"}')
-    logging.info(f'Log file directory: {stem + "IMG_04_logs/"}')
+    logging.info(f'Log file directory: {stem + "IMG_04_simmed_stray_light_logs/"}')
+    logging.info(f'Log file directory: {stem + "IMG_04_simmed_stray_light_logs/"}')
     logging.info(f'Simmed file output directory: {out_dir}')
 
     # clocking angles for the PSF
@@ -294,45 +294,40 @@ def main():
 
     # LM filters
     # dict_keys(['open', 'Lp', 'short-L', 'L_spec', 'Mp', 'M_spec', 'Br_alpha', 'Br_alpha_ref', 'PAH_3.3', 'PAH_3.3_ref', 'CO_1-0_ice', 'CO_ref', 'H2O-ice', 'IB_4.05', 'HCI_L_short', 'HCI_L_long', 'HCI_M'])
-    lm_obs_configs = [
-        #{"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Br_alpha",     "nd_filter": None,      "dit": 0.065, "ndit": 2, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-LM", "obs_filter": "Br_alpha",     "nd_filter": "ND_OD1",      "dit": 0.3, "ndit": 2, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Br_alpha_ref", "nd_filter": "ND_OD1",  "dit": 0.4, "ndit": 5, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Lp",           "nd_filter": "ND_OD2",  "dit": float(3/8), "ndit": 3, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "H2O-ice",      "nd_filter": "ND_OD1",      "dit": 0.06, "ndit": 1, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False}, 
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "short-L",      "nd_filter": "ND_OD2",  "dit": 0.375, "ndit": 4, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "PAH_3.3",      "nd_filter": "ND_OD1",  "dit": 0.1875, "ndit": 7, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "PAH_3.3_ref",  "nd_filter": "ND_OD1",  "dit": 0.1875, "ndit": 8, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "IB_4.05",      "nd_filter": "ND_OD1",  "dit": float(1/6), "ndit": 12, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "HCI_L_short",  "nd_filter": "ND_OD2",  "dit": float(5/6), "ndit": 3, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "HCI_L_long",   "nd_filter": "ND_OD1",  "dit": 0.06, "ndit": 25, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Mp",           "nd_filter": "ND_OD2",  "dit": 0.5, "ndit": 5, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "CO_1-0_ice",   "nd_filter": "ND_OD1",  "dit": float(2/21), "ndit": 21, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "CO_ref",       "nd_filter": "ND_OD1",  "dit": float(2/21), "ndit": 21, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "HCI_M",        "nd_filter": "ND_OD1",  "dit": float(1/11), "ndit": 22, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "L_spec",       "nd_filter": "ND_OD2",  "dit": 0.12, "ndit": 11, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "M_spec",       "nd_filter": "ND_OD2",  "dit": float(2/7), "ndit": 7, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+    obs_configs = [
+        {
+            "fp_mask": "pinhole_lm",
+            "pp_mask": "PPS-CFO2",
+            "obs_filter": "Br_alpha",
+            "nd_filter": None,
+            "dit": 0.065,
+            "ndit": 2,
+            "exptime": np.nan,
+            "obs_mode": "wcu_img_lm",
+            "use_exp_time_only": False,
+        },
+        {
+            "fp_mask": "pinhole_n",
+            "pp_mask": "PPS-CFO2",
+            "obs_filter": "N2",
+            "nd_filter": None,
+            "dit": 0.0025,
+            "ndit": 1,
+            "exptime": np.nan,
+            "obs_mode": "wcu_img_n",
+            "use_exp_time_only": False,
+        },
     ]
 
-    # for debug
-    '''
-    ipdb.set_trace()
-    for config in lm_obs_configs:
-        #_ = debug_mwe(fp_mask = "grid_lm", pp_mask = "Open", nd_filter = None, obs_filter = "Br_alpha", obs_mode = "wcu_img_lm", exptime = 0.1)
-        #ipdb.set_trace()
-        _ = debug_mwe(fp_mask = 'open', pp_mask= config["pp_mask"], nd_filter = "ND_OD3", obs_filter= config["obs_filter"], obs_mode= config["obs_mode"], exptime=config["exptime"])
-        _ = debug_mwe(fp_mask = config["fp_mask"], pp_mask= config["pp_mask"], nd_filter = "ND_OD3", obs_filter= config["obs_filter"], obs_mode= config["obs_mode"], exptime=config["exptime"])
-        exit()
-        #ipdb.set_trace()
-    ipdb.set_trace()
-    '''
 
-    for config in lm_obs_configs:
+
+    for config in obs_configs:
+        ipdb.set_trace()
 
         # below line is kludge for testing just one combo
         #config = {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Mp",           "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True}
 
-        generate_psf_image_quality_data(
+        generate_stray_light_data(
             fp_mask=config["fp_mask"],
             pp_mask=config["pp_mask"],
             nd_filter=config["nd_filter"],
