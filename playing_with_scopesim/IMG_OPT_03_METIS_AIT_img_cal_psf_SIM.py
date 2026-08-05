@@ -1,7 +1,7 @@
-# Maked simulated data for the IMG-OPT-04 PSF image quality test
+# Maked simulated data for the IMG-OPT-03 PSF image quality test
 
 # Reqs.:
-# - Ref. Overleaf doc IMG_OPT_04_Test_Description_PSF_Image_Quality
+# - Ref. Overleaf doc IMG_OPT_03_Test_Description_PSF_Image_Quality
 # 
 # 1. METIS-1408: Quality and alignment of the optical components within Mid-infrared ELT Imager and
 # Spectrograph (METIS) shall provide diffraction limited performance (Strehl ≥ 80 %)
@@ -20,7 +20,7 @@
 # for the PSF image quality measurements in this test in horizontal, vertical, and diagonal directions. We also
 # need to achieve a significantly higher SNR for accurate measurement of the FWHM, and better control of
 # calibration and flat fielding errors for measurement of the Encircled Energy. The flat field will be derived
-# from IMG-RAD-04.
+# from IMG-RAD-(TBD).
 
 import numpy as np
 from astropy.io import fits
@@ -58,7 +58,7 @@ sim.bug_report()
 
 def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode, angle_array, dit=1, ndit=1, exptime=0.01, use_exp_time_only=False, out_dir=None, intrapixel_capacitance=True):
     '''
-    Generate simulated data for the IMG-OPT-04 PSF image quality test
+    Generate simulated data for the IMG-OPT-03 PSF image quality test
     
     INPUTS:
     - fp_mask: focal plane mask
@@ -208,7 +208,7 @@ def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs
     raw_sci_readout = outhdul_on[1].data
     bckgd_subted = raw_sci_readout - background
     
-    basename_file_name_write = 'IMG_OPT_04_wcu_focal_mask_bckgrnd_subted_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '.fits'
+    basename_file_name_write = 'IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '.fits'
     abs_file_name_write = out_dir + basename_file_name_write
 
 
@@ -248,9 +248,9 @@ def main():
     stem = '/podman-share/metis_work/playing_with_scopesim/'
 
     now = datetime.datetime.now()
-    log_dir = stem + 'IMG_04_logs/'
-    log_file_name = log_dir + 'log_IMG_04_simulation_psf_image_quality_' + now.strftime('%Y-%m-%d_%H-%M-%S') + '.txt'
-    out_dir = stem + 'IMG_04_simmed_data/' # directory to write the simulated data to
+    log_dir = stem + 'IMG_03_logs/'
+    log_file_name = log_dir + 'log_IMG_03_simulation_psf_image_quality_' + now.strftime('%Y-%m-%d_%H-%M-%S') + '.txt'
+    out_dir = stem + 'IMG_03_simmed_data/' # directory to write the simulated data to
     
 
     # Ensure log directory exists and force config in case handlers already set
@@ -268,8 +268,8 @@ def main():
 
     logging.info(f'Log file created at {now.strftime("%Y-%m-%d %H:%M:%S")}')
     logging.info(f'Log file name: {log_file_name}')
-    logging.info(f'Log file directory: {stem + "IMG_04_logs/"}')
-    logging.info(f'Log file directory: {stem + "IMG_04_logs/"}')
+    logging.info(f'Log file directory: {stem + "IMG_03_logs/"}')
+    logging.info(f'Log file directory: {stem + "IMG_03_logs/"}')
     logging.info(f'Simmed file output directory: {out_dir}')
 
     # clocking angles for the PSF
