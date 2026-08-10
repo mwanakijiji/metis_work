@@ -2,10 +2,11 @@ import logging
 import os
 from dataclasses import dataclass
 import ipdb
+from notebook_working_dir.dev_stray_light_IMG_OPT_04 import readout_adu
 import numpy as np
 import matplotlib.pyplot as plt
 from .helpers import fit_psf_gaussian_from_native_array, fit_simmed_psfs, load_config_and_pipe
-from .psf_grid_prep import load_grid_data_from_fits, prepare_psf_grid
+from .psf_grid_prep import load_grid_data_from_fits, oversample_1st_pass_centroid, load_fits_data
 from .strehl_fcns import fit_annular_aperture_fixed_parameters, fit_annular_aperture_free_parameters
 from photutils.centroids import centroid_2dg, centroid_sources
 import pickle
@@ -27,6 +28,295 @@ class SinglePsfFitResult:
 
 
 def process_one_psf_stray_light(
+    num_coord: int,
+    num_psfs_to_process: int,
+    *,
+    original_array: np.ndarray,
+    oversample_factor: int,
+    coords_xy_1st_pass_normsamp: list[float, float],
+    filter_name: str,
+    fp_mask: str,
+    pp_mask: str,
+    config_observing: dict,
+    results_write_dir: str,
+    fit_method: str,
+    fit_simmed_psf: bool,
+    fit_annular_aperture_fixed: bool,
+    fit_annular_aperture_free: bool,
+) -> SinglePsfFitResult:
+    '''
+    Process one PSF cutout by oversampling it, centroiding it with a Gaussian fit,
+    and optionally evaluating additional Strehl estimators.
+
+    INPUTS
+    ----------
+    num_coord : int
+        Zero-based index of the PSF currently being processed.
+    num_psfs_to_process : int
+        Total number of PSFs being processed from this detector image.
+    original_array : np.ndarray
+        Native-sampling 2D array
+    oversample_factor : int
+        Factor used to oversample the PSF cutout before centroiding and model fitting.
+    coords_1st_pass_oversamp : list[float, float]
+        X and Y coordinates of the 1st-pass centroid in oversampled pixel coordinates (using the full 2D array)
+    filter_name : str
+        Name of the observing filter associated with the PSF.
+    fp_mask : str
+        Focal-plane mask label used for bookkeeping and plot naming.
+    pp_mask : str
+        Pupil-plane mask label used for bookkeeping and plot naming.
+    config_observing : dict
+        Observing configuration dictionary passed to downstream fitting routines.
+    results_write_dir : str
+        Directory where diagnostic plots and fit products are written.
+    fit_method : str
+        Name of the fitting backend to use for the free annular-aperture fit.
+    fit_simmed_psf : bool
+        Whether to evaluate the ScopeSim-based Strehl workflow if enabled.
+    fit_annular_aperture_fixed : bool
+        Whether to evaluate the fixed-geometry annular-aperture Strehl fit.
+    fit_annular_aperture_free : bool
+        Whether to evaluate the free-geometry annular-aperture Strehl fit.
+
+    OUTPUTS
+    -------
+    SinglePsfFitResult
+        Dataclass containing the Gaussian-fit centroid/FWHM/amplitude values in native
+        pixel units, the Gaussian-based Strehl estimate, and any optional Strehl metrics.
+    '''
+    logging.info(f"Processing PSF {num_coord} of {num_psfs_to_process}")
+
+    #cookie_edge_size_original = original_array.shape[0]
+
+    gaussian_fit_outputs = fit_psf_gaussian_from_native_array(
+        original_array=original_array,
+        oversample_factor=oversample_factor,
+        coords_xy_1st_pass_normsamp=coords_xy_1st_pass_normsamp,
+        edge_size_oversamp=30,
+    )
+    oversampled_array = gaussian_fit_outputs["oversampled_array"]
+    coords_xy_1st_pass_oversamp_fullarray = gaussian_fit_outputs["coords_xy_1st_pass_oversamp_fullarray"]
+    x_center_pix_gaussian_best_fit_fullarray_oversamp = gaussian_fit_outputs["x_center_pix_fullarray_oversamp"]
+    y_center_pix_gaussian_best_fit_fullarray_oversamp = gaussian_fit_outputs["y_center_pix_fullarray_oversamp"]
+    fwhm_x_pix_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs["fwhm_x_pix_cookie_oversamp"]
+    fwhm_y_pix_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs["fwhm_y_pix_cookie_oversamp"]
+    amplitude_counts_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs["amplitude_counts_cookie_oversamp"]
+    x_center_pix_gaussian_best_fit_fullarray_normsamp = gaussian_fit_outputs["x_center_pix_fullarray_normsamp"]
+    y_center_pix_gaussian_best_fit_fullarray_normsamp = gaussian_fit_outputs["y_center_pix_fullarray_normsamp"]
+    fwhm_x_pix_gaussian_best_fit_fullarray_normsamp = gaussian_fit_outputs["fwhm_x_pix_fullarray_normsamp"]
+    fwhm_y_pix_gaussian_best_fit_fullarray_normsamp = gaussian_fit_outputs["fwhm_y_pix_fullarray_normsamp"]
+
+    # consider the center of the frame to be the first guess for the 2nd-pass centroid 
+    # (remember, the 1st-pass was used to cut out the PSF in the first place)
+    #x_cen_oversamp = cookie_cutout_this_psf_oversamp.shape[1] / 2
+    #y_cen_oversamp = cookie_cutout_this_psf_oversamp.shape[0] / 2
+
+    logging.info(f"Gaussian-fit FWHM (x, y) (native sampling): ({fwhm_x_pix_gaussian_best_fit_fullarray_normsamp:.2f}, {fwhm_y_pix_gaussian_best_fit_fullarray_normsamp:.2f})")
+    logging.info(f"Gaussian-fit centroid (x, y) (native sampling): ({x_center_pix_gaussian_best_fit_fullarray_normsamp:.2f}, {y_center_pix_gaussian_best_fit_fullarray_normsamp:.2f})")
+
+
+    # save an FYI plot of oversampled region around PSF
+    plt.clf()
+    edge_size_oversamp = 20
+    idx_cutout_x1 = int(x_center_pix_gaussian_best_fit_fullarray_oversamp - edge_size_oversamp/2)
+    idx_cutout_x2 = int(x_center_pix_gaussian_best_fit_fullarray_oversamp + edge_size_oversamp/2)
+    idx_cutout_y1 = int(y_center_pix_gaussian_best_fit_fullarray_oversamp - edge_size_oversamp/2)
+    idx_cutout_y2 = int(y_center_pix_gaussian_best_fit_fullarray_oversamp + edge_size_oversamp/2)
+    plt.figure(figsize=(12, 12))
+    plt.imshow(oversampled_array[idx_cutout_y1:idx_cutout_y2, idx_cutout_x1:idx_cutout_x2], origin="lower", cmap="gray_r")
+    plt.scatter(
+        coords_xy_1st_pass_oversamp_fullarray[0] - idx_cutout_x1,
+        coords_xy_1st_pass_oversamp_fullarray[1] - idx_cutout_y1,
+        color="red",
+        s=50,
+        marker='x',
+        label='1st pass',
+        alpha=1,
+    )
+    plt.scatter(
+        x_center_pix_gaussian_best_fit_fullarray_oversamp - idx_cutout_x1,
+        y_center_pix_gaussian_best_fit_fullarray_oversamp - idx_cutout_y1,
+        color="green",
+        s=50,
+        marker='+',
+        label='2nd pass',
+        alpha=1,
+    )
+    plt.title(f"Oversampled region around PSF {num_coord} of {num_psfs_to_process}")
+    plt.legend()
+    file_name_plot = os.path.join(results_write_dir, f"fyi_plot_oversampled_region_around_psf_{num_coord}.png")
+    plt.savefig(file_name_plot)
+    logging.info(f"Saved {file_name_plot}")
+    plt.close()
+
+    centroid_results = {
+        "coord_x_fullarray_normsamp": float(x_center_pix_gaussian_best_fit_fullarray_normsamp),
+        "coord_y_fullarray_normsamp": float(y_center_pix_gaussian_best_fit_fullarray_normsamp),
+        "fwhm_x_fullarray_normsamp": float(fwhm_x_pix_gaussian_best_fit_fullarray_normsamp),
+        "fwhm_y_fullarray_normsamp": float(fwhm_y_pix_gaussian_best_fit_fullarray_normsamp),
+        "amplitude_counts": float(amplitude_counts_gaussian_best_fit_cookie_oversamp),
+    }
+
+    '''
+    return SinglePsfFitResult(
+        coord_x_fullarray_normsamp=float(x_center_pix_gaussian_best_fit_fullarray_normsamp),
+        coord_y_fullarray_normsamp=float(y_center_pix_gaussian_best_fit_fullarray_normsamp),
+        fwhm_x_fullarray_normsamp=float(fwhm_x_pix_gaussian_best_fit_fullarray_normsamp),
+        fwhm_y_fullarray_normsamp=float(fwhm_y_pix_gaussian_best_fit_fullarray_normsamp),
+        amplitude_counts=float(amplitude_counts_gaussian_best_fit_cookie_oversamp),
+    )
+    '''
+    return centroid_results
+
+
+def centroid_2passes_oversample(
+    data_state, 
+    config_coords_guesses_file_name, 
+    psfs_subset="all", 
+    oversample_factor=3, 
+    grid_header=None, 
+    centroid_box_size=41, 
+    zoom_order=3, 
+    centroid_func=centroid_2dg, 
+    centroid_sources_impl=centroid_sources):
+    '''
+    Process all PSFs in the grid by oversampling them, centroiding them with a Gaussian fit,
+    and returning the centroid results.
+    '''
+
+    data, header = load_fits_data(array_abs_file_name, hdu_index=1)
+    prep = oversample_1st_pass_centroid(data, config_coords_guesses_file_name) 
+    ipdb.set_trace()     # pass 1: whole-frame
+    #results = refine_2nd_pass_centroids(prep, ...)  # pass 2: per-PSF
+    #return CentroidResult(prep=prep, refined=results)
+    
+    return
+
+
+def centroid_one_psf_2nd_pass(
+    num_coord: int,
+    num_psfs_to_process: int,
+    *,
+    original_array: np.ndarray,
+    oversample_factor: int,
+    coords_xy_1st_pass_normsamp: list[float, float],
+    results_write_dir: str,
+) -> SinglePsfFitResult:
+    '''
+    Process one PSF cutout by oversampling it, centroiding it with a Gaussian fit,
+    and optionally evaluating additional Strehl estimators.
+
+    This is the 2nd-pass centroiding, using the 1st-pass centroid as a starting point.
+
+    INPUTS
+    ----------
+    num_coord : int
+        Zero-based index of the PSF currently being processed.
+    num_psfs_to_process : int
+        Total number of PSFs being processed from this detector image.
+    original_array : np.ndarray
+        2D array of the PSF at native detector sampling.
+    oversample_factor : int
+        The factor by which the PSF cutout is oversampled before centroiding and model fitting.
+    coords_xy_1st_pass_normsamp : list[float, float]
+        X and Y coordinates (in native pixel units) of the first-pass centroid, for initialization.
+    results_write_dir : str
+        Directory where diagnostic plots and fit products will be saved.
+   
+
+    OUTPUTS
+    -------
+    SinglePsfFitResult
+        Dataclass containing the Gaussian-fit centroid/FWHM/amplitude values in native
+        pixel units, the Gaussian-based Strehl estimate, and any optional Strehl metrics.
+    '''
+    logging.info(f"Processing PSF {num_coord} of {num_psfs_to_process}")
+
+    #cookie_edge_size_original = original_array.shape[0]
+
+    gaussian_fit_outputs = fit_psf_gaussian_from_native_array(
+        original_array=original_array,
+        oversample_factor=oversample_factor,
+        coords_xy_1st_pass_normsamp=coords_xy_1st_pass_normsamp,
+        edge_size_oversamp=30,
+    )
+    oversampled_array = gaussian_fit_outputs["oversampled_array"]
+    coords_xy_1st_pass_oversamp_fullarray = gaussian_fit_outputs["coords_xy_1st_pass_oversamp_fullarray"]
+    x_center_pix_gaussian_best_fit_fullarray_oversamp = gaussian_fit_outputs["x_center_pix_fullarray_oversamp"]
+    y_center_pix_gaussian_best_fit_fullarray_oversamp = gaussian_fit_outputs["y_center_pix_fullarray_oversamp"]
+    fwhm_x_pix_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs["fwhm_x_pix_cookie_oversamp"]
+    fwhm_y_pix_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs["fwhm_y_pix_cookie_oversamp"]
+    amplitude_counts_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs["amplitude_counts_cookie_oversamp"]
+    x_center_pix_gaussian_best_fit_fullarray_normsamp = gaussian_fit_outputs["x_center_pix_fullarray_normsamp"]
+    y_center_pix_gaussian_best_fit_fullarray_normsamp = gaussian_fit_outputs["y_center_pix_fullarray_normsamp"]
+    fwhm_x_pix_gaussian_best_fit_fullarray_normsamp = gaussian_fit_outputs["fwhm_x_pix_fullarray_normsamp"]
+    fwhm_y_pix_gaussian_best_fit_fullarray_normsamp = gaussian_fit_outputs["fwhm_y_pix_fullarray_normsamp"]
+
+    # consider the center of the frame to be the first guess for the 2nd-pass centroid 
+    # (remember, the 1st-pass was used to cut out the PSF in the first place)
+    #x_cen_oversamp = cookie_cutout_this_psf_oversamp.shape[1] / 2
+    #y_cen_oversamp = cookie_cutout_this_psf_oversamp.shape[0] / 2
+
+    logging.info(f"Gaussian-fit FWHM (x, y) (native sampling): ({fwhm_x_pix_gaussian_best_fit_fullarray_normsamp:.2f}, {fwhm_y_pix_gaussian_best_fit_fullarray_normsamp:.2f})")
+    logging.info(f"Gaussian-fit centroid (x, y) (native sampling): ({x_center_pix_gaussian_best_fit_fullarray_normsamp:.2f}, {y_center_pix_gaussian_best_fit_fullarray_normsamp:.2f})")
+
+
+    # save an FYI plot of oversampled region around PSF
+    plt.clf()
+    edge_size_oversamp = 20
+    idx_cutout_x1 = int(x_center_pix_gaussian_best_fit_fullarray_oversamp - edge_size_oversamp/2)
+    idx_cutout_x2 = int(x_center_pix_gaussian_best_fit_fullarray_oversamp + edge_size_oversamp/2)
+    idx_cutout_y1 = int(y_center_pix_gaussian_best_fit_fullarray_oversamp - edge_size_oversamp/2)
+    idx_cutout_y2 = int(y_center_pix_gaussian_best_fit_fullarray_oversamp + edge_size_oversamp/2)
+    plt.figure(figsize=(12, 12))
+    plt.imshow(oversampled_array[idx_cutout_y1:idx_cutout_y2, idx_cutout_x1:idx_cutout_x2], origin="lower", cmap="gray_r")
+    plt.scatter(
+        coords_xy_1st_pass_oversamp_fullarray[0] - idx_cutout_x1,
+        coords_xy_1st_pass_oversamp_fullarray[1] - idx_cutout_y1,
+        color="red",
+        s=50,
+        marker='x',
+        label='1st pass',
+        alpha=1,
+    )
+    plt.scatter(
+        x_center_pix_gaussian_best_fit_fullarray_oversamp - idx_cutout_x1,
+        y_center_pix_gaussian_best_fit_fullarray_oversamp - idx_cutout_y1,
+        color="green",
+        s=50,
+        marker='+',
+        label='2nd pass',
+        alpha=1,
+    )
+    plt.title(f"Oversampled region around PSF {num_coord} of {num_psfs_to_process}")
+    plt.legend()
+    file_name_plot = os.path.join(results_write_dir, f"fyi_plot_oversampled_region_around_psf_{num_coord}.png")
+    plt.savefig(file_name_plot)
+    logging.info(f"Saved {file_name_plot}")
+    plt.close()
+
+    centroid_results = {
+        "coord_x_fullarray_normsamp": float(x_center_pix_gaussian_best_fit_fullarray_normsamp),
+        "coord_y_fullarray_normsamp": float(y_center_pix_gaussian_best_fit_fullarray_normsamp),
+        "fwhm_x_fullarray_normsamp": float(fwhm_x_pix_gaussian_best_fit_fullarray_normsamp),
+        "fwhm_y_fullarray_normsamp": float(fwhm_y_pix_gaussian_best_fit_fullarray_normsamp),
+        "amplitude_counts": float(amplitude_counts_gaussian_best_fit_cookie_oversamp),
+    }
+
+    '''
+    return SinglePsfFitResult(
+        coord_x_fullarray_normsamp=float(x_center_pix_gaussian_best_fit_fullarray_normsamp),
+        coord_y_fullarray_normsamp=float(y_center_pix_gaussian_best_fit_fullarray_normsamp),
+        fwhm_x_fullarray_normsamp=float(fwhm_x_pix_gaussian_best_fit_fullarray_normsamp),
+        fwhm_y_fullarray_normsamp=float(fwhm_y_pix_gaussian_best_fit_fullarray_normsamp),
+        amplitude_counts=float(amplitude_counts_gaussian_best_fit_cookie_oversamp),
+    )
+    '''
+    return centroid_results
+
+
+def process_one_psf_centroid(
     num_coord: int,
     num_psfs_to_process: int,
     *,
@@ -374,8 +664,163 @@ def measure_light_exterior(array_input,
     return 
 
 
+def centroid_2passes_oversample(
+array_data, array_header = load_fits_data(readout_abs_file_name, hdu_index=1)
 
-def stray_light(
+def centroid_2passes_oversample(readout_abs_file_name,
+    config_coords_guesses_file_name,
+    psfs_subset="all",
+    oversample_factor=3,
+    grid_header=None,
+    centroid_box_size=41,
+    zoom_order=3,
+    centroid_func=centroid_2dg,
+    centroid_sources_impl=centroid_sources,
+):
+
+    data, header = load_fits_data(readout_abs_file_name, hdu_index=1)
+    prep = oversample_1st_pass_centroid(...)      # pass 1: whole-frame
+    results = refine_centroids_2nd_pass(prep, ...)  # pass 2: loops over PSFs for better accuracy
+    return CentroidResult(prep=prep, refined=results)
+
+
+def centroid_2passes_oversample(
+    readout_abs_file_name,
+    config_coords_guesses_file_name,
+    psfs_subset="all",
+    oversample_factor=3,
+    grid_header=None,
+    centroid_box_size=41,
+    zoom_order=3,
+    centroid_func=centroid_2dg,
+    centroid_sources_impl=centroid_sources,
+    ):
+    '''
+    Starting from PSF position guesses, find the PSF centroids and return their values.
+    The array is oversampled in the meantime for increased accuracy.
+
+    This is done in 2 passes.
+
+    INPUTS
+    ----------
+    readout_abs_file_name : str
+        Path to the FITS file containing the 'empirical' detector readout
+    config_coords_guesses_file_name : str
+        Path to the configuration file containing initial coordinate guesses.
+
+    OUTPUTS
+    -------
+    TBD
+    '''
+
+    #edge_size_original = 21 # pixels along one side of the cutout, original pixel sampling
+    oversample_factor = 3  # try to keep odd to facilitate centering
+    logging.info(f"PSF oversampling factor: {oversample_factor}")
+
+    # retrieve coord guesses as a starting point
+    config_coords_guesses_config = load_config_and_pipe(
+        config_file_choice=config_coords_guesses_file_name, print_one_line=False
+    )
+
+    # retrieve data, oversample, and do 1st-pass centroiding
+    # (note oversampled empirical frame is only used for centroiding; the cost function for fitting later on just uses the frame as-is)
+    array_data, array_header = load_fits_data(readout_abs_file_name, hdu_index=1)
+    prep = oversample_1st_pass_centroid(
+        grid_data,
+        config_coords_guesses_config,
+        psfs_subset=psfs_subset,
+        oversample_factor=oversample_factor,
+        grid_header=grid_header,
+    )
+
+    # unpack quantities
+    grid_data = prep.grid_data # original data (native pixel scale)
+    grid_data_original = prep.grid_data_original # original data (native pixel scale)
+    grid_data_oversamp = prep.grid_data_oversamp # oversampled data
+    x_pos_pix_oversamp_1st_pass = prep.x_pos_pix_oversamp # x-positions of the centroids (oversampled)
+    y_pos_pix_oversamp_1st_pass = prep.y_pos_pix_oversamp # y-positions of the centroids (oversampled)
+    coords_centroided_1st_pass_all_oversamp = prep.coords_centroided_1st_pass_all_oversamp # coordinates of the centroids (oversampled)
+    x_pos_pix_native_1st_pass = prep.x_pos_pix_native # x-positions of the centroids (native pixel scale)
+    y_pos_pix_native_1st_pass = prep.y_pos_pix_native # y-positions of the centroids (native pixel scale)
+    coords_centroided_1st_pass_all_native = prep.coords_centroided_1st_pass_all_native # coordinates of the centroids (native pixel scale)
+    raw_cutout_size_oversampled = prep.raw_cutout_size_oversampled # size of the raw cutout in oversampled pixels (note no cutout has been made yet)
+    num_psfs_to_process = prep.num_psfs_to_process # number of PSFs to process
+    total_psfs = prep.total_psfs # total number of PSFs in the grid
+
+    logging.info("Finding PSF centroids, first pass (via oversample_1st_pass_centroid)")
+    logging.info(f"Raw PSF cutout size (oversampled): {raw_cutout_size_oversampled}")
+    logging.info(f"Total PSFs: {total_psfs}")
+    if psfs_subset == "all":
+        logging.info(f"Processing all {total_psfs} PSFs")
+    elif isinstance(psfs_subset, int):
+        logging.info(f"Processing {num_psfs_to_process} out of {total_psfs} PSFs")
+    logging.info(f"Processing {num_psfs_to_process} out of {total_psfs} PSFs")
+
+    # initialize arrays/dicts to store results
+    (
+        coord_x_array,
+        coord_y_array,
+        fwhm_x_pix_array,
+        fwhm_y_pix_array,
+        sigma_x_pix_array,
+        sigma_y_pix_array,
+        angle_theta_array,
+        amplitude_counts_array,
+        gaussian_based_strehl_array,
+    ) = (np.zeros(total_psfs) for _ in range(9))
+    centroid_results_all = {} # to contain info from all the PSFs
+
+    # oversample the grid data
+    #grid_data_oversamp = zoom(grid_data, oversample_factor, order=3)
+
+    # loop over all PSFs that we want to process from this one detector readout
+    for num_coord in range(num_psfs_to_process):
+
+        #centroid_results_this_psf = {} # to contain info from this PSF alone
+        # make cutout of the PSF from the original array, using the closest int to the 1st pass centroids
+
+        # 1-st pass coords of the PSF in the original array
+        x_cen_1st_pass_native = coords_centroided_1st_pass_all_native[num_coord][1]
+        y_cen_1st_pass_native = coords_centroided_1st_pass_all_native[num_coord][0]
+
+        # convert to oversampled coordinates
+        #x_cen_1st_pass_oversamp = x_cen_1st_pass_native * oversample_factor
+        #y_cen_1st_pass_oversamp = y_cen_1st_pass_native * oversample_factor
+
+        
+        
+        # find coordinates (and later other things?)
+        centroid_results_this_psf = process_one_psf_centroid(
+            num_coord,
+            num_psfs_to_process,
+            original_array=grid_data,
+            oversample_factor=oversample_factor,
+            coords_xy_1st_pass_normsamp=[x_cen_1st_pass_native, y_cen_1st_pass_native],
+            filter_name=filter_name,
+            fp_mask=fp_mask,
+            pp_mask=pp_mask,
+            config_observing=config_observing,
+            results_write_dir=results_write_dir,
+            fit_method=fit_method,
+            fit_simmed_psf=fit_simmed_psf,
+            fit_annular_aperture_fixed=fit_annular_aperture_fixed,
+            fit_annular_aperture_free=fit_annular_aperture_free,
+        )
+
+        '''
+        # for each coord value in result, put it in centroid_results_this_psf as a key-value pair
+        for key, value in result.centroid_results.items():
+            centroid_results_this_psf[key] = value
+        # also include the 1st-pass centroid coordinates
+        centroid_results_this_psf['x_cen_1st_pass_native'] = x_cen_1st_pass_native
+        centroid_results_this_psf['y_cen_1st_pass_native'] = y_cen_1st_pass_native
+        '''
+        # put the results from this PSF into the overall dictionary
+        centroid_results_all[f'psf_num_{num_coord:02d}'] = centroid_results_this_psf
+
+
+
+def old_stray_light(
     file_name,
     fp_mask,
     pp_mask,
@@ -439,7 +884,7 @@ def stray_light(
     # retrieve data, oversample, and do 1st-pass centroiding
     # (note oversampled empirical frame is only used for centroiding; the cost function for fitting later on just uses the frame as-is)
     grid_data, grid_header = load_grid_data_from_fits(file_name, hdu_index=1)
-    prep = prepare_psf_grid(
+    prep = oversample_1st_pass_centroid(
         grid_data,
         config_coords_guesses_config,
         psfs_subset=psfs_subset,
@@ -461,7 +906,7 @@ def stray_light(
     num_psfs_to_process = prep.num_psfs_to_process # number of PSFs to process
     total_psfs = prep.total_psfs # total number of PSFs in the grid
 
-    logging.info("Finding PSF centroids, first pass (via prepare_psf_grid)")
+    logging.info("Finding PSF centroids, first pass (via oversample_1st_pass_centroid)")
     logging.info(f"Raw PSF cutout size (oversampled): {raw_cutout_size_oversampled}")
     logging.info(f"Total PSFs: {total_psfs}")
     if psfs_subset == "all":

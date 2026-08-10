@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from modules.psf_grid_prep import PsfGridPrep, prepare_psf_grid, resolve_psfs_subset
+from modules.psf_grid_prep import PsfGridPrep, oversample_1st_pass_centroid, resolve_psfs_subset
 
 
 def _fake_centroid_sources(_img, xpos, ypos, box_size, centroid_func):
@@ -25,22 +25,22 @@ def test_resolve_psfs_subset_invalid():
         resolve_psfs_subset("first", 3)
 
 
-def test_prepare_psf_grid_requires_2d():
+def test_oversample_1st_pass_centroid_requires_2d():
     with pytest.raises(ValueError, match="2D"):
-        prepare_psf_grid(np.zeros(10), {"psf_coordinate_guesses": []}, centroid_sources_impl=_fake_centroid_sources)
+        oversample_1st_pass_centroid(np.zeros(10), {"psf_coordinate_guesses": []}, centroid_sources_impl=_fake_centroid_sources)
 
 
-def test_prepare_psf_grid_invalid_subset():
+def test_oversample_1st_pass_centroid_invalid_subset():
     grid = np.zeros((20, 20))
     cfg = {"psf_coordinate_guesses": [{"y": 10.0, "x": 10.0}]}
     with pytest.raises(ValueError, match="psfs_subset"):
-        prepare_psf_grid(grid, cfg, psfs_subset="first", centroid_sources_impl=_fake_centroid_sources)
+        oversample_1st_pass_centroid(grid, cfg, psfs_subset="first", centroid_sources_impl=_fake_centroid_sources)
 
 
-def test_prepare_psf_grid_oversample_and_centroids():
+def test_oversample_1st_pass_centroid_oversample_and_centroids():
     grid = np.zeros((10, 12))
     cfg = {"psf_coordinate_guesses": [{"y": 4.0, "x": 5.0}, {"y": 8.0, "x": 9.0}]}
-    prep = prepare_psf_grid(
+    prep = oversample_1st_pass_centroid(
         grid,
         cfg,
         psfs_subset="all",
@@ -59,7 +59,7 @@ def test_prepare_psf_grid_oversample_and_centroids():
     assert not np.shares_memory(prep.grid_data_original, prep.grid_data)
 
 
-def test_prepare_psf_grid_subset_limits_loop_count_field():
+def test_oversample_1st_pass_centroid_subset_limits_loop_count_field():
     grid = np.zeros((20, 20))
     cfg = {
         "psf_coordinate_guesses": [
@@ -67,7 +67,7 @@ def test_prepare_psf_grid_subset_limits_loop_count_field():
             {"y": 12.0, "x": 12.0},
         ]
     }
-    prep = prepare_psf_grid(
+    prep = oversample_1st_pass_centroid(
         grid,
         cfg,
         psfs_subset=1,

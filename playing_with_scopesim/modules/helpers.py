@@ -833,7 +833,8 @@ def fit_psf_gaussian_from_native_array(
     fwhm_x_pix_fullarray_normsamp = fwhm_x_pix_oversamp_cutout / oversample_factor
     fwhm_y_pix_fullarray_normsamp = fwhm_y_pix_oversamp_cutout / oversample_factor
 
-    return {
+    # a wad of info that may be useful later, or for debugging
+    lots_of_info = {
         "oversampled_array": oversampled_array,
         "coords_xy_1st_pass_oversamp_fullarray": coords_xy_1st_pass_oversamp_fullarray,
         "cookie_cut_out_sci_oversamp": cookie_cut_out_sci_oversamp,
@@ -851,6 +852,14 @@ def fit_psf_gaussian_from_native_array(
         "sigma_y_pix_oversamp_cutout": sigma_y_pix_oversamp_cutout,
         "angle_theta_deg": angle_theta_deg,
     }
+
+    # just the important stuff
+    xy_centering_only = {
+        "x_center_pix_fullarray_normsamp": x_center_pix_fullarray_normsamp,
+        "y_center_pix_fullarray_normsamp": y_center_pix_fullarray_normsamp,
+    }
+
+    return xy_centering_only, lots_of_info
 
 
 def fyi_plot_centroiding(array_to_plot, coords_to_plot, title_string=None, zscale=False, results_write_dir="figs_dump"):

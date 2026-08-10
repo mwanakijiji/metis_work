@@ -1,7 +1,7 @@
 '''
 Prepare oversampled PSF grid data and first-pass centroids for strehl_psfs.
 
-The core entry point is prepare_psf_grid(): pass in-memory arrays and a coords
+The core entry point is oversample_1st_pass_centroid(): pass in-memory arrays and a coords
 config dict so unit tests do not need FITS or YAML on disk.
 '''
 
@@ -13,8 +13,11 @@ from typing import Any, Callable, Mapping, Union
 import copy
 import numpy as np
 from photutils.centroids import centroid_2dg, centroid_sources
+from . import helpers
 from scipy.ndimage import zoom
 from astropy.io import fits
+import ipdb
+import matplotlib.pyplot as plt
 
 
 @dataclass(frozen=True)
@@ -90,7 +93,7 @@ def _guesses_yx_from_config(coords_config: Mapping[str, Any]) -> tuple[np.ndarra
     return coords[:, 0], coords[:, 1]
 
 
-def prepare_psf_grid(
+def oversample_1st_pass_centroid(
     grid_data: np.ndarray,
     coords_config: Mapping[str, Any],
     psfs_subset: Union[str, int] = "all",
@@ -190,6 +193,52 @@ def prepare_psf_grid(
     )
 
 
+def refine_2nd_pass_centroids(
+    data_original: np.ndarray, 
+    prep: PsfGridPrep, 
+    oversample_factor: int = 3) -> PsfGridPrep:
+
+    '''
+    Refine the centroids of the PSFs using a Gaussian fit.
+
+    INPUTS:
+    ----------
+    prep : PsfGridPrep
+        Dataclass containing the original and oversampled grids, first-pass centroid
+        coordinates in both oversampled and native pixel units, and some other (legacy) stuff
+
+    OUTPUTS:
+    -------
+    PsfGridPrep
+    '''
+
+    # loop over all the PSFs on this FITS file (might just be one)
+    for num_coord in range(prep.num_psfs_to_process):
+
+        # coordinates from first-pass centroiding
+        x_cen_1st_pass_native = prep.coords_centroided_1st_pass_all_native[num_coord][1]
+        y_cen_1st_pass_native = prep.coords_centroided_1st_pass_all_native[num_coord][0]
+        coords_xy_1st_pass_normsamp = (x_cen_1st_pass_native, y_cen_1st_pass_native)
+
+        # make the cookie cutout around this PSF
+        edge_size_native_sampling = 20 # length of one side of a box around the PSF, native sampling (KEEP EVEN)
+        grid_data_original_cutout_this_psf = data_original[
+            int(x_cen_1st_pass_native - 0.5*edge_size_native_sampling):int(x_cen_1st_pass_native + 0.5*edge_size_native_sampling),
+            int(y_cen_1st_pass_native - 0.5*edge_size_native_sampling):int(y_cen_1st_pass_native + 0.5*edge_size_native_sampling)
+        ]
+
+        # fit a Gaussian to the PSF
+        xy_coords_2nd_pass, _ = helpers.fit_psf_gaussian_from_native_array(
+            original_array=data_original,
+            oversample_factor=oversample_factor,
+            coords_xy_1st_pass_normsamp=coords_xy_1st_pass_normsamp,
+            edge_size_oversamp=edge_size_native_sampling,
+        )
+        ipdb.set_trace()
+
+    return xy_coords_2nd_pass
+
+
 def load_grid_data_from_fits(file_name: str, hdu_index: int = 1) -> tuple[np.ndarray, Any]:
     '''
     Load image data and header metadata from a selected FITS HDU.
@@ -198,6 +247,31 @@ def load_grid_data_from_fits(file_name: str, hdu_index: int = 1) -> tuple[np.nda
     ----------
     file_name : str
         Path to the FITS file containing the PSF-grid data.
+    hdu_index : int, optional
+        Index of the HDU to read from the FITS file.
+
+    OUTPUTS
+    -------
+    tuple[np.ndarray, Any]
+        Tuple containing a copy of the HDU data as a NumPy array and a copy of the HDU
+        header.
+    '''
+
+    with fits.open(file_name) as hdul:
+        hdu = hdul[hdu_index]
+        data = np.array(np.asarray(hdu.data), copy=True)
+        header = hdu.header.copy()
+    return data, header
+
+
+def load_fits_data(file_name: str, hdu_index: int = 1) -> tuple[np.ndarray, Any]:
+    '''
+    Load image data and header metadata from a selected FITS HDU.
+
+    INPUTS
+    ----------
+    file_name : str
+        Abs path to the FITS file containing the PSF-grid data.
     hdu_index : int, optional
         Index of the HDU to read from the FITS file.
 

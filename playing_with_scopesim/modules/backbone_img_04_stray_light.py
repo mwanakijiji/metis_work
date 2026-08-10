@@ -1,5 +1,39 @@
 import numpy as np
+from . import psf_grid_prep, helpers
+from photutils.centroids import centroid_2dg, centroid_sources
+import ipdb
 
+def centroid_2passes_oversample(
+    data_state, 
+    config_coords_guesses_file_name, 
+    psfs_subset="all", 
+    oversample_factor=3, 
+    grid_header=None, 
+    centroid_box_size=41, 
+    zoom_order=3, 
+    centroid_func=centroid_2dg, 
+    centroid_sources_impl=centroid_sources):
+    '''
+    Take 1 FITS file and centroid the PSFs, starting with first guesses of the positions.
+    This uses 2 passes for accuracy.
+    '''
+
+    # load the empirical readout
+    data_original, header = psf_grid_prep.load_fits_data(file_name=data_state['file_absname'], hdu_index=1)
+
+    # load the config file with the coordinates guesses
+    coords_guesses = helpers.load_config_and_pipe(config_file_choice=config_coords_guesses_file_name, print_one_line=False)
+
+    # 1st pass: centroid with photutils
+    prep = psf_grid_prep.oversample_1st_pass_centroid(data_original, coords_guesses)
+    ipdb.set_trace()
+
+    # 2nd pass: centroid with Gaussian fit
+    results, _ = psf_grid_prep.refine_2nd_pass_centroids(data_original, prep)
+    ipdb.set_trace()
+    #return CentroidResult(prep=prep, refined=results)
+    
+    return
 
 def make_random_contiguous_stray_light(
     shape,

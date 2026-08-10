@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from .helpers import fit_psf_gaussian_from_native_array, fit_simmed_psfs, load_config_and_pipe
-from .psf_grid_prep import load_grid_data_from_fits, prepare_psf_grid
+from .psf_grid_prep import load_grid_data_from_fits, oversample_1st_pass_centroid
 from .strehl_fcns import fit_annular_aperture_fixed_parameters, fit_annular_aperture_free_parameters
 from photutils.centroids import centroid_2dg, centroid_sources
 import pickle
@@ -287,7 +287,7 @@ def strehl_psfs(
     # retrieve data, oversample, and do 1st-pass centroiding
     # (note oversampled empirical frame is only used for centroiding; the cost function for fitting later on just uses the frame as-is)
     grid_data, grid_header = load_grid_data_from_fits(file_name, hdu_index=1)
-    prep = prepare_psf_grid(
+    prep = oversample_1st_pass_centroid(
         grid_data,
         config_coords_guesses_config,
         psfs_subset=psfs_subset,
@@ -309,7 +309,7 @@ def strehl_psfs(
     num_psfs_to_process = prep.num_psfs_to_process # number of PSFs to process
     total_psfs = prep.total_psfs # total number of PSFs in the grid
 
-    logging.info("Finding PSF centroids, first pass (via prepare_psf_grid)")
+    logging.info("Finding PSF centroids, first pass (via oversample_1st_pass_centroid)")
     logging.info(f"Raw PSF cutout size (oversampled): {raw_cutout_size_oversampled}")
     logging.info(f"Total PSFs: {total_psfs}")
     if psfs_subset == "all":
