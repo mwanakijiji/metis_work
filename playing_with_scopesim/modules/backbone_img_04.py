@@ -170,28 +170,7 @@ def process_one_psf_stray_light(
     return centroid_results
 
 
-def centroid_2passes_oversample(
-    data_state, 
-    config_coords_guesses_file_name, 
-    psfs_subset="all", 
-    oversample_factor=3, 
-    grid_header=None, 
-    centroid_box_size=41, 
-    zoom_order=3, 
-    centroid_func=centroid_2dg, 
-    centroid_sources_impl=centroid_sources):
-    '''
-    Process all PSFs in the grid by oversampling them, centroiding them with a Gaussian fit,
-    and returning the centroid results.
-    '''
 
-    data, header = load_fits_data(array_abs_file_name, hdu_index=1)
-    prep = oversample_1st_pass_centroid(data, config_coords_guesses_file_name) 
-    ipdb.set_trace()     # pass 1: whole-frame
-    #results = refine_2nd_pass_centroids(prep, ...)  # pass 2: per-PSF
-    #return CentroidResult(prep=prep, refined=results)
-    
-    return
 
 
 def centroid_one_psf_2nd_pass(

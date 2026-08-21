@@ -2,6 +2,42 @@ import numpy as np
 from . import psf_grid_prep, helpers
 from photutils.centroids import centroid_2dg, centroid_sources
 import ipdb
+from dataclasses import dataclass, field
+from typing import Any
+
+
+# class for containing information about a stray light region
+@dataclass
+class StrayLightRegion:
+    label: int
+    spatial_scale: str          # e.g. "point", "extended", "large"
+    peak_irradiance: float
+    total_flux: float
+    area_pix: int
+    # optional: bbox, centroid, ...
+
+
+# class for containing information about a stray light result from a single FITS file
+@dataclass
+class StrayLightResult:
+    # identity
+    file_absname: str
+    filter_name: str
+    detector: str
+
+    # images
+    image: np.ndarray                 # working 2D array
+    real_psf_mask: np.ndarray | None = None
+    segment_map: np.ndarray | None = None   # integer labels
+
+    # bookkeeping
+    centroids: Any | None = None      # from centroid_2passes_oversample
+    regions: list[StrayLightRegion] = field(default_factory=list)
+
+    # global quantities
+    background_level: float | None = None
+    background_rms: float | None = None
+
 
 def centroid_2passes_oversample(
     data_state, 
