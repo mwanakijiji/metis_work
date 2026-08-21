@@ -56,3 +56,8 @@ D_aperture:
 #  full: 34.6878
 #  D_obscuration: 12.8502
 # corresponding to PPS-CFO2 mask:
+
+# mapping: analysis detector labels → pixel_scales keys
+scope_sim_to_analysis:
+  LM: img_lm
+  N: img_n

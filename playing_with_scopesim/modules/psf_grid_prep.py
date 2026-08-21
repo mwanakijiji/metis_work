@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Union
 
 import copy
+import os
 import numpy as np
 from photutils.centroids import centroid_2dg, centroid_sources
 from . import helpers
@@ -139,6 +140,7 @@ def oversample_1st_pass_centroid(
         coordinates in both oversampled and native pixel units, and related bookkeeping
         values needed by downstream Strehl-analysis code.
     '''
+
     grid_data = np.asarray(grid_data)
     if grid_data.ndim != 2:
         raise ValueError(f"grid_data must be 2D, got shape {grid_data.shape}")
@@ -234,9 +236,81 @@ def refine_2nd_pass_centroids(
             coords_xy_1st_pass_normsamp=coords_xy_1st_pass_normsamp,
             edge_size_oversamp=edge_size_native_sampling,
         )
-        ipdb.set_trace()
 
     return xy_coords_2nd_pass
+
+
+def _is_resource_deadlock(exc: BaseException) -> bool:
+    errno = getattr(exc, "errno", None)
+    return errno == 35 or "Resource deadlock avoided" in str(exc)
+
+
+def _local_copy_of_fits(file_name: str) -> str:
+    """
+    Copy a FITS file to container-local /tmp.
+
+    Needed when Podman virtiofs on macOS raises errno 35 on direct reads.
+    Tries several copy methods because ``cp``/``shutil`` can hit the same deadlock.
+    """
+    import subprocess
+    import tempfile
+
+    dest = os.path.join(
+        tempfile.gettempdir(),
+        f"metis_fits_cache_{os.path.basename(file_name)}",
+    )
+    errors: list[str] = []
+
+    # 1) shell cp
+    try:
+        subprocess.run(["cp", "-f", file_name, dest], check=True, capture_output=True)
+        return dest
+    except (OSError, subprocess.CalledProcessError) as exc:
+        errors.append(f"cp: {exc}")
+
+    # 2) dd (sometimes succeeds when cp fails on virtiofs)
+    try:
+        subprocess.run(
+            ["dd", f"if={file_name}", f"of={dest}", "bs=1M", "status=none"],
+            check=True,
+            capture_output=True,
+        )
+        return dest
+    except (OSError, subprocess.CalledProcessError) as exc:
+        errors.append(f"dd: {exc}")
+
+    # 3) cat redirect via shell
+    try:
+        subprocess.run(
+            f'cat "{file_name}" > "{dest}"',
+            shell=True,
+            check=True,
+            capture_output=True,
+        )
+        return dest
+    except (OSError, subprocess.CalledProcessError) as exc:
+        errors.append(f"cat: {exc}")
+
+    raise OSError(
+        35,
+        "Resource deadlock avoided while reading FITS on a shared mount. "
+        "Tried cp/dd/cat to /tmp and all failed. "
+        "On the Mac host run: xattr -c <file>; or restart Podman "
+        "(`podman machine stop && podman machine start`). "
+        f"Details: {errors}",
+        file_name,
+    )
+
+
+def _open_fits_hdul(file_name: str):
+    """Open a FITS file with memmap off, falling back to a /tmp copy on errno 35."""
+    try:
+        return fits.open(file_name, memmap=False)
+    except OSError as exc:
+        if not _is_resource_deadlock(exc):
+            raise
+        local_path = _local_copy_of_fits(file_name)
+        return fits.open(local_path, memmap=False)
 
 
 def load_grid_data_from_fits(file_name: str, hdu_index: int = 1) -> tuple[np.ndarray, Any]:
@@ -256,24 +330,24 @@ def load_grid_data_from_fits(file_name: str, hdu_index: int = 1) -> tuple[np.nda
         Tuple containing a copy of the HDU data as a NumPy array and a copy of the HDU
         header.
     '''
-
-    with fits.open(file_name) as hdul:
-        hdu = hdul[hdu_index]
-        data = np.array(np.asarray(hdu.data), copy=True)
-        header = hdu.header.copy()
-    return data, header
+    return load_fits_data(file_name, hdu_index=hdu_index)
 
 
 def load_fits_data(file_name: str, hdu_index: int = 1) -> tuple[np.ndarray, Any]:
     '''
     Load image data and header metadata from a selected FITS HDU.
 
+    Uses ``memmap=False``. If the path is on a flaky Podman/macOS share and open
+    raises errno 35 (Resource deadlock avoided), copies the file to ``/tmp`` via
+    shell ``cp`` and opens that instead.
+
     INPUTS
     ----------
     file_name : str
         Abs path to the FITS file containing the PSF-grid data.
     hdu_index : int, optional
-        Index of the HDU to read from the FITS file.
+        Index of the HDU to read from the FITS file. Science arrays from the
+        IMG-OPT-04 SIM writers live in extension 1 (``BCKGD_SUBTED``).
 
     OUTPUTS
     -------
@@ -281,8 +355,7 @@ def load_fits_data(file_name: str, hdu_index: int = 1) -> tuple[np.ndarray, Any]
         Tuple containing a copy of the HDU data as a NumPy array and a copy of the HDU
         header.
     '''
-
-    with fits.open(file_name) as hdul:
+    with _open_fits_hdul(file_name) as hdul:
         hdu = hdul[hdu_index]
         data = np.array(np.asarray(hdu.data), copy=True)
         header = hdu.header.copy()

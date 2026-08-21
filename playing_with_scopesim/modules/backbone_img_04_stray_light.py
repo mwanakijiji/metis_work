@@ -4,6 +4,7 @@ from photutils.centroids import centroid_2dg, centroid_sources
 import ipdb
 from dataclasses import dataclass, field
 from typing import Any
+import astropy.io.fits as fits
 
 
 # class for containing information about a stray light region
@@ -24,9 +25,13 @@ class StrayLightResult:
     file_absname: str
     filter_name: str
     detector: str
+    image: np.ndarray
+
+    # derived from observing config
+    wavel_central: float | None = None  # meters
+    pixel_scale: float | None = None  # mas/pixel
 
     # images
-    image: np.ndarray                 # working 2D array
     real_psf_mask: np.ndarray | None = None
     segment_map: np.ndarray | None = None   # integer labels
 
@@ -39,8 +44,54 @@ class StrayLightResult:
     background_rms: float | None = None
 
 
+def populate_result_obj_info(result_obj, data_state, observing_config):
+    '''
+    Populate the result object with information from the data state.
+
+    INPUTS:
+    - result_obj (StrayLightResult): result object
+    - data_state (dict): data state
+    - observing_config (ObservingConfig): observing config
+
+    OUTPUTS:
+    - result_obj (StrayLightResult): result object
+    '''
+
+    # add the things from the data state
+    for key, value in data_state.items():
+        setattr(result_obj, key, value)
+
+    # add the central wavelength for the filter
+    filters = observing_config["monochromatic_observing_filters_lm"]
+    try:
+        result_obj.wavel_central = float(filters[result_obj.filter_name])  # in m
+    except KeyError as exc:
+        raise KeyError(
+            f"No central wavelength for filter {result_obj.filter_name!r} "
+            f"in monochromatic_observing_filters_lm"
+        ) from exc
+
+    # pixel scale: detector label (LM/N) → analysis key (img_lm/img_n) → mas/pixel
+    detector_to_scale_key = observing_config["scope_sim_to_analysis"]
+    try:
+        scale_key = detector_to_scale_key[result_obj.detector]
+    except KeyError as exc:
+        raise KeyError(
+            f"No ScopeSim→analysis mapping for detector {result_obj.detector!r} "
+            f"in scope_sim_to_analysis"
+        ) from exc
+    try:
+        result_obj.pixel_scale = float(observing_config["pixel_scales"][scale_key])
+    except KeyError as exc:
+        raise KeyError(
+            f"No pixel scale for key {scale_key!r} in pixel_scales"
+        ) from exc
+
+    return result_obj
+
+
 def centroid_2passes_oversample(
-    data_state, 
+    result_obj, 
     config_coords_guesses_file_name, 
     psfs_subset="all", 
     oversample_factor=3, 
@@ -52,24 +103,49 @@ def centroid_2passes_oversample(
     '''
     Take 1 FITS file and centroid the PSFs, starting with first guesses of the positions.
     This uses 2 passes for accuracy.
+
+    INPUTS:
+    - result_obj: result object
+    - config_coords_guesses_file_name: path to the config file with the coordinates guesses
+    - psfs_subset: subset of PSFs to use, "all" or "subset"
+    - oversample_factor: oversample factor
+    - grid_header: header of the grid
+    - centroid_box_size: size of the centroid box
+    - zoom_order: order of the zoom
+    - centroid_func: function to use for centroiding
+    - centroid_sources_impl: implementation of the centroid_sources function
+
+    OUTPUTS:
+    - CentroidResult object
+    - prep: preparation object
+    - results: results object
+    - _: _
+    - _: _
+    - _: _
+    - _: _
+    - _: _
     '''
 
     # load the empirical readout
-    data_original, header = psf_grid_prep.load_fits_data(file_name=data_state['file_absname'], hdu_index=1)
+    #data_original, header = psf_grid_prep.load_fits_data(file_name=image_array, hdu_index=1)
+
+    data_original = result_obj.image
 
     # load the config file with the coordinates guesses
     coords_guesses = helpers.load_config_and_pipe(config_file_choice=config_coords_guesses_file_name, print_one_line=False)
 
     # 1st pass: centroid with photutils
     prep = psf_grid_prep.oversample_1st_pass_centroid(data_original, coords_guesses)
-    ipdb.set_trace()
 
     # 2nd pass: centroid with Gaussian fit
-    results, _ = psf_grid_prep.refine_2nd_pass_centroids(data_original, prep)
-    ipdb.set_trace()
+    centroid_post_2nd_pass = psf_grid_prep.refine_2nd_pass_centroids(data_original, prep)
+
     #return CentroidResult(prep=prep, refined=results)
-    
-    return
+
+    # now attach this to the result object
+    result_obj.centroids = centroid_post_2nd_pass
+
+    return result_obj
 
 def make_random_contiguous_stray_light(
     shape,
@@ -185,6 +261,38 @@ def make_random_contiguous_stray_light(
 
     return stray, label_map
 
+
+def stray_light_mask_real(result_obj, observing_config):
+    '''
+    Mask the real PSF, so we can find the stray light.
+
+    INPUTS:
+    - result_obj (StrayLightResult): result object
+    - observing_config (ObservingConfig): observing config
+
+    OUTPUTS:
+    - None; updates result_obj
+    '''
+
+    # just make a mask over 3*lambda/D for now''
+    #wavel = float(observing_config['filter_name']['wavelength'])
+    lambda_over_D = 206265. * float(result_obj.wavel_central) / float(observing_config['D_aperture']['full']) # in arcsec
+
+    # make a 2D array of the distances from the centroid, units pixels
+    del_x_pix = np.arange(result_obj.image.shape[1]) - result_obj.centroids['x_center_pix_fullarray_normsamp']
+    del_y_pix = np.arange(result_obj.image.shape[0]) - result_obj.centroids['y_center_pix_fullarray_normsamp']
+    xx_pix, yy_pix = np.meshgrid(del_x_pix, del_y_pix)
+
+    xx_arcsec = xx_pix * result_obj.pixel_scale / 1000 # /1000 because pixel scale is in mas/pixel
+    yy_arcsec = yy_pix * result_obj.pixel_scale / 1000
+
+    angular_distances = np.sqrt(xx_arcsec**2 + yy_arcsec**2)
+    mask = angular_distances < 3.*lambda_over_D
+
+    # add the mask to the result object
+    result_obj.real_psf_mask = mask
+
+    return result_obj
 
 # crescent shape
 def make_crescent(shape, center, width, height, angle, amplitude=0.5):

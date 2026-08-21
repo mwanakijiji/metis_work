@@ -54,3 +54,8 @@ D_aperture:
 # based on numbers from RvB, 2 Mar 2026:
 #  full: 34.6878
 #  D_obscuration: 12.8502
+
+# mapping between this analysis notation and that of ScopeSim
+scope_sim_to_analysis:
+  LM: img_lm
+  N: img_n
