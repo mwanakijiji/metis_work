@@ -262,6 +262,22 @@ def make_random_contiguous_stray_light(
     return stray, label_map
 
 
+def stray_light_segmentation(result_obj):
+    '''
+    Segment the stray light.
+    '''
+
+    # apply the mask to the image
+    ipdb.set_trace()
+    result_obj_masked = result_obj.image.astype(float, copy=True)
+    result_obj_masked[result_obj.real_psf_mask.astype(bool)] = np.nan
+
+
+    # CONTINUE HERE: NOW DO THE SEGMENTATION!
+
+    return result_obj
+
+
 def stray_light_mask_real(result_obj, observing_config):
     '''
     Mask the real PSF, so we can find the stray light.
