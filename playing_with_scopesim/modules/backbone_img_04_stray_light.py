@@ -5,6 +5,13 @@ import ipdb
 from dataclasses import dataclass, field
 from typing import Any
 import astropy.io.fits as fits
+import matplotlib.pyplot as plt
+import cv2
+import skimage as ski
+from skimage.segmentation import active_contour
+from skimage.feature import peak_local_max
+from typing import Literal
+import logging
 
 
 # class for containing information about a stray light region
@@ -262,18 +269,252 @@ def make_random_contiguous_stray_light(
     return stray, label_map
 
 
-def stray_light_segmentation(result_obj):
+# options for how to segment the stray light
+HoughVariant = Literal["circle", "active"]
+
+def stray_light_segmentation(
+    result_obj,
+    option: str = "hough_transform",
+    hough_variant: HoughVariant = "circle",
+):
     '''
     Segment the stray light.
+
+    Ideas and methods herein are from Eric Pantin's notebook for instructional purposes. Many knobs remain
+    to be tuned with real data.
     '''
 
-    # apply the mask to the image
-    ipdb.set_trace()
+    # apply the PSF mask to the image
     result_obj_masked = result_obj.image.astype(float, copy=True)
     result_obj_masked[result_obj.real_psf_mask.astype(bool)] = np.nan
 
+    # fill the nans with zeros to avoid choking stats; will reapply mask later
+    result_obj_masked[np.isnan(result_obj_masked)] = 0.0
+    # to avoid choking stats (redundant?)
+    finite = np.isfinite(result_obj_masked)
+    finite_vals = result_obj_masked[finite]
 
-    # CONTINUE HERE: NOW DO THE SEGMENTATION!
+    '''
+    fig, ax = plt.subplots(figsize=(10, 10))
+    ax.imshow(result_obj_masked, cmap='gray', origin='lower')
+    ax.set_title('Masked Image')
+    plt.show()
+
+    fig, ax = plt.subplots(figsize=(10, 3))
+    ax.hist(result_obj_masked.ravel(), bins=100)
+    plt.show()
+    '''
+
+    if option == 'threshold':
+        #logging.info('Using thresholding method')
+        # thresholds from finite pixels only (Otsu/cv2 do not accept NaNs)
+        mean = float(np.mean(finite_vals))
+        median = float(np.median(finite_vals))
+        otsu_threshold = float(ski.filters.threshold_otsu(finite_vals))
+
+        # keep full 2D shape; masked/NaN pixels stay False (0)
+        #ret, thresh1 = cv2.threshold(result_obj_masked, mean, 255, cv2.THRESH_BINARY)
+        ret, image_passed = cv2.threshold(result_obj_masked, 1.e3*median, 255, cv2.THRESH_BINARY) ## ## TODO: make coeff in front of median a parameter
+        #ret, thresh3 = cv2.threshold(result_obj_masked, otsu_threshold, 255, cv2.THRESH_BINARY)
+        #thresh1 = (finite & (result_obj_masked > mean)).astype(np.uint8) * 10
+        #thresh2 = (finite & (result_obj_masked > median)).astype(np.uint8) * 10
+        #thresh3 = (finite & (result_obj_masked > otsu_threshold)).astype(np.uint8) * 10
+
+    elif option == 'hough_transform':
+
+        # fit initial circles to blobs
+
+        # Bright circular stray-light blobs: intensity → clean binary → fit circles.
+        # (Edge-Sobel + Hough on a zero-filled PSF hole finds noise and hole-boundary rings.)
+        psf_mask = result_obj.real_psf_mask.astype(bool)
+        filled = result_obj.image.astype(float, copy=True)
+        bg = float(np.nanmedian(filled[~psf_mask])) if np.any(~psf_mask) else 0.0
+        filled[psf_mask] = bg
+
+        # TV denoise on normalized data (smaller weight => more denoise)
+        vmin = float(np.min(filled))
+        vmax = float(np.max(filled))
+        scale = vmax - vmin if vmax > vmin else 1.0
+        tv = ski.restoration.denoise_tv_bregman((filled - vmin) / scale, weight=1.0)
+        tv = tv * scale + vmin
+        ipdb.set_trace()
+
+        # Sobel edge detection
+        gx = cv2.Sobel(tv, cv2.CV_64F, 1, 0, ksize=3)
+        gy = cv2.Sobel(tv, cv2.CV_64F, 0, 1, ksize=3)
+        mag = cv2.magnitude(gx, gy)
+        ipdb.set_trace()
+
+        # Keep only strong edges so Hough isn't swamped by noise
+        thr = float(np.percentile(mag, 99.8))
+        edges = (mag > thr).astype(np.uint8) * 255
+        image_passed = edges.astype(float)
+        ipdb.set_trace()
+
+        # Remove speckles, fill small gaps in real circles
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        ipdb.set_trace()
+        # remove a bit more noise; 'erosion followed by dilation'
+        binary = cv2.morphologyEx(image_passed, cv2.MORPH_OPEN, kernel)
+        ipdb.set_trace()
+        # docs.opencv.org: 'reverse of Opening, Dilation followed by Erosion. It is useful in closing small holes inside the foreground objects, or small black points on the object'
+        binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+        ipdb.set_trace()
+
+        # Fit a circle to each connected component (more stable than Hough on noisy edges)
+        binary = (binary > 0).astype(np.uint8) # convert to binary image to prevent problems with connectedComponentsWithStats
+        n_lab, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
+        min_area = 50  # pixels; drop noise crumbs
+        circles_xyr = []
+        for lab in range(1, n_lab):
+            area = int(stats[lab, cv2.CC_STAT_AREA])
+            if area < min_area:
+                continue
+            comp = (labels == lab).astype(np.uint8)
+            contours, _ = cv2.findContours(comp, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if not contours:
+                continue
+            cnt = max(contours, key=cv2.contourArea)
+            peri = cv2.arcLength(cnt, True)
+            if peri <= 0:
+                continue
+            circularity = 4.0 * np.pi * float(cv2.contourArea(cnt)) / (peri * peri)
+            if circularity < 0.4:
+                continue
+            (cx, cy), radius = cv2.minEnclosingCircle(cnt)
+            circles_xyr.append((float(cx), float(cy), float(radius), area, circularity))
+
+        print(f"Detected {len(circles_xyr)} circular regions (thr={thr:.4g})")
+        for cx, cy, radius, area, circ in circles_xyr:
+            print(f"  center=({cx:.1f}, {cy:.1f}) r={radius:.1f} area={area} circ={circ:.2f}")
+
+        # fyi plot
+        fig, axs = plt.subplots(1, 3, figsize=(14, 4), constrained_layout=True)
+        axs[0].imshow(tv, origin="lower", cmap="gray")
+        axs[0].set_title("Denoised")
+        axs[1].imshow(binary, origin="lower", cmap="gray")
+        axs[1].set_title("Bright mask")
+        axs[2].imshow(tv, origin="lower", cmap="gray")
+        for cx, cy, radius, *_ in circles_xyr:
+            circ_patch = plt.Circle((cx, cy), radius, fill=False, color="lime", lw=2)
+            axs[2].add_patch(circ_patch)
+            axs[2].plot(cx, cy, "r+", ms=8)
+        axs[2].set_title("Fitted circles")
+        for ax in axs:
+            ax.set_aspect("equal")
+        plt.show()
+
+        # simple circle fitting
+        if hough_variant == "circle":
+
+            # make a mask for each circle
+            region_masks = []
+            for cx, cy, radius, *_ in circles_xyr:
+                region_mask = np.zeros(tv.shape, dtype=np.uint8)
+                cv2.circle(region_mask, (int(cx), int(cy)), int(radius), 255, -1)
+                region_masks.append(region_mask)
+            logging.info('Using simple circle fitting for segmentation')
+
+        elif hough_variant == "active":
+
+            logging.info('Using active contour fitting for segmentation')
+
+            mask = np.zeros(tv.shape, dtype=np.uint8)
+            expand_px = 5
+            expand_kernel = cv2.getStructuringElement(
+                cv2.MORPH_ELLIPSE, (2 * expand_px + 1, 2 * expand_px + 1)
+            )
+            snakes = []
+            expanded_contours = []
+
+            for circle in circles_xyr:
+                center = (circle[0], circle[1])  # Circle center
+                radius = circle[2]              # Circle radius
+
+                # Generate an initial circular contour
+                theta = np.linspace(0, 2 * np.pi, 100)
+                x = center[0] + radius * np.cos(theta)
+                y = center[1] + radius * np.sin(theta)
+                init = np.array([y, x]).T # initial snake coords
+
+                # Apply active contour model
+                tv_blurred = ski.filters.gaussian(tv, sigma=0.5)
+                # make a snake
+                # alpha: length shape; beta: smoothness; gamma: stepping parameter
+                snake = active_contour(tv_blurred, init, alpha=0.05, beta=3, gamma=0.1)
+
+                # Convert the snake (refined contour) to an integer format and swap coordinates for OpenCV
+                snake_int = np.array([(int(point[1]), int(point[0])) for point in snake], dtype=np.int32)
+
+                # init the component
+                comp = np.zeros(tv.shape, dtype=np.uint8)
+                # fill the contour on the mask
+                cv2.fillPoly(comp, [snake_int], 255)
+                # expand the contour, to make sure we capture all of the stray light
+                comp_exp = cv2.dilate(comp, expand_kernel, iterations=1)
+                mask = np.maximum(mask, comp_exp)
+
+                snakes.append(snake)
+                cnts, _ = cv2.findContours(comp_exp, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                expanded_contours.extend(cnts) # add all elements as separate iterables into the list
+
+            ipdb.set_trace()
+            # make a mask for each expanded contour
+            region_masks = []
+            for contour in expanded_contours:
+                region_mask_this = np.zeros(tv.shape, dtype=np.uint8)
+                cv2.fillPoly(region_mask_this, [contour], 255)
+                region_masks.append(region_mask_this)
+            ipdb.set_trace()
+
+            '''
+            fig, ax = plt.subplots(figsize=(10, 10))
+            ax.imshow(tv, origin="lower", cmap="gray")
+            for snake in snakes:
+                ax.plot(snake[:, 1], snake[:, 0], "r-", lw=1.5)
+            for cnt in expanded_contours:
+                ax.plot(cnt[:, 0, 0], cnt[:, 0, 1], "lime", lw=2)
+            ax.set_title("Active contours (red) and expanded boundaries (lime)")
+            ax.set_aspect("equal")
+            plt.show()
+            '''
+
+    #image_passed = mask.astype(float)
+
+    # mask the science image with the stray light region masks
+    result_obj_stray_light_masked = result_obj_masked.astype(float)
+
+    # loop over stray light regions and apply each as a patch of nans to the science image
+    for region_mask_this in region_masks:
+        region_mask_this_nan = region_mask_this.copy().astype(float) # float to allow nans
+        idx = region_mask_this_nan == 255 # indices of stray light pixels
+        result_obj_stray_light_masked[idx] = np.nan # make stray light nans
+   
+        #result_obj_stray_light_masked *= np.nan_to_num(region_mask_this)
+    # extract the stray light fluxes from inside the region masks
+    ipdb.set_trace()
+
+    # reapply psf mask
+    #image_passed = binary.astype(float) * 255.0
+    #image_passed[psf_mask] = np.nan
+
+
+
+    
+
+    ipdb.set_trace()
+
+    # reapply the psf mask to the thresholded image
+    image_passed[result_obj.real_psf_mask.astype(bool)] = np.nan
+
+    cmap = plt.cm.gray.copy()
+    cmap.set_bad("purple") # these are the psf masked pixels
+
+    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+    ax.imshow(image_passed, cmap=cmap, origin='lower')
+    ax.set_title(f'Thresholded Image')
+    plt.colorbar(ax.images[0], ax=ax)
+    plt.savefig(f'junk.png')
 
     return result_obj
 
@@ -290,7 +531,8 @@ def stray_light_mask_real(result_obj, observing_config):
     - None; updates result_obj
     '''
 
-    # just make a mask over 3*lambda/D for now''
+    # just make a mask over N*lambda/D for now''
+    N_val = 5.
     #wavel = float(observing_config['filter_name']['wavelength'])
     lambda_over_D = 206265. * float(result_obj.wavel_central) / float(observing_config['D_aperture']['full']) # in arcsec
 
@@ -303,7 +545,7 @@ def stray_light_mask_real(result_obj, observing_config):
     yy_arcsec = yy_pix * result_obj.pixel_scale / 1000
 
     angular_distances = np.sqrt(xx_arcsec**2 + yy_arcsec**2)
-    mask = angular_distances < 3.*lambda_over_D
+    mask = angular_distances < N_val*lambda_over_D
 
     # add the mask to the result object
     result_obj.real_psf_mask = mask
