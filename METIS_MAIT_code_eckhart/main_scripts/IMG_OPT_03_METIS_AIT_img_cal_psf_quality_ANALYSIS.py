@@ -28,9 +28,9 @@ def main():
 
     stem = '/podman-share/metis_work/playing_with_scopesim/'
     # config file with the observing parameters
-    observing_config_file = stem + 'config/config_file_IMG_03_observing.yaml'
+    observing_config_file = stem + 'config/config_file_IMG_OPT_03_psf_quality_observing_params.yaml'
     # config file with the data states (i.e., how to analyze each PSF)
-    data_states_config_file = stem + 'config/config_file_IMG_03_strehl_runs_v2.yaml'
+    data_states_config_file = stem + 'config/config_file_IMG_OPT_03_psf_quality_data_states.yaml'
 
     now = datetime.datetime.now()
 

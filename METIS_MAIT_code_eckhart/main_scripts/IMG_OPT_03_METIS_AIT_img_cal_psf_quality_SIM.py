@@ -56,7 +56,20 @@ sim.link_irdb("../../../")
 sim.bug_report()
 
 
-def generate_psf_image_quality_data(fp_mask, pp_mask, nd_filter, obs_filter, obs_mode, angle_array, dit=1, ndit=1, exptime=0.01, use_exp_time_only=False, out_dir=None, intrapixel_capacitance=True):
+def generate_psf_image_quality_data(
+    fp_mask, 
+    pp_mask, 
+    nd_filter, 
+    obs_filter, 
+    obs_mode, 
+    angle_array, 
+    dit=1, 
+    ndit=1, 
+    exptime=0.01, 
+    use_exp_time_only=False, 
+    out_dir=None, 
+    intrapixel_capacitance=True
+    ):
     '''
     Generate simulated data for the IMG-OPT-03 PSF image quality test
     
