@@ -44,9 +44,23 @@ pixel_scales:
   img_lm: 5.47
   img_n: 6.79
 
+# WCU FP2.1 pinhole physical diameters [um]
+# Choose lm vs n from the focal-plane mask name (e.g. grid_lm, pinhole_n).
+# Use null for either band to skip finite-pinhole convolution (delta-function pinhole).
+pinhole_diam_um:
+  lm: 25.0
+  n: 66.0
+  # lm: null
+  # n: null
+
+# Plate scale at WCU FP2.1 [mm/asec]; Table 2.6 in E-REP-MPIA-1203
+plate_scale_wcu_fp2pt1_mm_per_asec: 3.319
+
 D_aperture:
   full: 34.6878
   D_obscuration: 12.8502
+
+
 
 # ELT EXIT PUPIL GEOMETRY
 # Ref. p. 8 in E-REP-ULG-MET-1033 1-0 01/08/2022:
