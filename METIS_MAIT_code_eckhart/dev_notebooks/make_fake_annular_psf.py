@@ -8,7 +8,7 @@ from astropy.io import fits
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.convolution import convolve_fft
-from scipy.ndimage import zoom, shift, center_of_mass
+from scipy.ndimage import zoom, shift
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path("..") / "main_scripts"))  # if cwd is dev_notebooks/
@@ -76,18 +76,36 @@ def downsample_2d(array_2d, factor):
     return zoom(array_2d, (out_ny / ny, out_nx / nx), order=3)
 
 
-def peak_yx_subpix(array_2d, half_width=5):
+def peak_yx_subpix(array_2d):
     '''
-    Subpixel peak (y, x) from a clipped center-of-mass around nanargmax.
+    Subpixel peak (y, x) from a 1D quadratic fit through nanargmax along each axis.
     '''
+    array_2d = np.asarray(array_2d, dtype=float)
     y0, x0 = np.unravel_index(np.nanargmax(array_2d), array_2d.shape)
-    y1 = max(0, y0 - half_width)
-    y2 = min(array_2d.shape[0], y0 + half_width + 1)
-    x1 = max(0, x0 - half_width)
-    x2 = min(array_2d.shape[1], x0 + half_width + 1)
-    stamp = np.clip(np.nan_to_num(array_2d[y1:y2, x1:x2], nan=0.0), 0, None)
-    cy, cx = center_of_mass(stamp)
-    return np.array([y1 + cy, x1 + cx])
+
+    def quad_offset(values):
+        values = np.nan_to_num(values, nan=0.0)
+        denom = values[0] - 2.0 * values[1] + values[2]
+        if denom == 0 or not np.isfinite(denom):
+            return 0.0
+        delta = 0.5 * (values[0] - values[2]) / denom
+        return float(np.clip(delta, -0.5, 0.5))
+
+    ny, nx = array_2d.shape
+    dy = quad_offset(array_2d[y0 - 1:y0 + 2, x0]) if 0 < y0 < ny - 1 else 0.0
+    dx = quad_offset(array_2d[y0, x0 - 1:x0 + 2]) if 0 < x0 < nx - 1 else 0.0
+    return np.array([y0 + dy, x0 + dx])
+
+
+def shift_peak_to(array_2d, target_yx, n_pass=2):
+    '''
+    Cubic-spline shift so the quadratic peak lands on ``target_yx`` (y, x).
+    '''
+    out = np.asarray(array_2d, dtype=float)
+    target_yx = np.asarray(target_yx, dtype=float)
+    for _ in range(n_pass):
+        out = shift(out, target_yx - peak_yx_subpix(out), order=3, mode="nearest")
+    return out
 
 # # Method 1: Use ScopeSim kernel
 file_name_abs_kernel_scopesim = '/Users/eckhartspalding/Documents/git.repos/metis_work/METIS_MAIT_code_eckhart/data/kernels_scopesim/PSF_PPS-LM.fits'
@@ -141,11 +159,17 @@ annulus_outer_diam_m = 34.6878
 kernel_scopesim_up = oversample_2d(kernel_scopesim, factor=oversampling_factor)
 
 # make the pinhole screen from upsampled kernel image
-pinhole_up = np.zeros(kernel_scopesim_up.shape) # pinhole aleady upsampled
-xx, yy = np.meshgrid(np.arange(kernel_scopesim_up.shape[1])-kernel_scopesim_up.shape[1]/2, np.arange(kernel_scopesim_up.shape[0])-kernel_scopesim_up.shape[0]/2)
+# Origin at (N-1)/2 so an odd axis has a pixel at the center (not N/2, which is between pixels).
+ny_up, nx_up = kernel_scopesim_up.shape
+center_yx = np.array([(ny_up - 1) / 2.0, (nx_up - 1) / 2.0])
+xx, yy = np.meshgrid(
+    np.arange(nx_up) - (nx_up - 1) / 2.0,
+    np.arange(ny_up) - (ny_up - 1) / 2.0,
+)
 dist_from_center_pix = np.sqrt(xx**2 + yy**2)
 dist_from_center_asec_up = dist_from_center_pix * ((plate_scale_mas_per_pix/oversampling_factor) / 1000.0)
 
+pinhole_up = np.zeros((ny_up, nx_up))
 pinhole_up[dist_from_center_asec_up < pinhole_diam_asec/2] = 1
 # distances in units of radians
 dist_from_center_rad_up = dist_from_center_asec_up / 206265.
@@ -158,26 +182,24 @@ annulus_analytical_psf_up = intensity_annular_aperture(
     D_aperture = annulus_outer_diam_m, 
     pinhole_diam_rad=None
     )
-#annulus_analytical_psf_up = oversample_2d(annulus_analytical_psf, factor=oversampling_factor)
 
-# shift so maxima coincide with the analytical PSF (the kernel is still off-center due to padding)
-#peak_kernel = peak_yx_subpix(kernel_scopesim_up)
-peak_annulus_analytical_psf_up = peak_yx_subpix(annulus_analytical_psf_up)
-'''
-# pinhole should already be centered
-pinhole_up = shift(
-    pinhole_up,
-    peak_annulus_analytical_psf_up - peak_yx_subpix(pinhole_up),
-    order=3,
-    mode="nearest",
-)
-'''
-kernel_scopesim_up = shift(
-    kernel_scopesim_up,
-    peak_annulus_analytical_psf_up - peak_yx_subpix(kernel_scopesim_up),
-    order=3,
-    mode="nearest",
-)
+# Shift PSF peaks onto the center pixel. Do not spline-shift the binary pinhole;
+# it is already centered by the (N-1)/2 origin.
+annulus_analytical_psf_up = shift_peak_to(annulus_analytical_psf_up, center_yx)
+kernel_scopesim_up = shift_peak_to(kernel_scopesim_up, center_yx)
+
+print("center_yx:", center_yx)
+print("kernel peak - center:", peak_yx_subpix(kernel_scopesim_up) - center_yx)
+print("analytical peak - center:", peak_yx_subpix(annulus_analytical_psf_up) - center_yx)
+print("kernel peak - analytical peak:", peak_yx_subpix(kernel_scopesim_up) - peak_yx_subpix(annulus_analytical_psf_up))
+
+kernel_up_n = kernel_scopesim_up / np.nanmax(kernel_scopesim_up)
+annulus_up_n = annulus_analytical_psf_up / np.nanmax(annulus_analytical_psf_up)
+plt.clf()
+plt.imshow(kernel_up_n - annulus_up_n)
+plt.colorbar()
+plt.title('Resids between kernel and analytical (oversampled)')
+plt.show()
 
 
 
@@ -264,7 +286,6 @@ plt.legend(['kernel * pinhole', 'analytical * pinhole'])
 plt.title('Cross-section (native sampling; with pinholes)')
 plt.show()
 
-print(peak_yx_subpix(kernel_scopesim_up) - peak_yx_subpix(annulus_analytical_psf_up))
-print(np.unravel_index(np.nanargmax(kernel_scopesim_up), kernel_scopesim_up.shape))
-print(np.unravel_index(np.nanargmax(annulus_analytical_psf_up), annulus_analytical_psf_up.shape))
-plt.imshow(kernel_scopesim_up - annulus_analytical_psf_up)
+print("native kernel peak:", peak_yx_subpix(kernel_scopesim))
+print("native analytical peak:", peak_yx_subpix(annulus_analytical_psf))
+print("native kernel - analytical peak:", peak_yx_subpix(kernel_scopesim) - peak_yx_subpix(annulus_analytical_psf))
