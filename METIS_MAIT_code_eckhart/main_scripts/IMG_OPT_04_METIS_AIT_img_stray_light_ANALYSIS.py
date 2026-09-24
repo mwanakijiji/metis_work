@@ -42,7 +42,7 @@ import modules.backbone_img_04_stray_light as b04
 
 def main():
 
-    stem = "/podman-share/metis_work/playing_with_scopesim/"
+    stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
     # config file with the observing parameters
     observing_config_file = (
         stem + "config/config_file_IMG_04_stray_light_observing.yaml"
@@ -50,7 +50,7 @@ def main():
     # config file with the data states (i.e., how to analyze each PSF),
     # incl. file names
     data_states_config_file = (
-        stem + "config/config_file_IMG_04_stray_light_analysis.yaml"
+        stem + "config/config_file_IMG_04_stray_light_data_states.yaml"
     )  # needed? TBD
     # config file with the coordinates guesses for the PSFs
     coords_guesses_config_file = (

@@ -1,8 +1,0 @@
-data_states:
-  - file_name: IMG_04_simmed_stray_light_data/IMG_OPT_04_stray_light_pinhole_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
-    filter_name: Br_alpha
-    detector: LM
-
-  - file_name: IMG_04_simmed_stray_light_data/IMG_OPT_04_stray_light_pinhole_n_pupil_mask_PPS-CFO2_filter_N2.fits
-    filter_name: N2
-    detector: N
