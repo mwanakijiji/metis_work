@@ -50,7 +50,7 @@ from pipeline_registry import (  # pylint: disable=import-error,wrong-import-ord
 sim.link_irdb("../../../")
 
 # simulate observations with METIS (comment this out if packages already exist)
-# sim.download_packages(["METIS", "ELT", "Armazones"])
+sim.download_packages(["METIS", "ELT", "Armazones"])
 
 # print versions of things
 sim.bug_report()

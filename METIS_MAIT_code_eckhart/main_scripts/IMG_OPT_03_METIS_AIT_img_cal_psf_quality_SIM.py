@@ -51,7 +51,7 @@ from pipeline_registry import CLUSTER_PSF, COLOR_PSF, pipeline_stage
 sim.link_irdb("../../../../")
 
 # simulate observations with METIS (comment this out if packages already exist)
-#sim.download_packages(["METIS", "ELT", "Armazones"])
+# sim.download_packages(["METIS", "ELT", "Armazones"])
 
 # print versions of things
 sim.bug_report()
