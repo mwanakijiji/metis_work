@@ -30,8 +30,7 @@ def main():
     stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
     # config file with the observing parameters
     observing_config_file = (
-        stem
-        + "config/config_file_IMG_OPT_03_psf_quality_observing_params.yaml"
+        stem + "config/config_file_IMG_OPT_03_psf_quality_observing_params.yaml"
     )
     # config file with the data states (i.e., how to analyze each PSF)
     data_states_config_file = (

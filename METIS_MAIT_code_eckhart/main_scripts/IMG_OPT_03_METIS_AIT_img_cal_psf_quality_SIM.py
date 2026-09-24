@@ -169,9 +169,7 @@ def generate_psf_image_quality_data(
     logging.info("OBS filter: " + str(metis.cmds.get("!OBS.filter_name")))
     logging.info("WCU FP mask: " + str(metis.cmds.get("!WCU.current_fpmask")))
     logging.info("OBS PP mask: " + str(metis.cmds.get("!OBS.pupil_mask")))
-    logging.info(
-        "OBS ND filter: " + str(metis.cmds.get("!OBS.nd_filter_name"))
-    )
+    logging.info("OBS ND filter: " + str(metis.cmds.get("!OBS.nd_filter_name")))
     logging.info("NDIT: " + str(metis.cmds["!OBS.ndit"]))
     logging.info("DIT: " + str(metis.cmds["!OBS.dit"]))
     logging.info("WCU source state:")
@@ -223,15 +221,10 @@ def generate_psf_image_quality_data(
     metis.observe()
     # print the ingredients of the PSF generation
     # pipe_2_log(lambda m=metis: [print(f"{k}: {v}") for k, v in vars(m["psf"]).items()], msg="PSF ingredients") # this prints EVERYTHING
+    logging.info("PSF model wavel range: " + str(vars(metis["psf"])["_waveset"]))
+    logging.info("PSF model kernel shape: " + str(vars(metis["psf"])["kernel"].shape))
     logging.info(
-        "PSF model wavel range: " + str(vars(metis["psf"])["_waveset"])
-    )
-    logging.info(
-        "PSF model kernel shape: " + str(vars(metis["psf"])["kernel"].shape)
-    )
-    logging.info(
-        "PSF model kernel file name: "
-        + str(vars(metis["psf"])["meta"]["filename"])
+        "PSF model kernel file name: " + str(vars(metis["psf"])["meta"]["filename"])
     )
     pipe_2_log(
         lambda m=metis: str(vars(m["psf"])["_waveset"]),
@@ -261,9 +254,7 @@ def generate_psf_image_quality_data(
     logging.info("OBS filter: " + str(metis.cmds.get("!OBS.filter_name")))
     logging.info("WCU FP mask: " + str(metis.cmds.get("!WCU.current_fpmask")))
     logging.info("OBS PP mask: " + str(metis.cmds.get("!OBS.pupil_mask")))
-    logging.info(
-        "OBS ND filter: " + str(metis.cmds.get("!OBS.nd_filter_name"))
-    )
+    logging.info("OBS ND filter: " + str(metis.cmds.get("!OBS.nd_filter_name")))
     logging.info("NDIT:" + str(metis.cmds["!OBS.ndit"]))
     logging.info("DIT:" + str(metis.cmds["!OBS.dit"]))
     logging.info("WCU source state:")
@@ -321,9 +312,7 @@ def generate_psf_image_quality_data(
     )
 
     logging.info("--------------------------------")
-    logging.info(
-        f"Median of raw science readout: {np.median(raw_sci_readout):.4f}"
-    )
+    logging.info(f"Median of raw science readout: {np.median(raw_sci_readout):.4f}")
     logging.info(f"Median of background: {np.median(background):.4f}")
     logging.info(
         f"Median of background-subtracted readout: {np.median(bckgd_subted):.4f}"

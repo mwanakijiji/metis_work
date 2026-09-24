@@ -82,9 +82,7 @@ def main():
             fit_annular_aperture_free=state["fit_annular_aperture_free"],
             fit_annular_aperture_fixed=state["fit_annular_aperture_fixed"],
             psfs_subset=state["psfs_subset"],
-            config_coords_guesses_file_name=state[
-                "config_coords_guesses_file_name"
-            ],
+            config_coords_guesses_file_name=state["config_coords_guesses_file_name"],
             config_observing=observing_config,
             results_write_dir=state["results_write_dir"],
             fit_method="curve_fit",
