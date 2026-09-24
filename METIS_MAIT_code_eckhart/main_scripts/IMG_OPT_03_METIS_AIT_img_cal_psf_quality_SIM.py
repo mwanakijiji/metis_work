@@ -45,6 +45,7 @@ import logging
 
 import scopesim as sim
 from modules.helpers import pipe_2_log
+from pipeline_registry import CLUSTER_PSF, COLOR_PSF, pipeline_stage
 
 # Edit this path if you have a custom install directory, otherwise comment it out. [For ReadTheDocs only]
 sim.link_irdb("../../../../")
@@ -56,6 +57,12 @@ sim.link_irdb("../../../../")
 sim.bug_report()
 
 
+@pipeline_stage(
+    name="generate_psf_quality_sim",
+    cluster=CLUSTER_PSF,
+    cluster_color=COLOR_PSF,
+    label="Generate PSF-quality sims",
+)
 def generate_psf_image_quality_data(
     fp_mask,
     pp_mask,

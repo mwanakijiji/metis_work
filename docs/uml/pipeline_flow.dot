@@ -1,0 +1,72 @@
+digraph pipeline {
+  rankdir=LR;
+  node [shape=box, style="rounded,filled", fillcolor="white"];
+  edge [color="#444444"];
+
+  subgraph cluster_img_opt_01_fov {
+    label="IMG-OPT-01 FOV";
+    style="dashed";
+    color="#1f77b4";
+    generate_fov_sim;
+    fov_calc;
+  }
+
+  subgraph cluster_img_opt_02_distortion {
+    label="IMG-OPT-02 Distortion";
+    style="dashed";
+    color="#ff7f0e";
+    generate_distortion_sim;
+    image_distortion;
+  }
+
+  subgraph cluster_img_opt_03_psf_quality {
+    label="IMG-OPT-03 PSF quality";
+    style="dashed";
+    color="#2ca02c";
+    generate_psf_quality_sim;
+    strehl_psfs;
+    process_one_psf;
+  }
+
+  subgraph cluster_img_opt_04_stray_light {
+    label="IMG-OPT-04 Stray light";
+    style="dashed";
+    color="#d62728";
+    generate_stray_light_sim;
+    populate_result_obj_info;
+    centroid_2passes_oversample;
+    stray_light_mask_real;
+    stray_light_segmentation;
+    stray_light_spatial_scales;
+    stray_light_background_measurement;
+    stray_light_peak_illumination_per_region;
+  }
+
+  generate_fov_sim [label="Generate FOV sims"];
+  generate_distortion_sim [label="Generate distortion sims"];
+  generate_psf_quality_sim [label="Generate PSF-quality sims"];
+  generate_stray_light_sim [label="Generate stray-light sims"];
+  fov_calc [label="Compute FOV"];
+  image_distortion [label="Measure distortion"];
+  strehl_psfs [label="Measure Strehl"];
+  process_one_psf [label="Fit one PSF"];
+  populate_result_obj_info [label="Populate result object"];
+  centroid_2passes_oversample [label="Centroid PSFs"];
+  stray_light_mask_real [label="Mask the real PSF"];
+  stray_light_segmentation [label="Segment stray light"];
+  stray_light_spatial_scales [label="Classify spatial scales", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
+  stray_light_background_measurement [label="Measure background", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
+  stray_light_peak_illumination_per_region [label="Peak illumination per region", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
+
+  generate_fov_sim -> fov_calc;
+  generate_distortion_sim -> image_distortion;
+  generate_psf_quality_sim -> strehl_psfs;
+  strehl_psfs -> process_one_psf;
+  generate_stray_light_sim -> populate_result_obj_info;
+  populate_result_obj_info -> centroid_2passes_oversample;
+  centroid_2passes_oversample -> stray_light_mask_real;
+  stray_light_mask_real -> stray_light_segmentation;
+  stray_light_segmentation -> stray_light_spatial_scales;
+  stray_light_spatial_scales -> stray_light_background_measurement;
+  stray_light_background_measurement -> stray_light_peak_illumination_per_region;
+}

@@ -46,6 +46,7 @@ import modules.backbone_img_04_stray_light as backbone
 
 import scopesim as sim
 from modules.helpers import pipe_2_log
+from pipeline_registry import CLUSTER_STRAY, COLOR_STRAY, pipeline_stage
 
 # Edit this path if you have a custom install directory, otherwise comment it out. [For ReadTheDocs only]
 sim.link_irdb("../../../")
@@ -57,6 +58,12 @@ sim.link_irdb("../../../")
 sim.bug_report()
 
 
+@pipeline_stage(
+    name="generate_stray_light_sim",
+    cluster=CLUSTER_STRAY,
+    cluster_color=COLOR_STRAY,
+    label="Generate stray-light sims",
+)
 def generate_stray_light_data(
     fp_mask,
     pp_mask,

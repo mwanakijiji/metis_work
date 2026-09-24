@@ -34,6 +34,7 @@ import yaml
 import scopesim as sim
 
 from modules.helpers import pipe_2_log, setup_logging, load_config_and_pipe
+from pipeline_registry import CLUSTER_FOV, COLOR_FOV, pipeline_stage
 
 
 def read_simulation_configurations(simulation_config_file):
@@ -43,6 +44,12 @@ def read_simulation_configurations(simulation_config_file):
     return simulation_configs
 
 
+@pipeline_stage(
+    name="generate_fov_sim",
+    cluster=CLUSTER_FOV,
+    cluster_color=COLOR_FOV,
+    label="Generate FOV sims",
+)
 def main():
 
     stem = "/podman-share/metis_work/playing_with_scopesim/"
