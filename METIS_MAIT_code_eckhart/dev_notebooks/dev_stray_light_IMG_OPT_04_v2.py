@@ -17,7 +17,7 @@ detector_array = np.zeros((2048, 2048))
 # Define the PSF parameters
 fwhm_pix = 20.0  # Full Width at Half Maximum in pixels
 sigma_pix = fwhm_pix / (2.0 * np.sqrt(2.0 * np.log(2.0)))  # Convert FWHM to sigma
-#mu = 20
+# mu = 20
 detector_array_xx, detector_array_yy = np.meshgrid(np.arange(2048), np.arange(2048))
 # Create a 2D Gaussian PSF
 center_x, center_y = 1024, 1024  # Center of the array
@@ -26,12 +26,13 @@ dst = np.sqrt((detector_array_xx - center_x) ** 2 + (detector_array_yy - center_
 normal = 1 / (2 * np.pi * sigma_pix**2)
 # Calculate Gaussian filter centered in the array
 exp_part = np.exp(-((dst) ** 2) / (2.0 * sigma_pix**2))
-detector_array = 1 * exp_part/np.max(exp_part) + 0.01 * np.random.randn(2048, 2048)
+detector_array = 1 * exp_part / np.max(exp_part) + 0.01 * np.random.randn(2048, 2048)
 
-#plt.imshow(detector_array, origin='lower')
-#plt.title('PSF max: ' + str(np.max(detector_array)))
-#plt.colorbar()
-#plt.show()
+# plt.imshow(detector_array, origin='lower')
+# plt.title('PSF max: ' + str(np.max(detector_array)))
+# plt.colorbar()
+# plt.show()
+
 
 def random_contiguous_stray_light(
     shape,
@@ -193,10 +194,11 @@ def random_contiguous_stray_light(
         out = np.zeros_like(stray)
         for j in range(ny):
             for i in range(nx):
-                out[j, i] = pad[j:j+3, i:i+3].mean()
+                out[j, i] = pad[j : j + 3, i : i + 3].mean()
         stray = out
 
     return stray, label_map
+
 
 def _colval(row, name, default=None):
     if name not in row.colnames:
@@ -344,7 +346,7 @@ def plot_subtraction_triple(
 
     fig, axs = plt.subplots(1, 3, figsize=figsize, constrained_layout=True)
 
-    #im0 = axs[0].imshow(input_image, origin="lower", cmap="gray_r", vmin=vmin_i, vmax=vmax_i)
+    # im0 = axs[0].imshow(input_image, origin="lower", cmap="gray_r", vmin=vmin_i, vmax=vmax_i)
     im0 = axs[0].imshow(input_image, origin="lower", cmap="gray_r")
     axs[0].set_title(input_title)
     fig.colorbar(im0, ax=axs[0], fraction=0.046)
@@ -353,7 +355,7 @@ def plot_subtraction_triple(
     axs[1].set_title(model_title)
     fig.colorbar(im1, ax=axs[1], fraction=0.046)
 
-    #im2 = axs[2].imshow(residuals, origin="lower", cmap="gray_r", vmin=vmin_i, vmax=vmax_i)
+    # im2 = axs[2].imshow(residuals, origin="lower", cmap="gray_r", vmin=vmin_i, vmax=vmax_i)
     im2 = axs[2].imshow(residuals, origin="lower", cmap="gray_r")
     axs[2].set_title(residual_title)
     fig.colorbar(im2, ax=axs[2], fraction=0.046)
@@ -418,7 +420,9 @@ def detect_and_catalog_sources(
     convolved_data = convolve(data, det_kernel)
 
     if segment_map is None:
-        segment_map = detect_sources(convolved_data, detection_threshold, npixels=npixels)
+        segment_map = detect_sources(
+            convolved_data, detection_threshold, npixels=npixels
+        )
         print(segment_map)
 
     catalog = SourceCatalog(data, segment_map, convolved_data=convolved_data)
@@ -492,7 +496,9 @@ v1, v2 = z.get_limits(net_readout_rand_gaussian2d)
 fig, ax = plt.subplots(1, 2, figsize=(10, 4))
 ax[0].imshow(stray_rand_gaussian2d, origin="lower", cmap="inferno", vmin=v1, vmax=v2)
 ax[0].set_title("Random contiguous stray light")
-ax[1].imshow(net_readout_rand_gaussian2d, origin="lower", cmap="gray_r", vmin=v1, vmax=v2)
+ax[1].imshow(
+    net_readout_rand_gaussian2d, origin="lower", cmap="gray_r", vmin=v1, vmax=v2
+)
 ax[1].set_title("Readout + random stray light")
 plt.tight_layout()
 plt.show()
@@ -524,7 +530,13 @@ plt.show()
 
 ########################################################
 # circles test: detect sources
-net_readout_rand_circles, segment_map_circles, convolved_data_circles, cat_circles, tbl_circles = detect_and_catalog_sources(
+(
+    net_readout_rand_circles,
+    segment_map_circles,
+    convolved_data_circles,
+    cat_circles,
+    tbl_circles,
+) = detect_and_catalog_sources(
     net_readout_rand_circles,
     detection_threshold_coeff=1.5,
     segment_map=None,
@@ -537,7 +549,13 @@ residuals_circles = net_readout_rand_circles - model_from_tbl_circles
 
 ########################################################
 # Gaussian2D test: detect sources
-net_readout_rand_gaussian2d, segment_map_gaussian2d, convolved_data_gaussian2d, cat_gaussian2d, tbl_gaussian2d = detect_and_catalog_sources(
+(
+    net_readout_rand_gaussian2d,
+    segment_map_gaussian2d,
+    convolved_data_gaussian2d,
+    cat_gaussian2d,
+    tbl_gaussian2d,
+) = detect_and_catalog_sources(
     net_readout_rand_gaussian2d,
     detection_threshold_coeff=1.5,
     segment_map=None,
@@ -550,7 +568,13 @@ residuals_gaussian2d = net_readout_rand_gaussian2d - model_from_tbl_gaussian2d
 
 ########################################################
 # GeneralSersic2D test: detect sources
-net_readout_rand_sersic2d, segment_map_sersic2d, convolved_data_sersic2d, cat_sersic2d, tbl_sersic2d = detect_and_catalog_sources(
+(
+    net_readout_rand_sersic2d,
+    segment_map_sersic2d,
+    convolved_data_sersic2d,
+    cat_sersic2d,
+    tbl_sersic2d,
+) = detect_and_catalog_sources(
     net_readout_rand_sersic2d,
     detection_threshold_coeff=1.5,
     segment_map=None,
@@ -563,7 +587,13 @@ residuals_sersic2d = net_readout_rand_sersic2d - model_from_tbl_sersic2d
 
 ########################################################
 # Ring2D test: detect sources
-net_readout_rand_ring2d, segment_map_ring2d, convolved_data_ring2d, cat_ring2d, tbl_ring2d = detect_and_catalog_sources(
+(
+    net_readout_rand_ring2d,
+    segment_map_ring2d,
+    convolved_data_ring2d,
+    cat_ring2d,
+    tbl_ring2d,
+) = detect_and_catalog_sources(
     net_readout_rand_ring2d,
     detection_threshold_coeff=1.5,
     segment_map=None,

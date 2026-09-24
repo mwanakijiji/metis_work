@@ -10,14 +10,13 @@ from modules.helpers import load_config_and_pipe, setup_logging
 from modules.psf_grid_prep import load_fits_data
 import modules.backbone_img_04_stray_light as b04
 
-
 # Analyze data for the IMG-OPT-04 stray light test
 
 # Reqs.:
 # - Ref. Overleaf doc IMG_OPT_04_Test_Description_In_Field_Straylight_and_Ghosts
-# 
+#
 # 1. METIS-1189: The maximum allowed stray light irradiance from an in-field source shall be less than
-# 0.1 % of the peak irradiance in the focal planes of the IMG. Hereby, stray light contains scattering 
+# 0.1 % of the peak irradiance in the focal planes of the IMG. Hereby, stray light contains scattering
 # from opto-mechanical surfaces in Mid-infrared ELT Imager and Spectrograph (METIS).
 
 # 2. METIS-1429: The maximum allowed stray light irradiance in the CFO-FP2 plane from an in-field
@@ -34,41 +33,57 @@ import modules.backbone_img_04_stray_light as b04
 # the celestial source causing the artefact(s) corresponds to the saturation limit in the
 # fastest full-frame operation.
 
+
 def main():
 
-    stem = '/podman-share/metis_work/playing_with_scopesim/'
+    stem = "/podman-share/metis_work/playing_with_scopesim/"
     # config file with the observing parameters
-    observing_config_file = stem + 'config/config_file_IMG_04_stray_light_observing.yaml' # needed? TBD
+    observing_config_file = (
+        stem + "config/config_file_IMG_04_stray_light_observing.yaml"
+    )  # needed? TBD
     # config file with the data states (i.e., how to analyze each PSF), incl. file names
-    data_states_config_file = stem + 'config/config_file_IMG_04_stray_light_analysis.yaml' # needed? TBD
+    data_states_config_file = (
+        stem + "config/config_file_IMG_04_stray_light_analysis.yaml"
+    )  # needed? TBD
     # config file with the coordinates guesses for the PSFs
-    coords_guesses_config_file = stem + 'config/config_file_IMG_04_stray_light_coords_guesses.yaml'
+    coords_guesses_config_file = (
+        stem + "config/config_file_IMG_04_stray_light_coords_guesses.yaml"
+    )
 
     now = datetime.datetime.now()
 
     # initialize logging
-    log_dir = stem + 'IMG_04_stray_light_analysis_logs/'
-    log_file_name = log_dir + 'log_IMG_04_stray_light_analysis_' + now.strftime('%Y-%m-%d_%H-%M-%S') + '.txt'    
+    log_dir = stem + "IMG_04_stray_light_analysis_logs/"
+    log_file_name = (
+        log_dir
+        + "log_IMG_04_stray_light_analysis_"
+        + now.strftime("%Y-%m-%d_%H-%M-%S")
+        + ".txt"
+    )
     setup_logging(log_dir=log_dir, log_file_name=log_file_name, now=now)
 
     # directory containing 'empirical' data
-    dir_read_data = stem + 'IMG_04_simmed_stray_light_data/'
+    dir_read_data = stem + "IMG_04_simmed_stray_light_data/"
 
     # config file with generic observing parameters
-    observing_config = load_config_and_pipe(config_file_choice=observing_config_file, print_one_line=False)
+    observing_config = load_config_and_pipe(
+        config_file_choice=observing_config_file, print_one_line=False
+    )
 
     # config file with data states incl. data file names
-    data_states_config = load_config_and_pipe(config_file_choice=data_states_config_file, print_one_line=False)
+    data_states_config = load_config_and_pipe(
+        config_file_choice=data_states_config_file, print_one_line=False
+    )
     defaults = data_states_config.get("defaults", {})
     runs = data_states_config.get("runs", [])
 
     # assemble the absolute file names from the read directory and the file basename
-    #for data_state in data_states_config['data_states']:
+    # for data_state in data_states_config['data_states']:
     #    array_abs_file_name = dir_read_data + data_state['file_name']
     #    data_state['file_absname'] = array_abs_file_name
 
     # to set up the data states, merge config data state defaults with overrides that are specific for each run
-    '''
+    """
     data_states = []
     for entry in runs:
         merged = {**defaults, **entry}
@@ -80,10 +95,12 @@ def main():
         if not results_write_dir.startswith("/"):
             merged["results_write_dir"] = stem + results_write_dir
         data_states.append(merged)
-    '''
+    """
 
     # loop over each data state (corresponding to one FITS image)
-    for data_state in data_states_config['data_states']: # [0:1]: # if just for a small test
+    for data_state in data_states_config[
+        "data_states"
+    ]:  # [0:1]: # if just for a small test
         # Resolve relative paths against the project stem
         file_name = data_state["file_name"]
         if not os.path.isabs(file_name):
@@ -103,13 +120,20 @@ def main():
         )
 
         # populate object with data state info
-        result = b04.populate_result_obj_info(result, data_state, observing_config=observing_config)
+        result = b04.populate_result_obj_info(
+            result, data_state, observing_config=observing_config
+        )
 
         # center on the real PSF
-        result = b04.centroid_2passes_oversample(result_obj=result, config_coords_guesses_file_name=coords_guesses_config_file)
+        result = b04.centroid_2passes_oversample(
+            result_obj=result,
+            config_coords_guesses_file_name=coords_guesses_config_file,
+        )
 
         # make the mask for the real PSF
-        result = b04.stray_light_mask_real(result_obj=result, observing_config=observing_config)
+        result = b04.stray_light_mask_real(
+            result_obj=result, observing_config=observing_config
+        )
 
         # segment the remaining light
         result = b04.stray_light_segmentation(result, hough_variant="active")
@@ -127,7 +151,7 @@ def main():
         result = b04.stray_light_peak_illumination_per_region(result)
         ipdb.set_trace()
 
-        '''
+        """
         stray_light(
             state["file_name"],
             fp_mask=state["fp_mask"],
@@ -142,8 +166,7 @@ def main():
             results_write_dir=state["results_write_dir"],
             fit_method="curve_fit"
         )
-        '''
-
+        """
 
 
 if __name__ == "__main__":

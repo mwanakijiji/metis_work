@@ -2,9 +2,9 @@
 
 # Reqs.:
 # - Ref. Overleaf doc IMG_OPT_04_Test_Description_In_Field_Straylight_and_Ghosts
-# 
+#
 # 1. METIS-1189: The maximum allowed stray light irradiance from an in-field source shall be less than
-# 0.1 % of the peak irradiance in the focal planes of the IMG. Hereby, stray light contains scattering 
+# 0.1 % of the peak irradiance in the focal planes of the IMG. Hereby, stray light contains scattering
 # from opto-mechanical surfaces in Mid-infrared ELT Imager and Spectrograph (METIS).
 
 # 2. METIS-1429: The maximum allowed stray light irradiance in the CFO-FP2 plane from an in-field
@@ -51,7 +51,7 @@ from modules.helpers import pipe_2_log
 sim.link_irdb("../../../")
 
 # simulate observations with METIS (comment this out if packages already exist)
-#sim.download_packages(["METIS", "ELT", "Armazones"])
+# sim.download_packages(["METIS", "ELT", "Armazones"])
 
 # print versions of things
 sim.bug_report()
@@ -68,13 +68,13 @@ def generate_stray_light_data(
     ndit=1,
     exptime=0.01,
     use_exp_time_only=False,
-    artifact_type='random_contiguous_stray_light',
+    artifact_type="random_contiguous_stray_light",
     out_dir=None,
-    intrapixel_capacitance=True
+    intrapixel_capacitance=True,
 ):
-    '''
+    """
     Generate simulated data for the IMG-OPT-04 PSF image quality test
-    
+
     INPUTS:
     - fp_mask: focal plane mask
     - pp_mask: pupil plane mask
@@ -89,164 +89,194 @@ def generate_stray_light_data(
 
     OUTPUTS:
     - None; writes out files
-    '''
+    """
 
     # set up instrument
 
-    cmd = None # reset
+    cmd = None  # reset
 
     if nd_filter is not None:
         cmd = sim.UserCommands(
-                            use_instrument='METIS', 
-                            set_modes=[obs_mode], 
-                            properties={"!OBS.filter_name": obs_filter, 
-                            "!WCU.current_fpmask": fp_mask, 
-                            "!OBS.pupil_mask": pp_mask, 
-                            "!OBS.nd_filter_name": nd_filter},
-                            #ignore_effects=["shot_noise", "readout_noise", "dark_current", "ipc"]
-                            )
+            use_instrument="METIS",
+            set_modes=[obs_mode],
+            properties={
+                "!OBS.filter_name": obs_filter,
+                "!WCU.current_fpmask": fp_mask,
+                "!OBS.pupil_mask": pp_mask,
+                "!OBS.nd_filter_name": nd_filter,
+            },
+            # ignore_effects=["shot_noise", "readout_noise", "dark_current", "ipc"]
+        )
     else:
         cmd = sim.UserCommands(
-                            use_instrument='METIS', 
-                            set_modes=[obs_mode], 
-                            properties={"!OBS.filter_name": obs_filter, 
-                            "!WCU.current_fpmask": fp_mask},
-                            #ignore_effects=["shot_noise", "readout_noise", "dark_current", "ipc"]
-                            )
+            use_instrument="METIS",
+            set_modes=[obs_mode],
+            properties={"!OBS.filter_name": obs_filter, "!WCU.current_fpmask": fp_mask},
+            # ignore_effects=["shot_noise", "readout_noise", "dark_current", "ipc"]
+        )
 
     metis = sim.OpticalTrain(cmd)
-    #metis['ipc'].included = False # turn off inter-pixel capacitance for now
+    # metis['ipc'].included = False # turn off inter-pixel capacitance for now
 
     if not intrapixel_capacitance:
-        #metis['ipc'].update(alpha_edge=0.0, alpha_corner=0.0, alpha_aniso=0.0) # turn off inter-pixel capacitance for now
+        # metis['ipc'].update(alpha_edge=0.0, alpha_corner=0.0, alpha_aniso=0.0) # turn off inter-pixel capacitance for now
         metis["ipc"].include = False
-        logging.info('Turning off inter-pixel capacitance for now')
+        logging.info("Turning off inter-pixel capacitance for now")
     else:
-        logging.info('Using default inter-pixel capacitance')
+        logging.info("Using default inter-pixel capacitance")
 
     # Generate a circularly-symmetric PSF from an annular aperture
-    metis['pupil_masks'].change_mask(pp_mask)
-    metis['psf'].update(pupil_mask=pp_mask+"_WCU")
-    logging.info('Setting WCU PP mask to be: ' + str(pp_mask+"_WCU"))
+    metis["pupil_masks"].change_mask(pp_mask)
+    metis["psf"].update(pupil_mask=pp_mask + "_WCU")
+    logging.info("Setting WCU PP mask to be: " + str(pp_mask + "_WCU"))
 
-    wcu = metis['wcu_source']
-
+    wcu = metis["wcu_source"]
 
     bb_temp = 1000 * u.K
 
-    pipe_2_log(lambda m=metis: m.effects.pprint_all(), msg="Optical train effects (initial)")
+    pipe_2_log(
+        lambda m=metis: m.effects.pprint_all(), msg="Optical train effects (initial)"
+    )
 
     #########################################################
     # BACKGROUND
 
-    logging.info('Closing WCU BB aperture first to get a background ...')
-    wcu.set_bb_aperture(value = 0.0)
-    
+    logging.info("Closing WCU BB aperture first to get a background ...")
+    wcu.set_bb_aperture(value=0.0)
+
     metis.observe()
 
-    pipe_2_log(lambda m=metis: m.effects.pprint_all(), msg="Optical train effects (background)")
+    pipe_2_log(
+        lambda m=metis: m.effects.pprint_all(), msg="Optical train effects (background)"
+    )
 
     if use_exp_time_only:
         # Method 1 for setting exposure times: exptime alone
-        outhdul_off = metis.readout(exptime = exptime, reset=False)[0]
+        outhdul_off = metis.readout(exptime=exptime, reset=False)[0]
     else:
         # Method 2 for setting exposure times: use ndit and dit together
-        outhdul_off = metis.readout(ndit = ndit, dit = dit, reset=False)[0]
+        outhdul_off = metis.readout(ndit=ndit, dit=dit, reset=False)[0]
 
-    logging.info('--------------------------------')
-    logging.info('Background readout:')
-    logging.info('OBS filter: ' + str(metis.cmds.get("!OBS.filter_name")))
-    logging.info('WCU FP mask: ' + str(metis.cmds.get("!WCU.current_fpmask")))
-    logging.info('OBS PP mask: ' + str(metis.cmds.get("!OBS.pupil_mask")))
-    logging.info('OBS ND filter: ' + str(metis.cmds.get("!OBS.nd_filter_name")))
-    logging.info('NDIT: ' + str(metis.cmds["!OBS.ndit"]))
-    logging.info('DIT: ' + str(metis.cmds["!OBS.dit"]))
-    logging.info('WCU source state:')
-    pipe_2_log(lambda m=metis: metis["wcu_source"].info(), msg="Optical train effects (background)")
+    logging.info("--------------------------------")
+    logging.info("Background readout:")
+    logging.info("OBS filter: " + str(metis.cmds.get("!OBS.filter_name")))
+    logging.info("WCU FP mask: " + str(metis.cmds.get("!WCU.current_fpmask")))
+    logging.info("OBS PP mask: " + str(metis.cmds.get("!OBS.pupil_mask")))
+    logging.info("OBS ND filter: " + str(metis.cmds.get("!OBS.nd_filter_name")))
+    logging.info("NDIT: " + str(metis.cmds["!OBS.ndit"]))
+    logging.info("DIT: " + str(metis.cmds["!OBS.dit"]))
+    logging.info("WCU source state:")
+    pipe_2_log(
+        lambda m=metis: metis["wcu_source"].info(),
+        msg="Optical train effects (background)",
+    )
 
     # sanity check that user inputs really are the same as what the instrument is using
     def sanity_check_user_inputs(metis, obs_filter, fp_mask, pp_mask):
         if metis.cmds.get("!OBS.filter_name") != obs_filter:
-            logging.error('! ------- OBS filter: ' + str(metis.cmds.get("!OBS.filter_name")) + ' does not match user input: ' + str(obs_filter))
+            logging.error(
+                "! ------- OBS filter: "
+                + str(metis.cmds.get("!OBS.filter_name"))
+                + " does not match user input: "
+                + str(obs_filter)
+            )
             exit()
         if metis.cmds.get("!WCU.current_fpmask") != fp_mask:
-            logging.error('! ------- WCU FP mask: ' + str(metis.cmds.get("!WCU.current_fpmask")) + ' does not match user input: ' + str(fp_mask))
+            logging.error(
+                "! ------- WCU FP mask: "
+                + str(metis.cmds.get("!WCU.current_fpmask"))
+                + " does not match user input: "
+                + str(fp_mask)
+            )
             exit()
         if metis.cmds.get("!OBS.pupil_mask") != pp_mask:
-            logging.error('! ------- OBS PP mask: ' + str(metis.cmds.get("!OBS.pupil_mask")) + ' does not match user input: ' + str(pp_mask))
+            logging.error(
+                "! ------- OBS PP mask: "
+                + str(metis.cmds.get("!OBS.pupil_mask"))
+                + " does not match user input: "
+                + str(pp_mask)
+            )
             exit()
         else:
-            logging.info('User filter inputs match instrument inputs')
+            logging.info("User filter inputs match instrument inputs")
         return
 
     # check for background-taking
-    #sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask, pp_mask=pp_mask)
+    # sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask, pp_mask=pp_mask)
     background = outhdul_off[1].data
 
     #########################################################
     # SCIENCE FRAME
 
-    logging.info('Re-opening WCU BB aperture to get a PSF ...')
-    wcu.set_bb_aperture(value = 1.0) # open BB source
+    logging.info("Re-opening WCU BB aperture to get a PSF ...")
+    wcu.set_bb_aperture(value=1.0)  # open BB source
 
     metis.observe()
     # print the ingredients of the PSF generation
     # pipe_2_log(lambda m=metis: [print(f"{k}: {v}") for k, v in vars(m["psf"]).items()], msg="PSF ingredients") # this prints EVERYTHING
-    logging.info('PSF model wavel range: ' + str(vars(metis['psf'])['_waveset']))
-    logging.info('PSF model kernel shape: ' + str(vars(metis['psf'])['kernel'].shape))
-    logging.info('PSF model kernel file name: ' + str(vars(metis['psf'])['meta']['filename']))
-    pipe_2_log(lambda m=metis: str(vars(m['psf'])['_waveset']), msg="PSF model wavel range")
+    logging.info("PSF model wavel range: " + str(vars(metis["psf"])["_waveset"]))
+    logging.info("PSF model kernel shape: " + str(vars(metis["psf"])["kernel"].shape))
+    logging.info(
+        "PSF model kernel file name: " + str(vars(metis["psf"])["meta"]["filename"])
+    )
+    pipe_2_log(
+        lambda m=metis: str(vars(m["psf"])["_waveset"]), msg="PSF model wavel range"
+    )
 
     # Get perfect PSF - no detector noise
-    #hdul_perfect = metis.image_planes[0].hdu
+    # hdul_perfect = metis.image_planes[0].hdu
 
-    pipe_2_log(lambda m=metis: m.effects.pprint_all(), msg="Optical train effects (science)")
+    pipe_2_log(
+        lambda m=metis: m.effects.pprint_all(), msg="Optical train effects (science)"
+    )
 
     if use_exp_time_only:
         # Method 1 for setting exposure times: exptime alone
-        outhdul_on = metis.readout(exptime = exptime, reset=False)[0]
+        outhdul_on = metis.readout(exptime=exptime, reset=False)[0]
     else:
         # Method 2 for setting exposure times: use ndit and dit together
-        outhdul_on = metis.readout(ndit = ndit, dit = dit, reset=False)[0]
-    logging.info('--------------------------------')
-    logging.info('Science readout:')
-    logging.info('OBS filter: ' + str(metis.cmds.get("!OBS.filter_name")))
-    logging.info('WCU FP mask: ' + str(metis.cmds.get("!WCU.current_fpmask")))
-    logging.info('OBS PP mask: ' + str(metis.cmds.get("!OBS.pupil_mask")))
-    logging.info('OBS ND filter: ' + str(metis.cmds.get("!OBS.nd_filter_name")))
-    logging.info('NDIT:' + str(metis.cmds["!OBS.ndit"]))
-    logging.info('DIT:' + str(metis.cmds["!OBS.dit"]))
-    logging.info('WCU source state:')
-    pipe_2_log(lambda m=metis: metis["wcu_source"].info(), msg="Optical train effects (background)")
+        outhdul_on = metis.readout(ndit=ndit, dit=dit, reset=False)[0]
+    logging.info("--------------------------------")
+    logging.info("Science readout:")
+    logging.info("OBS filter: " + str(metis.cmds.get("!OBS.filter_name")))
+    logging.info("WCU FP mask: " + str(metis.cmds.get("!WCU.current_fpmask")))
+    logging.info("OBS PP mask: " + str(metis.cmds.get("!OBS.pupil_mask")))
+    logging.info("OBS ND filter: " + str(metis.cmds.get("!OBS.nd_filter_name")))
+    logging.info("NDIT:" + str(metis.cmds["!OBS.ndit"]))
+    logging.info("DIT:" + str(metis.cmds["!OBS.dit"]))
+    logging.info("WCU source state:")
+    pipe_2_log(
+        lambda m=metis: metis["wcu_source"].info(),
+        msg="Optical train effects (background)",
+    )
 
     # check for science-taking
-    #sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask, pp_mask=pp_mask)
-    #hdul_perfect = metis.image_planes[0].hdu
+    # sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask, pp_mask=pp_mask)
+    # hdul_perfect = metis.image_planes[0].hdu
 
     # background-subtract
     raw_sci_readout = outhdul_on[1].data
 
     # generate the artifact
-    if artifact_type == 'random_contiguous_stray_light':
+    if artifact_type == "random_contiguous_stray_light":
         stray_light, label_map = backbone.make_random_contiguous_stray_light(
             raw_sci_readout.shape,
-            n_shapes=5,            
-            seed=None,              
-            pixels_per_shape=(600, 2000), 
-            growth_p=0.65,                  
-            intensity_range=(1000.0, 20000.0),     
-            smooth_edges=True              
+            n_shapes=5,
+            seed=None,
+            pixels_per_shape=(600, 2000),
+            growth_p=0.65,
+            intensity_range=(1000.0, 20000.0),
+            smooth_edges=True,
         )
-    elif artifact_type == 'crescent':
+    elif artifact_type == "crescent":
         stray_light = backbone.make_crescent(
             shape=raw_sci_readout.shape,
-            center=(300,400),
+            center=(300, 400),
             width=100,
             height=30,
             angle=0.0,
-            amplitude=10000
+            amplitude=10000,
         )
-   
 
     # add the artifact
     raw_sci_readout = raw_sci_readout + stray_light
@@ -257,69 +287,86 @@ def generate_stray_light_data(
     # Copy the primary header
     primary_hdu = fits.PrimaryHDU(header=outhdul_on[0].header)
     # Add background-subtracted readout as first extension
-    hdu_bckgd_subted = fits.ImageHDU(data=bckgd_subted, name='BCKGD_SUBTED')
+    hdu_bckgd_subted = fits.ImageHDU(data=bckgd_subted, name="BCKGD_SUBTED")
     # Add raw science readout as second extension
-    hdu_raw_readout = fits.ImageHDU(data=raw_sci_readout, name='RAW_READOUT')
+    hdu_raw_readout = fits.ImageHDU(data=raw_sci_readout, name="RAW_READOUT")
     # Add background as third extension
-    hdu_background = fits.ImageHDU(data=background, name='BACKGROUND')
-    hdul_new = fits.HDUList([primary_hdu, hdu_bckgd_subted, hdu_raw_readout, hdu_background])
+    hdu_background = fits.ImageHDU(data=background, name="BACKGROUND")
+    hdul_new = fits.HDUList(
+        [primary_hdu, hdu_bckgd_subted, hdu_raw_readout, hdu_background]
+    )
 
     # add some stuff to the header, some of which may be redundant
-    hdul_new[0].header['FILTER'] = (obs_filter, 'Observing filter')
-    hdul_new[0].header['WCU_FP'] = (fp_mask, 'WCU focal plane mask')
-    hdul_new[0].header['WCU_PP'] = (pp_mask, 'WCU pupil plane mask')
-    hdul_new[0].header['BB_TEMP'] = (bb_temp.value, 'BB temperature')
+    hdul_new[0].header["FILTER"] = (obs_filter, "Observing filter")
+    hdul_new[0].header["WCU_FP"] = (fp_mask, "WCU focal plane mask")
+    hdul_new[0].header["WCU_PP"] = (pp_mask, "WCU pupil plane mask")
+    hdul_new[0].header["BB_TEMP"] = (bb_temp.value, "BB temperature")
     if ndit is not None:
-        hdul_new[0].header['NDIT'] = (ndit, 'Number of dithered exposures')
-        hdul_new[0].header['DIT'] = (dit, 'Det integration time')
+        hdul_new[0].header["NDIT"] = (ndit, "Number of dithered exposures")
+        hdul_new[0].header["DIT"] = (dit, "Det integration time")
     else:
-        hdul_new[0].header['EXPTIME'] = (exptime, 'Exposure time')
+        hdul_new[0].header["EXPTIME"] = (exptime, "Exposure time")
 
-    basename_file_name_write = 'IMG_OPT_04_stray_light_' + str(fp_mask) + '_pupil_mask_' + str(pp_mask) + '_filter_' + str(obs_filter) + '.fits'
+    basename_file_name_write = (
+        "IMG_OPT_04_stray_light_"
+        + str(fp_mask)
+        + "_pupil_mask_"
+        + str(pp_mask)
+        + "_filter_"
+        + str(obs_filter)
+        + ".fits"
+    )
     abs_file_name_write = out_dir + basename_file_name_write
-    
+
     hdul_new.writeto(abs_file_name_write, overwrite=True)
-    logging.info('Saved background-subtracted readout without aberrations to ' + abs_file_name_write)
+    logging.info(
+        "Saved background-subtracted readout without aberrations to "
+        + abs_file_name_write
+    )
 
-    logging.info('--------------------------------')
-    logging.info(f'Median of raw science readout: {np.median(raw_sci_readout):.4f}')
-    logging.info(f'Median of background: {np.median(background):.4f}')
-    logging.info(f'Median of background-subtracted readout: {np.median(bckgd_subted):.4f}')
-
+    logging.info("--------------------------------")
+    logging.info(f"Median of raw science readout: {np.median(raw_sci_readout):.4f}")
+    logging.info(f"Median of background: {np.median(background):.4f}")
+    logging.info(
+        f"Median of background-subtracted readout: {np.median(bckgd_subted):.4f}"
+    )
 
 
 def main():
 
-    stem = '/podman-share/metis_work/playing_with_scopesim/'
+    stem = "/podman-share/metis_work/playing_with_scopesim/"
 
     now = datetime.datetime.now()
-    log_dir = stem + 'IMG_04_simmed_stray_light_logs/'
-    log_file_name = log_dir + 'log_IMG_04_simmed_stray_light_' + now.strftime('%Y-%m-%d_%H-%M-%S') + '.txt'
-    out_dir = stem + 'IMG_04_simmed_stray_light_data/' # directory to write the simulated data to
-    
+    log_dir = stem + "IMG_04_simmed_stray_light_logs/"
+    log_file_name = (
+        log_dir
+        + "log_IMG_04_simmed_stray_light_"
+        + now.strftime("%Y-%m-%d_%H-%M-%S")
+        + ".txt"
+    )
+    out_dir = (
+        stem + "IMG_04_simmed_stray_light_data/"
+    )  # directory to write the simulated data to
 
     # Ensure log directory exists and force config in case handlers already set
     os.makedirs(log_dir, exist_ok=True)
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_file_name),
-            logging.StreamHandler()
-        ],
-        force=True
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[logging.FileHandler(log_file_name), logging.StreamHandler()],
+        force=True,
     )
     os.makedirs(out_dir, exist_ok=True)
 
     logging.info(f'Log file created at {now.strftime("%Y-%m-%d %H:%M:%S")}')
-    logging.info(f'Log file name: {log_file_name}')
+    logging.info(f"Log file name: {log_file_name}")
     logging.info(f'Log file directory: {stem + "IMG_04_simmed_stray_light_logs/"}')
     logging.info(f'Log file directory: {stem + "IMG_04_simmed_stray_light_logs/"}')
-    logging.info(f'Simmed file output directory: {out_dir}')
+    logging.info(f"Simmed file output directory: {out_dir}")
 
     # clocking angles for the PSF
-    #angle_array = [0, 45, 60]
-    angle_array = [0] # can be implemented later
+    # angle_array = [0, 45, 60]
+    angle_array = [0]  # can be implemented later
 
     # LM filters
     # dict_keys(['open', 'Lp', 'short-L', 'L_spec', 'Mp', 'M_spec', 'Br_alpha', 'Br_alpha_ref', 'PAH_3.3', 'PAH_3.3_ref', 'CO_1-0_ice', 'CO_ref', 'H2O-ice', 'IB_4.05', 'HCI_L_short', 'HCI_L_long', 'HCI_M'])
@@ -348,12 +395,10 @@ def main():
         },
     ]
 
-
-
     for config in obs_configs:
 
         # below line is kludge for testing just one combo
-        #config = {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Mp",           "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True}
+        # config = {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Mp",           "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True}
 
         generate_stray_light_data(
             fp_mask=config["fp_mask"],
@@ -365,9 +410,9 @@ def main():
             dit=config["dit"],
             ndit=config["ndit"],
             exptime=config["exptime"],
-            artifact_type = 'random_contiguous_stray_light', # can be 'crescent' or 'random_contiguous_stray_light'
+            artifact_type="random_contiguous_stray_light",  # can be 'crescent' or 'random_contiguous_stray_light'
             out_dir=out_dir,
-            intrapixel_capacitance=True
+            intrapixel_capacitance=True,
         )
 
 

@@ -6,7 +6,6 @@ import logging
 from modules.helpers import load_config_and_pipe, setup_logging
 from modules.backbone_img_01 import fov_calc
 
-
 # Reqs.:
 # - Ref. Overleaf doc IMG_OPT_01_Test_Description_Field_of_View_and_Ghost_Measurement.pdf
 #
@@ -16,16 +15,18 @@ from modules.backbone_img_01 import fov_calc
 
 def main():
 
-    stem = '/podman-share/metis_work/playing_with_scopesim/'
-    analysis_states_config_file = stem + 'config/config_file_IMG_01_METIS_AIT_img_cal_fov_ANALYSIS.yaml'
+    stem = "/podman-share/metis_work/playing_with_scopesim/"
+    analysis_states_config_file = (
+        stem + "config/config_file_IMG_01_METIS_AIT_img_cal_fov_ANALYSIS.yaml"
+    )
 
     now = datetime.datetime.now()
-    log_dir = stem + 'IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_logs/'
+    log_dir = stem + "IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_logs/"
     log_file_name = (
         log_dir
-        + 'log_IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS_'
-        + now.strftime('%Y-%m-%d_%H-%M-%S')
-        + '.txt'
+        + "log_IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS_"
+        + now.strftime("%Y-%m-%d_%H-%M-%S")
+        + ".txt"
     )
     setup_logging(log_dir=log_dir, log_file_name=log_file_name, now=now)
 

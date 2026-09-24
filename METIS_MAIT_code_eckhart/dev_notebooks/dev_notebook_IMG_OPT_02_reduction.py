@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from astropy.io import fits
 
-'''
+"""
 Fundamental reqs.:
 
 1. METIS-1408: Quality and alignment of the optical components within Mid-infrared ELT Imager and
@@ -25,16 +25,15 @@ Analysis steps:
 PSF wings +PSF symmetry + radial dependence on encircled energy.
 
 Ref. Overleaf doc IMG_OPT_02_Test_Description_PSF_Image_Quality
-'''
+"""
 
-file_path_name = '/Users/eckhartspalding/Documents/git.repos/metis_work/notebook_working_dir/data/test_IMG_OPT_02_result_1.fits'
+file_path_name = "/Users/eckhartspalding/Documents/git.repos/metis_work/notebook_working_dir/data/test_IMG_OPT_02_result_1.fits"
 
 hdul = fits.open(file_path_name)
 
 print(hdul.info())
 
-plt.imshow(hdul[1].data, origin='lower')
+plt.imshow(hdul[1].data, origin="lower")
 plt.show()
 
 hdul.close()
-
