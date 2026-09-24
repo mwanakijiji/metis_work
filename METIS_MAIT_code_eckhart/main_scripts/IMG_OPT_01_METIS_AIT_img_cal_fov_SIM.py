@@ -49,7 +49,8 @@ def main():
 
     # config file with the observing parameters
     observing_config_file = (
-        stem + "config/config_file_IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_observing.yaml"
+        stem
+        + "config/config_file_IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_observing.yaml"
     )
 
     now = datetime.datetime.now()
@@ -199,7 +200,9 @@ def main():
             exptime = config_params.get("exptime")
             use_exp_time_only = config_params.get("use_exp_time_only", False)
             # out_dir = config_params['results_write_dir']
-            file_name_abs = str(config_params["file_name_abs_trunc"]) + str(i) + ".fits"
+            file_name_abs = (
+                str(config_params["file_name_abs_trunc"]) + str(i) + ".fits"
+            )
 
             # set up instrument for imaging (same property keys as IMG_OPT_03)
             if nd_filter is not None:
@@ -233,10 +236,18 @@ def main():
                 angle=0.0,
             )
             metis["pupil_masks"].change_mask(pp_mask)
-            logging.info("OBS filter: " + str(metis.cmds.get("!OBS.filter_name")))
-            logging.info("WCU FP mask: " + str(metis.cmds.get("!WCU.current_fpmask")))
-            logging.info("OBS PP mask: " + str(metis.cmds.get("!OBS.pupil_mask")))
-            logging.info("OBS ND filter: " + str(metis.cmds.get("!OBS.nd_filter_name")))
+            logging.info(
+                "OBS filter: " + str(metis.cmds.get("!OBS.filter_name"))
+            )
+            logging.info(
+                "WCU FP mask: " + str(metis.cmds.get("!WCU.current_fpmask"))
+            )
+            logging.info(
+                "OBS PP mask: " + str(metis.cmds.get("!OBS.pupil_mask"))
+            )
+            logging.info(
+                "OBS ND filter: " + str(metis.cmds.get("!OBS.nd_filter_name"))
+            )
 
             pipe_2_log(
                 lambda m=metis: m.effects.pprint_all(),
@@ -296,7 +307,9 @@ def main():
 
             #########################################################
             # Take science exposure with same params as background
-            logging.info("Taking science exposure with same params as background.")
+            logging.info(
+                "Taking science exposure with same params as background."
+            )
             pipe_2_log(
                 lambda m=metis: m.effects.pprint_all(),
                 msg="Optical train effects (for science exposure)",
@@ -320,18 +333,29 @@ def main():
 
             # write
             abs_file_name_write = file_name_abs
-            os.makedirs(os.path.dirname(abs_file_name_write) or ".", exist_ok=True)
+            os.makedirs(
+                os.path.dirname(abs_file_name_write) or ".", exist_ok=True
+            )
 
             # Copy the primary header
             primary_hdu = fits.PrimaryHDU(header=outhdul_on[0].header)
             # Add background-subtracted readout as first extension
-            hdu_bckgd_subted = fits.ImageHDU(data=bckgd_subted, name="BCKGD_SUBTED")
+            hdu_bckgd_subted = fits.ImageHDU(
+                data=bckgd_subted, name="BCKGD_SUBTED"
+            )
             # Add raw science readout as second extension
-            hdu_raw_readout = fits.ImageHDU(data=raw_sci_readout, name="RAW_READOUT")
+            hdu_raw_readout = fits.ImageHDU(
+                data=raw_sci_readout, name="RAW_READOUT"
+            )
             # Add background as third extension
             hdu_background = fits.ImageHDU(data=background, name="BACKGROUND")
             hdul_new = fits.HDUList(
-                [primary_hdu, hdu_bckgd_subted, hdu_raw_readout, hdu_background]
+                [
+                    primary_hdu,
+                    hdu_bckgd_subted,
+                    hdu_raw_readout,
+                    hdu_background,
+                ]
             )
 
             # add some stuff to the header, some of which may be redundant
@@ -340,7 +364,10 @@ def main():
             hdul_new[0].header["WCU_PP"] = (pp_mask, "WCU pupil plane mask")
             hdul_new[0].header["BB_TEMP"] = (bb_temp.value, "BB temperature")
             if ndit is not None:
-                hdul_new[0].header["NDIT"] = (ndit, "Number of dithered exposures")
+                hdul_new[0].header["NDIT"] = (
+                    ndit,
+                    "Number of dithered exposures",
+                )
                 hdul_new[0].header["DIT"] = (dit, "Det integration time")
             else:
                 hdul_new[0].header["EXPTIME"] = (exptime, "Exposure time")

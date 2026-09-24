@@ -44,7 +44,9 @@ def main():
             merged["results_write_dir"] = stem + results_write_dir
         analysis_states.append(merged)
 
-    logging.info(f"Number of analysis states (filters): {len(analysis_states)}")
+    logging.info(
+        f"Number of analysis states (filters): {len(analysis_states)}"
+    )
 
     for state in analysis_states:
         fov_calc(run_state=state, stem=stem)
