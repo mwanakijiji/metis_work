@@ -51,7 +51,7 @@ from pipeline_registry import CLUSTER_PSF, COLOR_PSF, pipeline_stage
 sim.link_irdb("../../../../")
 
 # simulate observations with METIS (comment this out if packages already exist)
-# sim.download_packages(["METIS", "ELT", "Armazones"])
+# sim.download_packages(["METIS"])   # or git pull your IRDB clone
 
 # print versions of things
 sim.bug_report()
@@ -109,6 +109,7 @@ def generate_psf_image_quality_data(
                 "!WCU.current_fpmask": fp_mask,
                 "!OBS.pupil_mask": pp_mask,
                 "!OBS.nd_filter_name": nd_filter,
+                "!SIM.psf.interp_order": 1
             },
             # ignore_effects=["shot_noise", "readout_noise", "dark_current", "ipc"]
         )
@@ -119,6 +120,7 @@ def generate_psf_image_quality_data(
             properties={
                 "!OBS.filter_name": obs_filter,
                 "!WCU.current_fpmask": fp_mask,
+                "!SIM.psf.interp_order": 1
             },
             # ignore_effects=["shot_noise", "readout_noise", "dark_current", "ipc"]
         )
@@ -238,12 +240,14 @@ def generate_psf_image_quality_data(
         msg="PSF model wavel range",
     )
 
+    ipdb.set_trace()
     # Get perfect PSF - no detector noise (for debugging)
-    # hdul_perfect_sky = metis.image_planes[0].hdu
-    # hdul_perfect_sky.writeto(out_dir + 'junk_perfect_sky.fits', overwrite=True)
+    hdul_perfect_sky = metis.image_planes[0].hdu
+    hdul_perfect_sky.writeto(out_dir + 'junk_perfect_sky.fits', overwrite=True)
     # ... with background-subtraction:
-    # test_array = hdul_perfect_sky.data - hdul_perfect_background.data
-    # fits.writeto('junk.fits', test_array)
+    #hdul_perfect_background = metis.image_planes[2].hdu
+    test_array = hdul_perfect_sky.data - np.median(hdul_perfect_sky.data)
+    fits.writeto('junk.fits', test_array)
 
     pipe_2_log(
         lambda m=metis: m.effects.pprint_all(),
@@ -365,18 +369,27 @@ def main():
     # LM filters
     # dict_keys(['open', 'Lp', 'short-L', 'L_spec', 'Mp', 'M_spec', 'Br_alpha', 'Br_alpha_ref', 'PAH_3.3', 'PAH_3.3_ref', 'CO_1-0_ice', 'CO_ref', 'H2O-ice', 'IB_4.05', 'HCI_L_short', 'HCI_L_long', 'HCI_M'])
     lm_obs_configs = [
-        # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Br_alpha",     "nd_filter": None,      "dit": 0.065, "ndit": 2, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
         {
-            "fp_mask": "grid_lm",
-            "pp_mask": "PPS-LM",
-            "obs_filter": "Br_alpha",
-            "nd_filter": "ND_OD1",
-            "dit": 0.3,
-            "ndit": 2,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
+            "fp_mask": "grid_lm", 
+            "pp_mask": "PPS-CFO2", 
+            "obs_filter": "Br_alpha",     
+            "nd_filter": None,      
+            "dit": 0.065, 
+            "ndit": 2, 
+            "exptime": np.nan, "obs_mode": 
+            "wcu_img_lm", 
+            "use_exp_time_only": False},
+        # {
+        #     "fp_mask": "grid_lm",
+        #     "pp_mask": "PPS-LM",
+        #     "obs_filter": "Br_alpha",
+        #     "nd_filter": "ND_OD1",
+        #     "dit": 0.3,
+        #     "ndit": 2,
+        #     "exptime": np.nan,
+        #     "obs_mode": "wcu_img_lm",
+        #     "use_exp_time_only": False,
+        # },
         # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Br_alpha_ref", "nd_filter": "ND_OD1",  "dit": 0.4, "ndit": 5, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
         # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Lp",           "nd_filter": "ND_OD2",  "dit": float(3/8), "ndit": 3, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
         # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "H2O-ice",      "nd_filter": "ND_OD1",      "dit": 0.06, "ndit": 1, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},

@@ -34,6 +34,7 @@ digraph pipeline {
     color="#d62728";
     generate_stray_light_sim;
     populate_result_obj_info;
+    stray_light_brightness_spectrum;
     centroid_2passes_oversample;
     stray_light_segmentation;
     stray_light_mask_real;
@@ -51,6 +52,7 @@ digraph pipeline {
   process_one_psf [label="Fit one PSF"];
   strehl_psfs [label="Measure Strehl"];
   populate_result_obj_info [label="Populate result object"];
+  stray_light_brightness_spectrum [label="Arrange segments into brightnesses as function of spatial scales"];
   centroid_2passes_oversample [label="Centroid PSFs"];
   stray_light_segmentation [label="Segment stray light"];
   stray_light_mask_real [label="Mask the real PSF"];
@@ -63,6 +65,7 @@ digraph pipeline {
   strehl_psfs -> process_one_psf;
   generate_psf_quality_sim -> strehl_psfs;
   generate_stray_light_sim -> populate_result_obj_info;
+  stray_light_segmentation -> stray_light_brightness_spectrum;
   populate_result_obj_info -> centroid_2passes_oversample;
   stray_light_mask_real -> stray_light_segmentation;
   centroid_2passes_oversample -> stray_light_mask_real;

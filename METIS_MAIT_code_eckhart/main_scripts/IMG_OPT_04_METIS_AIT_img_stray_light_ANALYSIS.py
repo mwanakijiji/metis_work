@@ -141,10 +141,9 @@ def main():
 
         # segment the remaining light
         result = b04.stray_light_segmentation(result, hough_variant="active")
-        ipdb.set_trace()
 
-        # sort out the segments into different spatial scales
-        result = b04.stray_light_spatial_scales(result)
+        # sort out the segments into different spatial scales, keeping track of illumination
+        result = b04.stray_light_brightness_spectrum(result)
         ipdb.set_trace()
 
         # mask the parts with light, and measure the background level
