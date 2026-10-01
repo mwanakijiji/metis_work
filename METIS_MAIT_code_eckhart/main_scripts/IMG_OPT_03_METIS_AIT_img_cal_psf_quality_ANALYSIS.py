@@ -76,7 +76,7 @@ def main():
         data_states.append(merged)
 
     # loop over each data state (which likely means a single input FITS file; but that file can include multiple PSFs)
-    for state in data_states[0:1]:  # [0:1]: if just for a small test
+    for state in data_states:  # data_states[0:1]: if just for a small test
         strehl_psfs(
             state["file_name_abs"],
             fp_mask=state["fp_mask"],

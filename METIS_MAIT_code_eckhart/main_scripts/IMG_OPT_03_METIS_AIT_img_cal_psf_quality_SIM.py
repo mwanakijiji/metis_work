@@ -387,53 +387,27 @@ def main():
     # The table's "METISsim" row (IB 4.05) is left out: PSF_METISsim exists, but METISsim is not a
     # mask in the WCU pupil-mask wheel.
     # TODO: dit values are placeholders (ndit=1) -- tune by hand to avoid saturation / reach SNR
+    #lm_obs_configs = []
     lm_obs_configs = [
-        {"fp_mask": "grid_lm", "pp_mask": "SPM-LM",   "psf_kernel": "SPM-LM",       "obs_filter": "HCI_L_short", "nd_filter": None, "dit": 0.065, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-LM",   "psf_kernel": "PPS-LM_WCU",   "obs_filter": "HCI_L_short", "nd_filter": None, "dit": 0.065, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "RLS-LM",   "psf_kernel": "RLS-LM",       "obs_filter": "HCI_L_short", "nd_filter": None, "dit": 0.065, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "psf_kernel": "PPS-CFO2_WCU", "obs_filter": "Lp",          "nd_filter": None, "dit": 0.065, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "CLS-LM",   "psf_kernel": "CLS-LM",       "obs_filter": "IB_4.05",     "nd_filter": None, "dit": 0.065, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "CLS-LM",   "psf_kernel": "CLS-LM",       "obs_filter": "Mp",          "nd_filter": None, "dit": 0.065, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "CLS-LM",   "psf_kernel": "CLS-LM",       "obs_filter": "CO_ref",      "nd_filter": None, "dit": 0.065, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        # earlier configs:
-        # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Br_alpha", "nd_filter": None, "dit": 0.065, "ndit": 2, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        # {
-        #     "fp_mask": "grid_lm",
-        #     "pp_mask": "PPS-LM",
-        #     "obs_filter": "Br_alpha",
-        #     "nd_filter": "ND_OD1",
-        #     "dit": 0.3,
-        #     "ndit": 2,
-        #     "exptime": np.nan,
-        #     "obs_mode": "wcu_img_lm",
-        #     "use_exp_time_only": False,
-        # },
-        # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Br_alpha_ref", "nd_filter": "ND_OD1",  "dit": 0.4, "ndit": 5, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Lp",           "nd_filter": "ND_OD2",  "dit": float(3/8), "ndit": 3, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "H2O-ice",      "nd_filter": "ND_OD1",      "dit": 0.06, "ndit": 1, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "short-L",      "nd_filter": "ND_OD2",  "dit": 0.375, "ndit": 4, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "PAH_3.3",      "nd_filter": "ND_OD1",  "dit": 0.1875, "ndit": 7, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "PAH_3.3_ref",  "nd_filter": "ND_OD1",  "dit": 0.1875, "ndit": 8, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "IB_4.05",      "nd_filter": "ND_OD1",  "dit": float(1/6), "ndit": 12, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "HCI_L_short",  "nd_filter": "ND_OD2",  "dit": float(5/6), "ndit": 3, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "HCI_L_long",   "nd_filter": "ND_OD1",  "dit": 0.06, "ndit": 25, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "Mp",           "nd_filter": "ND_OD2",  "dit": 0.5, "ndit": 5, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "CO_1-0_ice",   "nd_filter": "ND_OD1",  "dit": float(2/21), "ndit": 21, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "CO_ref",       "nd_filter": "ND_OD1",  "dit": float(2/21), "ndit": 21, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "HCI_M",        "nd_filter": "ND_OD1",  "dit": float(1/11), "ndit": 22, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "L_spec",       "nd_filter": "ND_OD2",  "dit": 0.12, "ndit": 11, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        # {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "obs_filter": "M_spec",       "nd_filter": "ND_OD2",  "dit": float(2/7), "ndit": 7, "exptime": np.nan,   "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "SPM-LM",   "psf_kernel": "SPM-LM",       "obs_filter": "HCI_L_short", "nd_filter": None, "dit": 0.01, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "PPS-LM",   "psf_kernel": "PPS-LM_WCU",   "obs_filter": "HCI_L_short", "nd_filter": None, "dit": 0.01, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "RLS-LM",   "psf_kernel": "RLS-LM",       "obs_filter": "HCI_L_short", "nd_filter": None, "dit": 0.02, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "psf_kernel": "PPS-CFO2_WCU", "obs_filter": "Lp",          "nd_filter": None, "dit": 0.002, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "CLS-LM",   "psf_kernel": "CLS-LM",       "obs_filter": "IB_4.05",     "nd_filter": None, "dit": 0.015, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "CLS-LM",   "psf_kernel": "CLS-LM",       "obs_filter": "Mp",          "nd_filter": None, "dit": 0.005, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "CLS-LM",   "psf_kernel": "CLS-LM",       "obs_filter": "CO_ref",      "nd_filter": None, "dit": 0.01, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
     ]
 
     # N filters (Table 4-1 rows); placeholder dit from the IMG-OPT-04 N2 config
     # TODO: dit values are placeholders (ndit=1) -- tune by hand to avoid saturation / reach SNR
+    #n_obs_configs = []
     n_obs_configs = [
-        {"fp_mask": "pinhole_n", "pp_mask": "SPM-N", "psf_kernel": "SPM-N", "obs_filter": "N1",      "nd_filter": None, "dit": 0.0025, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_n", "use_exp_time_only": False},
-        {"fp_mask": "pinhole_n", "pp_mask": "CLS-N", "psf_kernel": "CLS-N", "obs_filter": "N2",      "nd_filter": None, "dit": 0.0025, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_n", "use_exp_time_only": False},
-        {"fp_mask": "pinhole_n", "pp_mask": "CLS-N", "psf_kernel": "CLS-N", "obs_filter": "N3",      "nd_filter": None, "dit": 0.0025, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_n", "use_exp_time_only": False},
-        {"fp_mask": "pinhole_n", "pp_mask": "SPM-N", "psf_kernel": "SPM-N", "obs_filter": "PAH_8.6", "nd_filter": None, "dit": 0.0025, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_n", "use_exp_time_only": False},
-        {"fp_mask": "pinhole_n", "pp_mask": "SPM-N", "psf_kernel": "SPM-N", "obs_filter": "S_IV",    "nd_filter": None, "dit": 0.0025, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_n", "use_exp_time_only": False},
-        {"fp_mask": "pinhole_n", "pp_mask": "SPM-N", "psf_kernel": "SPM-N", "obs_filter": "Ne_II",   "nd_filter": None, "dit": 0.0025, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_n", "use_exp_time_only": False},
+        {"fp_mask": "pinhole_n", "pp_mask": "SPM-N", "psf_kernel": "SPM-N", "obs_filter": "N1",      "nd_filter": None, "dit": 0.0005, "ndit": 50, "exptime": np.nan, "obs_mode": "wcu_img_n", "use_exp_time_only": False},
+        {"fp_mask": "pinhole_n", "pp_mask": "CLS-N", "psf_kernel": "CLS-N", "obs_filter": "N2",      "nd_filter": None, "dit": 0.0005, "ndit": 50, "exptime": np.nan, "obs_mode": "wcu_img_n", "use_exp_time_only": False},
+        {"fp_mask": "pinhole_n", "pp_mask": "CLS-N", "psf_kernel": "CLS-N", "obs_filter": "N3",      "nd_filter": None, "dit": 0.0005, "ndit": 50, "exptime": np.nan, "obs_mode": "wcu_img_n", "use_exp_time_only": False},
+        {"fp_mask": "pinhole_n", "pp_mask": "SPM-N", "psf_kernel": "SPM-N", "obs_filter": "PAH_8.6", "nd_filter": None, "dit": 0.0005, "ndit": 50, "exptime": np.nan, "obs_mode": "wcu_img_n", "use_exp_time_only": False},
+        {"fp_mask": "pinhole_n", "pp_mask": "SPM-N", "psf_kernel": "SPM-N", "obs_filter": "S_IV",    "nd_filter": None, "dit": 0.0005, "ndit": 50, "exptime": np.nan, "obs_mode": "wcu_img_n", "use_exp_time_only": False},
+        {"fp_mask": "pinhole_n", "pp_mask": "SPM-N", "psf_kernel": "SPM-N", "obs_filter": "Ne_II",   "nd_filter": None, "dit": 0.0005, "ndit": 50, "exptime": np.nan, "obs_mode": "wcu_img_n", "use_exp_time_only": False},
     ]
 
     # for debug
