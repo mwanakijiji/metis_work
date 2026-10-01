@@ -16,12 +16,82 @@ defaults:
   results_write_dir: results/IMG_OPT_03_psf_quality_analysis_results/
 
 runs:
-  - filter_name: Br_alpha
-    file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+  # (filter, cold stop) rows of E-REP-MPIA-1203 0-1, Table 4-1, as written by the current
+  # IMG_OPT_03_METIS_AIT_img_cal_psf_quality_SIM.py (lm_obs_configs + n_obs_configs)
+
+  # LM (grid_lm; coord guesses from the defaults)
+  - filter_name: HCI_L_short
+    file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_SPM-LM_filter_HCI_L_short.fits
+    pp_mask: SPM-LM
+
+  - filter_name: HCI_L_short
+    file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-LM_filter_HCI_L_short.fits
+    pp_mask: PPS-LM
+
+  - filter_name: HCI_L_short
+    file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_RLS-LM_filter_HCI_L_short.fits
+    pp_mask: RLS-LM
+
+  - filter_name: Lp
+    file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Lp.fits
     pp_mask: PPS-CFO2
-    fit_method: curve_fit
-    fit_annular_aperture_fixed: true
-    fit_annular_aperture_free: true
+
+  - filter_name: IB_4.05
+    file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_CLS-LM_filter_IB_4.05.fits
+    pp_mask: CLS-LM
+
+  - filter_name: Mp
+    file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_CLS-LM_filter_Mp.fits
+    pp_mask: CLS-LM
+
+  - filter_name: CO_ref
+    file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_CLS-LM_filter_CO_ref.fits
+    pp_mask: CLS-LM
+
+  # N (single pinhole_n PSF near the detector centre)
+  - filter_name: N1
+    file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_pinhole_n_pupil_mask_SPM-N_filter_N1.fits
+    fp_mask: pinhole_n
+    pp_mask: SPM-N
+    config_coords_guesses_file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/config/config_file_IMG_OPT_03_psf_quality_coords_guesses_pinhole_n.yaml
+
+  - filter_name: N2
+    file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_pinhole_n_pupil_mask_CLS-N_filter_N2.fits
+    fp_mask: pinhole_n
+    pp_mask: CLS-N
+    config_coords_guesses_file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/config/config_file_IMG_OPT_03_psf_quality_coords_guesses_pinhole_n.yaml
+
+  - filter_name: N3
+    file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_pinhole_n_pupil_mask_CLS-N_filter_N3.fits
+    fp_mask: pinhole_n
+    pp_mask: CLS-N
+    config_coords_guesses_file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/config/config_file_IMG_OPT_03_psf_quality_coords_guesses_pinhole_n.yaml
+
+  - filter_name: PAH_8.6
+    file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_pinhole_n_pupil_mask_SPM-N_filter_PAH_8.6.fits
+    fp_mask: pinhole_n
+    pp_mask: SPM-N
+    config_coords_guesses_file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/config/config_file_IMG_OPT_03_psf_quality_coords_guesses_pinhole_n.yaml
+
+  - filter_name: S_IV
+    file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_pinhole_n_pupil_mask_SPM-N_filter_S_IV.fits
+    fp_mask: pinhole_n
+    pp_mask: SPM-N
+    config_coords_guesses_file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/config/config_file_IMG_OPT_03_psf_quality_coords_guesses_pinhole_n.yaml
+
+  - filter_name: Ne_II
+    file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_pinhole_n_pupil_mask_SPM-N_filter_Ne_II.fits
+    fp_mask: pinhole_n
+    pp_mask: SPM-N
+    config_coords_guesses_file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/config/config_file_IMG_OPT_03_psf_quality_coords_guesses_pinhole_n.yaml
+
+  # earlier runs:
+  # - filter_name: Br_alpha
+  #   file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+  #   pp_mask: PPS-CFO2
+  #   fit_method: curve_fit
+  #   fit_annular_aperture_fixed: true
+  #   fit_annular_aperture_free: true
 
   # - filter_name: Br_alpha
   #   file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/data/IMG_OPT_03_psf_quality_simmed_data/noiseless_2nd_order_IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-LM_filter_Br_alpha.fits

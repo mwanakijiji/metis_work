@@ -7,6 +7,8 @@
 # fp_mask: WCU focal-plane mask (sets LM vs N band; LM uses grid_lm, N uses pinhole_n)
 # d_ph_um: physical pinhole diameter [um] (report column 3)
 # ph_file: FITS file of the pinhole (PH) observation   } science image in extension 1
+#          NB: IGNORED by run_IMG_OPT_03_table_4-1.py, which takes the PH files (and fp_mask) from
+#          the 'runs' in config_file_IMG_OPT_03_psf_quality_data_states.yaml, matched on (filter, pp_mask)
 # ps_file: FITS file of the true point source (PS) one  } (BCKGD_SUBTED), as written by the SIM script
 #          Relative paths are taken relative to METIS_MAIT_code_eckhart/. Leave null if not made yet.
 # skip:    reason to skip the row (it is still listed in the output table)

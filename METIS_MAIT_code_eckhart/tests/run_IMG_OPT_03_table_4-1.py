@@ -1,8 +1,13 @@
 # Reproduces E-REP-MPIA-1203 0-1, Table 4-1 ("Pinhole vs. true point source PSF analysis")
 # with our own IMG-OPT-03 fitting pipeline.
 #
-# For each (filter, cold stop) row in the inputs manifest, and for each of the pinhole (PH)
-# and true point source (PS) images supplied there, this:
+# The pinhole (PH) images are the ones IMG_OPT_03_METIS_AIT_img_cal_psf_quality_ANALYSIS.py reads
+# in, i.e. the 'runs' in the data-states config (--data-states). Each run is matched to a manifest
+# row by (filter, pp_mask); the manifest supplies the report label, d_ph_um and any PS image.
+# Runs with no matching manifest row are added as extra rows (d_ph_um from the observing config),
+# and manifest rows with no matching run are listed as having no PH data.
+#
+# For each (filter, cold stop) row, and for each of the PH and true point source (PS) images, this:
 #   1. cuts out the PSF around the brightest (smoothed) pixel,
 #   2. runs the production per-PSF analysis (process_one_psf, free annular-aperture fit),
 #      writing free_ann_ap_best_fit_num_coord_0_fpmask_*_ppmask_*_filter_*.png into <out>/PH or <out>/PS,
@@ -11,10 +16,10 @@
 #
 # PS images are fitted with a delta-function source (no pinhole in the model); PH images with the
 # pinhole diameter d_ph_um from the manifest. D_aper and D_obsc in the table come from the PS fit,
-# as in the report.
+# as in the report, or from the PH fit if there is no PS image (column 'D fit from').
 #
 # Not collected by pytest (no test_ prefix). Usage:
-#   python tests/run_IMG_OPT_03_table_4-1.py [--manifest ...] [--out ...]
+#   python tests/run_IMG_OPT_03_table_4-1.py [--manifest ...] [--data-states ...] [--out ...]
 
 import argparse
 import copy
@@ -39,6 +44,7 @@ from modules.backbone_img_03_psf_quality import (  # noqa: E402
 )
 from modules.helpers import load_config_and_pipe, setup_logging  # noqa: E402
 from modules.psf_grid_prep import load_fits_data  # noqa: E402
+from modules.strehl_fcns import imaging_band_from_fp_mask  # noqa: E402
 
 OVERSAMPLE_FACTOR = 3  # same as strehl_psfs
 COLUMNS = [
@@ -56,6 +62,80 @@ COLUMNS = [
 def _abs_path(path):
     """Paths in the manifest may be absolute or relative to METIS_MAIT_code_eckhart/."""
     return path if os.path.isabs(path) else str(ROOT / path)
+
+
+def rows_from_data_states(manifest_rows, data_states_file, config_observing):
+    """
+    Build the table rows from the images the IMG-OPT-03 ANALYSIS script reads in.
+
+    INPUTS
+    ----------
+    manifest_rows : list of dict
+        Rows of the Table 4-1 inputs manifest.
+    data_states_file : str
+        Data-states config (defaults + runs) read by the ANALYSIS script.
+    config_observing : dict
+        Observing configuration (for pinhole diameters of runs not in the manifest).
+
+    OUTPUTS
+    -------
+    list of dict
+        Manifest rows with ph_file / fp_mask taken from the matching run (or ph_file=None if
+        there is none), followed by extra rows for runs that match no manifest row.
+    """
+    with open(data_states_file) as f:
+        data_states_config = yaml.safe_load(f)
+    defaults = data_states_config.get("defaults", {})
+    runs = [{**defaults, **entry} for entry in data_states_config.get("runs", [])]
+    logging.info(f"Read {len(runs)} runs from {data_states_file}")
+
+    rows = []
+    matched = set()
+    for manifest_row in manifest_rows:
+        row = dict(manifest_row)
+        hits = [
+            i
+            for i, run in enumerate(runs)
+            if run["filter_name"] == row["filter"] and run["pp_mask"] == row["pp_mask"]
+        ]
+        if row.get("skip") or not hits:
+            row["ph_file"] = None
+        else:
+            if len(hits) > 1:
+                logging.warning(
+                    f"{len(hits)} runs match filter={row['filter']}, pp_mask={row['pp_mask']}; "
+                    f"using the first"
+                )
+            run = runs[hits[0]]
+            row["ph_file"] = run["file_name_abs"]
+            row["fp_mask"] = run["fp_mask"]
+        matched.update(hits)
+        rows.append(row)
+
+    # runs that are not rows of Table 4-1
+    for i, run in enumerate(runs):
+        if i in matched:
+            continue
+        band = imaging_band_from_fp_mask(run["fp_mask"])
+        d_ph_um = config_observing["pinhole_diam_um"][band]
+        row = {
+            "label": run["filter_name"],
+            "filter": run["filter_name"],
+            "pp_mask": run["pp_mask"],
+            "fp_mask": run["fp_mask"],
+            "d_ph_um": d_ph_um,
+            "ph_file": run["file_name_abs"],
+            "ps_file": None,
+        }
+        if d_ph_um is None:
+            row["d_ph_um"] = float("nan")
+            row["skip"] = f"no pinhole_diam_um for band {band} in observing config"
+        logging.info(
+            f"Run not in Table 4-1 manifest, added as extra row: "
+            f"filter={run['filter_name']}, pp_mask={run['pp_mask']}"
+        )
+        rows.append(row)
+    return rows
 
 
 def _local_filter_paths(leaf_names):
@@ -197,6 +277,9 @@ def build_table(manifest_rows, config_observing, out_dir):
         fwhm_ph = ph["fwhm_mas"] if ph else None
         fwhm_ps = ps["fwhm_mas"] if ps else None
         ratio = fwhm_ph / fwhm_ps if (ph and ps) else None
+        # D_aper, D_obsc from the PS fit (as in the report) if there is one, else from the PH fit
+        # (which models the finite pinhole, as the ANALYSIS script does)
+        d_fit, d_source = (ps, "PS") if ps else ((ph, "PH") if ph else (None, "—"))
         table_rows.append(
             {
                 "filter": row["label"],
@@ -205,12 +288,13 @@ def build_table(manifest_rows, config_observing, out_dir):
                 "FWHM PH [mas]": _fmt(fwhm_ph, ".2f"),
                 "FWHM PS [mas]": _fmt(fwhm_ps, ".2f"),
                 "FWHM ratio PH / PS": _fmt(ratio, ".4f"),
-                "D_aper [m]": _fmt_pm(ps["D_aper"], ps["D_aper_err"]) if ps else "—",
-                "D_obsc [m]": _fmt_pm(ps["D_obsc"], ps["D_obsc_err"]) if ps else "—",
+                "D_aper [m]": _fmt_pm(d_fit["D_aper"], d_fit["D_aper_err"]) if d_fit else "—",
+                "D_obsc [m]": _fmt_pm(d_fit["D_obsc"], d_fit["D_obsc_err"]) if d_fit else "—",
+                "D fit from": d_source,
                 "note": note,
             }
         )
-    return pd.DataFrame(table_rows, columns=COLUMNS + ["note"])
+    return pd.DataFrame(table_rows, columns=COLUMNS + ["D fit from", "note"])
 
 
 def write_table(df, out_dir):
@@ -224,8 +308,10 @@ def write_table(df, out_dir):
     footer = (
         "\nOur analogue of E-REP-MPIA-1203 0-1, Table 4-1. FWHM is the mean of the x and y "
         "FWHM of a 2D Gaussian fit to the 3x-oversampled cutout (not necessarily the method "
-        "used in the report). D_aper and D_obsc are from the free annular-aperture fit to the "
-        "true point source (PS) image, with 1-sigma curve_fit errors.\n"
+        "used in the report). D_aper and D_obsc are from the free annular-aperture fit, with "
+        "1-sigma curve_fit errors: to the true point source (PS) image if there is one (as in the "
+        "report), otherwise to the pinhole (PH) image with the finite pinhole in the model "
+        "(column 'D fit from').\n"
     )
     with open(md_path, "w") as f:
         f.write("\n".join([header, rule] + body) + "\n" + footer)
@@ -239,6 +325,11 @@ def main():
     parser.add_argument(
         "--manifest",
         default=str(ROOT / "config/config_file_IMG_OPT_03_table_4-1_inputs.yaml"),
+    )
+    parser.add_argument(
+        "--data-states",
+        default=str(ROOT / "config/config_file_IMG_OPT_03_psf_quality_data_states.yaml"),
+        help="data-states config read by the ANALYSIS script; its runs are the PH images",
     )
     parser.add_argument(
         "--observing-config",
@@ -264,8 +355,9 @@ def main():
     )
     with open(args.manifest) as f:
         manifest_rows = yaml.safe_load(f)["rows"]
+    rows = rows_from_data_states(manifest_rows, args.data_states, config_observing)
 
-    df = build_table(manifest_rows, config_observing, args.out)
+    df = build_table(rows, config_observing, args.out)
     write_table(df, args.out)
     print(df.to_string(index=False))
 

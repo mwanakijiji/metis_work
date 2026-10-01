@@ -389,13 +389,13 @@ def main():
     # TODO: dit values are placeholders (ndit=1) -- tune by hand to avoid saturation / reach SNR
     #lm_obs_configs = []
     lm_obs_configs = [
-        {"fp_mask": "grid_lm", "pp_mask": "SPM-LM",   "psf_kernel": "SPM-LM",       "obs_filter": "HCI_L_short", "nd_filter": None, "dit": 0.01, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "PPS-LM",   "psf_kernel": "PPS-LM_WCU",   "obs_filter": "HCI_L_short", "nd_filter": None, "dit": 0.01, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "RLS-LM",   "psf_kernel": "RLS-LM",       "obs_filter": "HCI_L_short", "nd_filter": None, "dit": 0.02, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "SPM-LM",   "psf_kernel": "SPM-LM",       "obs_filter": "HCI_L_short", "nd_filter": None, "dit": 0.002, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "PPS-LM",   "psf_kernel": "PPS-LM_WCU",   "obs_filter": "HCI_L_short", "nd_filter": None, "dit": 0.005, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "RLS-LM",   "psf_kernel": "RLS-LM",       "obs_filter": "HCI_L_short", "nd_filter": None, "dit": 0.005, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
         {"fp_mask": "grid_lm", "pp_mask": "PPS-CFO2", "psf_kernel": "PPS-CFO2_WCU", "obs_filter": "Lp",          "nd_filter": None, "dit": 0.002, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "CLS-LM",   "psf_kernel": "CLS-LM",       "obs_filter": "IB_4.05",     "nd_filter": None, "dit": 0.015, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "CLS-LM",   "psf_kernel": "CLS-LM",       "obs_filter": "IB_4.05",     "nd_filter": None, "dit": 0.01, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
         {"fp_mask": "grid_lm", "pp_mask": "CLS-LM",   "psf_kernel": "CLS-LM",       "obs_filter": "Mp",          "nd_filter": None, "dit": 0.005, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
-        {"fp_mask": "grid_lm", "pp_mask": "CLS-LM",   "psf_kernel": "CLS-LM",       "obs_filter": "CO_ref",      "nd_filter": None, "dit": 0.01, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
+        {"fp_mask": "grid_lm", "pp_mask": "CLS-LM",   "psf_kernel": "CLS-LM",       "obs_filter": "CO_ref",      "nd_filter": None, "dit": 0.005, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
     ]
 
     # N filters (Table 4-1 rows); placeholder dit from the IMG-OPT-04 N2 config

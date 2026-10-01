@@ -5,9 +5,35 @@ import datetime
 import logging
 import yaml
 import ipdb
+import numpy as np
+from astropy.io import fits
 
 from modules.helpers import load_config_and_pipe, setup_logging
 from modules.backbone_img_03_psf_quality import strehl_psfs
+from modules.strehl_fcns import imaging_band_from_fp_mask
+
+
+def check_saturation(file_name_abs, fp_mask, config_observing, hdu_index=2, frac=0.75):
+    """
+    Log an error if the max counts in image extension ``hdu_index`` (the raw readout, before
+    background subtraction) exceed ``frac`` of the detector saturation level. Does not stop the analysis.
+    """
+    band = imaging_band_from_fp_mask(fp_mask)
+    saturation_adu = float(config_observing["saturation_adu"][f"img_{band}"])
+    with fits.open(file_name_abs) as hdul:
+        max_counts = float(np.nanmax(hdul[hdu_index].data))
+    if max_counts > frac * saturation_adu:
+        logging.error(
+            f"! ------- {os.path.basename(file_name_abs)}: max counts in extension {hdu_index} "
+            f"= {max_counts:.0f} ADU > {frac} x saturation ({frac * saturation_adu:.0f} of "
+            f"{saturation_adu:.0f} ADU, img_{band})"
+        )
+    else:
+        logging.info(
+            f"Saturation check OK for {os.path.basename(file_name_abs)}: "
+            f"max counts in extension {hdu_index} = {max_counts:.0f} ADU "
+            f"<= {frac} x saturation ({frac * saturation_adu:.0f} ADU, img_{band})"
+        )
 
 # Reqs.:
 # - Ref. Overleaf doc IMG_OPT_04_Test_Description_PSF_Image_Quality
@@ -77,6 +103,11 @@ def main():
 
     # loop over each data state (which likely means a single input FITS file; but that file can include multiple PSFs)
     for state in data_states:  # data_states[0:1]: if just for a small test
+        check_saturation(
+            state["file_name_abs"],
+            fp_mask=state["fp_mask"],
+            config_observing=observing_config,
+        )
         strehl_psfs(
             state["file_name_abs"],
             fp_mask=state["fp_mask"],

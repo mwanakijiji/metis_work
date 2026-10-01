@@ -66,6 +66,12 @@ pixel_scales:
   img_lm: 5.47
   img_n: 6.79
 
+# Detector saturation levels [ADU] per DIT (ScopeSim output is the average over NDIT),
+# from the IRDB METIS detector yamls: full_well / gain for the default readout mode of each WCU imaging mode
+saturation_adu:
+  img_lm: 25000   # H2RG, fast mode (wcu_img_lm default): 1.e+5 e / 4.0 e/ADU
+  img_n: 13930    # GeoSnap, high_capacity mode (wcu_img_n default): 2.8e+6 e / 201 e/ADU
+
 # WCU FP2.1 pinhole physical diameters [um]
 # Choose lm vs n from the focal-plane mask name (e.g. grid_lm, pinhole_n).
 # Use null for either band to skip finite-pinhole convolution (delta-function pinhole).
