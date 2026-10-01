@@ -1,0 +1,108 @@
+# central weighted wavelength only; can lead to inaccuracies
+monochromatic_observing_filters_lm:
+  short-L: 3.29e-6
+  Lp: 3.82e-6
+  L_spec: 3.56e-6
+  Mp: 4.76e-6
+  M_spec: 4.87e-6
+  Br_alpha: 4.06e-6
+  Br_alpha_ref: 3.93e-6
+  PAH_3.3: 3.31e-6
+  PAH_3.3_ref: 3.45e-6
+  CO_1-0_ice: 4.66e-6
+  CO_ref: 4.94e-6
+  H2O-ice: 3.09e-6
+  IB_4.05: 4.04e-6
+  HCI_L_short: 3.62e-6
+  HCI_L_long: 3.80e-6
+  HCI_M: 4.95e-6
+
+# file names of actual filter curves
+# paths are pre-pended in the code with 
+# PKGS_DIR = (Path(__file__).resolve().parent / "inst_pkgs").resolve()
+polychromatic_observing_filters_lm_leaf_name:
+  short-L: '/METIS/filters/TC_filter_short-L.dat'
+  Lp: '/METIS/filters/TC_filter_Lp.dat'
+  L_spec: '/METIS/filters/TC_filter_L_spec.dat'
+  Mp: '/METIS/filters/TC_filter_Mp.dat'
+  M_spec: '/METIS/filters/TC_filter_M_spec.dat'
+  Br_alpha: '/METIS/filters/TC_filter_Br_alpha.dat'
+  Br_alpha_ref: '/METIS/filters/TC_filter_Br_alpha_ref.dat'
+  PAH_3.3: '/METIS/filters/TC_filter_PAH_3.3.dat'
+  PAH_3.3_ref: '/METIS/filters/TC_filter_PAH_3.3_ref.dat'
+  CO_1-0_ice: '/METIS/filters/TC_filter_CO_1-0_ice.dat'
+  CO_ref: '/METIS/filters/TC_filter_CO_ref.dat'
+  H2O-ice: '/METIS/filters/TC_filter_H2O-ice.dat'
+  IB_4.05: '/METIS/filters/TC_filter_IB_4.05.dat'
+  HCI_L_short: '/METIS/filters/TC_filter_HCI_L_short.dat'
+  HCI_L_long: '/METIS/filters/TC_filter_HCI_L_long.dat'
+  HCI_M: '/METIS/filters/TC_filter_HCI_M.dat'
+
+# N-band equivalents of the two blocks above; central wavelengths are
+# transmission-weighted means of the TC_filter_*.dat curves (same method as LM)
+monochromatic_observing_filters_n:
+  N1: 8.648e-6
+  N2: 11.201e-6
+  N3: 12.261e-6
+  PAH_8.6: 8.614e-6
+  S_IV: 10.549e-6
+  Ne_II: 12.739e-6
+
+polychromatic_observing_filters_n_leaf_name:
+  N1: '/METIS/filters/TC_filter_N1.dat'
+  N2: '/METIS/filters/TC_filter_N2.dat'
+  N3: '/METIS/filters/TC_filter_N3.dat'
+  PAH_8.6: '/METIS/filters/TC_filter_PAH_8.6.dat'
+  S_IV: '/METIS/filters/TC_filter_S_IV.dat'
+  Ne_II: '/METIS/filters/TC_filter_Ne_II.dat'
+
+# side length [native pixels] of the PSF cutout; lambda/D is ~2.5x larger in pixels in N
+cutout_edge_native:
+  lm: 31
+  n: 61
+
+# units are mas/pixel
+pixel_scales:
+  img_lm: 5.47
+  img_n: 6.79
+
+# WCU FP2.1 pinhole physical diameters [um]
+# Choose lm vs n from the focal-plane mask name (e.g. grid_lm, pinhole_n).
+# Use null for either band to skip finite-pinhole convolution (delta-function pinhole).
+pinhole_diam_um:
+  lm: 25.0
+  n: 66.0
+  # lm: null
+  # n: null
+
+# Plate scale at WCU FP2.1 [mm/asec]; Table 2.6 in E-REP-MPIA-1203
+plate_scale_wcu_fp2pt1_mm_per_asec: 3.319
+
+# fallback values if dims are missing for a cold stop
+D_aperture:
+  full: 34.6878
+  D_obscuration: 12.8502
+
+# Physical cold-stop diameters projected onto the ELT-M1 plane [m] (Dmask,out / Dmask,in)
+# Ref. E-REP-MPIA-1203 0-1, Table 4-2 (p. 46). Selected via pp_mask in strehl_psfs;
+# masks not listed here fall back to D_aperture above.
+# NB: ScopeSim PSF_PPS-LM_WCU.fits (2025-11-24) fits to 37.26 / 0.00 m, inconsistent with PPS-LM below.
+D_aperture_by_pupil_mask:
+  SPM-LM:   {full: 36.067, D_obscuration: 10.860}
+  PPS-LM:   {full: 35.981, D_obscuration: 5.589}
+  RLS-LM:   {full: 35.039, D_obscuration: 20.693}
+  PPS-CFO2: {full: 34.688, D_obscuration: 12.850}
+  CLS-LM:   {full: 36.067, D_obscuration: 13.524}
+  SPM-N:    {full: 35.844, D_obscuration: 11.083}
+  CLS-N:    {full: 35.844, D_obscuration: 13.524}
+
+
+
+# ELT EXIT PUPIL GEOMETRY
+# Ref. p. 8 in E-REP-ULG-MET-1033 1-0 01/08/2022:
+#  full: 36.876
+#  D_obscuration: 10.053
+# based on numbers from RvB, 2 Mar 2026:
+#  full: 34.6878
+#  D_obscuration: 12.8502
+# corresponding to PPS-CFO2 mask:

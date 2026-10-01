@@ -1,0 +1,28 @@
+# Inputs for tests/run_IMG_OPT_03_table_4-1.py: one entry per row of
+# E-REP-MPIA-1203 0-1, Table 4-1 (p. 40), "Pinhole vs. true point source PSF analysis".
+#
+# label:   filter name as printed in the report
+# filter:  ScopeSim filter name
+# pp_mask: cold stop
+# fp_mask: WCU focal-plane mask (sets LM vs N band; LM uses grid_lm, N uses pinhole_n)
+# d_ph_um: physical pinhole diameter [um] (report column 3)
+# ph_file: FITS file of the pinhole (PH) observation   } science image in extension 1
+# ps_file: FITS file of the true point source (PS) one  } (BCKGD_SUBTED), as written by the SIM script
+#          Relative paths are taken relative to METIS_MAIT_code_eckhart/. Leave null if not made yet.
+# skip:    reason to skip the row (it is still listed in the output table)
+
+rows:
+  - {label: "HCI-L short", filter: HCI_L_short, pp_mask: SPM-LM,   fp_mask: grid_lm,   d_ph_um: 25.0, ph_file: data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_SPM-LM_filter_HCI_L_short.fits, ps_file: null}
+  - {label: "HCI-L short", filter: HCI_L_short, pp_mask: PPS-LM,   fp_mask: grid_lm,   d_ph_um: 25.0, ph_file: data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-LM_filter_HCI_L_short.fits, ps_file: null}
+  - {label: "HCI-L short", filter: HCI_L_short, pp_mask: RLS-LM,   fp_mask: grid_lm,   d_ph_um: 25.0, ph_file: data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_RLS-LM_filter_HCI_L_short.fits, ps_file: null}
+  - {label: "Lp",          filter: Lp,          pp_mask: PPS-CFO2, fp_mask: grid_lm,   d_ph_um: 25.0, ph_file: data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_PPS-CFO2_filter_Lp.fits, ps_file: null}
+  - {label: "IB 4.05",     filter: IB_4.05,     pp_mask: CLS-LM,   fp_mask: grid_lm,   d_ph_um: 25.0, ph_file: data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_CLS-LM_filter_IB_4.05.fits, ps_file: null}
+  - {label: "IB 4.05",     filter: IB_4.05,     pp_mask: METISsim, fp_mask: grid_lm,   d_ph_um: 25.0, skip: "not a ScopeSim pupil mask"}
+  - {label: "Mp",          filter: Mp,          pp_mask: CLS-LM,   fp_mask: grid_lm,   d_ph_um: 25.0, ph_file: data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_CLS-LM_filter_Mp.fits, ps_file: null}
+  - {label: "CO ref",      filter: CO_ref,      pp_mask: CLS-LM,   fp_mask: grid_lm,   d_ph_um: 25.0, ph_file: data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_grid_lm_pupil_mask_CLS-LM_filter_CO_ref.fits, ps_file: null}
+  - {label: "N1",          filter: N1,          pp_mask: SPM-N,    fp_mask: pinhole_n, d_ph_um: 66.0, ph_file: data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_pinhole_n_pupil_mask_SPM-N_filter_N1.fits, ps_file: null}
+  - {label: "N2",          filter: N2,          pp_mask: CLS-N,    fp_mask: pinhole_n, d_ph_um: 66.0, ph_file: data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_pinhole_n_pupil_mask_CLS-N_filter_N2.fits, ps_file: null}
+  - {label: "N3",          filter: N3,          pp_mask: CLS-N,    fp_mask: pinhole_n, d_ph_um: 66.0, ph_file: data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_pinhole_n_pupil_mask_CLS-N_filter_N3.fits, ps_file: null}
+  - {label: "PAH 8.6",     filter: PAH_8.6,     pp_mask: SPM-N,    fp_mask: pinhole_n, d_ph_um: 66.0, ph_file: data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_pinhole_n_pupil_mask_SPM-N_filter_PAH_8.6.fits, ps_file: null}
+  - {label: "[S IV]",      filter: S_IV,        pp_mask: SPM-N,    fp_mask: pinhole_n, d_ph_um: 66.0, ph_file: data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_pinhole_n_pupil_mask_SPM-N_filter_S_IV.fits, ps_file: null}
+  - {label: "[Ne II]",     filter: Ne_II,       pp_mask: SPM-N,    fp_mask: pinhole_n, d_ph_um: 66.0, ph_file: data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_pinhole_n_pupil_mask_SPM-N_filter_Ne_II.fits, ps_file: null}
