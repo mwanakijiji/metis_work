@@ -1,8 +1,16 @@
+# Optional per data state:
+#   segmentation_method: one of threshold, hough_circle, active_contour (default), watershed, kmeans, meanshift
+#   segmentation_params: dict overriding the defaults in
+#     backbone_img_04_stray_light.SEGMENTATION_DEFAULT_PARAMS[<method>], e.g.
+#       segmentation_method: watershed
+#       segmentation_params: {threshold_kind: otsu, min_distance: 15}
 data_states:
   - file_name: data/IMG_04_simmed_stray_light_data/IMG_OPT_04_stray_light_pinhole_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
     filter_name: Br_alpha
     detector: LM
+    segmentation_method: active_contour
 
   - file_name: data/IMG_04_simmed_stray_light_data/IMG_OPT_04_stray_light_pinhole_n_pupil_mask_PPS-CFO2_filter_N2.fits
     filter_name: N2
     detector: N
+    segmentation_method: active_contour

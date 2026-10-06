@@ -239,6 +239,7 @@ def analyze_one_image(file_name, row, source_type, config_observing, out_dir):
         "D_aper_err": updates["D_aperture_err"],
         "D_obsc": updates["D_obscuration_fit"],
         "D_obsc_err": updates["D_obscuration_err"],
+        "strehl_eso": updates["strehl_free_ann_ap_eso"],
     }
 
 
@@ -290,11 +291,12 @@ def build_table(manifest_rows, config_observing, out_dir):
                 "FWHM ratio PH / PS": _fmt(ratio, ".4f"),
                 "D_aper [m]": _fmt_pm(d_fit["D_aper"], d_fit["D_aper_err"]) if d_fit else "—",
                 "D_obsc [m]": _fmt_pm(d_fit["D_obsc"], d_fit["D_obsc_err"]) if d_fit else "—",
+                "Strehl ESO": _fmt(d_fit["strehl_eso"], ".3f") if d_fit else "—",
                 "D fit from": d_source,
                 "note": note,
             }
         )
-    return pd.DataFrame(table_rows, columns=COLUMNS + ["D fit from", "note"])
+    return pd.DataFrame(table_rows, columns=COLUMNS + ["Strehl ESO", "D fit from", "note"])
 
 
 def write_table(df, out_dir):
@@ -311,7 +313,8 @@ def write_table(df, out_dir):
         "used in the report). D_aper and D_obsc are from the free annular-aperture fit, with "
         "1-sigma curve_fit errors: to the true point source (PS) image if there is one (as in the "
         "report), otherwise to the pinhole (PH) image with the finite pinhole in the model "
-        "(column 'D fit from').\n"
+        "(column 'D fit from'). 'Strehl ESO' is the ESO-definition Strehl (peak / total flux of the "
+        "data over that of the best-fit model) from the same fit.\n"
     )
     with open(md_path, "w") as f:
         f.write("\n".join([header, rule] + body) + "\n" + footer)

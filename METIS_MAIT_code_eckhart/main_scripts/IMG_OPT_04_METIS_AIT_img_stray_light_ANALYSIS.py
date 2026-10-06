@@ -119,10 +119,12 @@ def main():
             result_obj=result, observing_config=observing_config
         )
 
-        # segment the remaining light
+        # segment the remaining light; method/params can be set per data state
+        # (see b04.SEGMENTATION_METHODS and b04.SEGMENTATION_DEFAULT_PARAMS)
         result = b04.stray_light_segmentation(
-            result, 
-            hough_variant="active"
+            result,
+            method=data_state.get("segmentation_method", "active_contour"),
+            params=data_state.get("segmentation_params"),
         )
 
         # sort out the segments into different spatial scales, keeping track of illumination
