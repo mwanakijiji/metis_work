@@ -369,8 +369,7 @@ def main():
 
     logging.info(f'Log file created at {now.strftime("%Y-%m-%d %H:%M:%S")}')
     logging.info(f"Log file name: {log_file_name}")
-    logging.info(f'Log file directory: {stem + "IMG_03_logs/"}')
-    logging.info(f'Log file directory: {stem + "IMG_03_logs/"}')
+    logging.info(f'Log file directory: {stem + log_dir}')
     logging.info(f"Simmed file output directory: {out_dir}")
 
     # clocking angles for the PSF
@@ -387,7 +386,7 @@ def main():
     # The table's "METISsim" row (IB 4.05) is left out: PSF_METISsim exists, but METISsim is not a
     # mask in the WCU pupil-mask wheel.
     # TODO: dit values are placeholders (ndit=1) -- tune by hand to avoid saturation / reach SNR
-    lm_obs_configs = []
+    # lm_obs_configs = []
     lm_obs_configs = [
         {"fp_mask": "grid_lm", "pp_mask": "SPM-LM",   "psf_kernel": "SPM-LM",       "obs_filter": "HCI_L_short", "nd_filter": None, "dit": 0.004, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
         {"fp_mask": "grid_lm", "pp_mask": "PPS-LM",   "psf_kernel": "PPS-LM_WCU",   "obs_filter": "HCI_L_short", "nd_filter": None, "dit": 0.005, "ndit": 1, "exptime": np.nan, "obs_mode": "wcu_img_lm", "use_exp_time_only": False},
@@ -400,7 +399,7 @@ def main():
 
     # N filters (Table 4-1 rows); placeholder dit from the IMG-OPT-04 N2 config
     # TODO: dit values are placeholders (ndit=1) -- tune by hand to avoid saturation / reach SNR
-    #n_obs_configs = []
+    # n_obs_configs = []
     n_obs_configs = [
         {"fp_mask": "pinhole_n", "pp_mask": "SPM-N", "psf_kernel": "SPM-N", "obs_filter": "N1",      "nd_filter": None, "dit": 0.0025, "ndit": 50, "exptime": np.nan, "obs_mode": "wcu_img_n", "use_exp_time_only": False},
         {"fp_mask": "pinhole_n", "pp_mask": "CLS-N", "psf_kernel": "CLS-N", "obs_filter": "N2",      "nd_filter": None, "dit": 0.0030, "ndit": 50, "exptime": np.nan, "obs_mode": "wcu_img_n", "use_exp_time_only": False},

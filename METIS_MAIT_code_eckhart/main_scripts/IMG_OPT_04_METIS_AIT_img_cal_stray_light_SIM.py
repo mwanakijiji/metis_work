@@ -385,8 +385,7 @@ def main():
 
     logging.info("Log file created at %s", now.strftime("%Y-%m-%d %H:%M:%S"))
     logging.info("Log file name: %s", log_file_name)
-    logging.info("Log file directory: %s", stem + "IMG_04_simmed_stray_light_logs/")
-    logging.info("Log file directory: %s", stem + "IMG_04_simmed_stray_light_logs/")
+    logging.info("Log file directory: %s", stem + log_dir)
     logging.info("Simmed file output directory: %s", out_dir)
 
     # clocking angles for the PSF
