@@ -24,8 +24,8 @@ digraph pipeline {
     style="dashed";
     color="#2ca02c";
     generate_psf_quality_sim;
-    process_one_psf;
     strehl_psfs;
+    process_one_psf;
   }
 
   subgraph cluster_img_opt_04_stray_light {
@@ -34,10 +34,9 @@ digraph pipeline {
     color="#d62728";
     generate_stray_light_sim;
     populate_result_obj_info;
-    stray_light_brightness_spectrum;
     centroid_2passes_oversample;
-    stray_light_segmentation;
     stray_light_mask_real;
+    stray_light_segmentation;
     stray_light_spatial_scales;
     stray_light_background_measurement;
     stray_light_peak_illumination_per_region;
@@ -49,26 +48,24 @@ digraph pipeline {
   generate_stray_light_sim [label="Generate stray-light sims"];
   fov_calc [label="Compute FOV"];
   image_distortion [label="Measure distortion"];
-  process_one_psf [label="Fit one PSF"];
   strehl_psfs [label="Measure Strehl"];
+  process_one_psf [label="Fit one PSF"];
   populate_result_obj_info [label="Populate result object"];
-  stray_light_brightness_spectrum [label="Arrange segments into brightnesses as function of spatial scales"];
   centroid_2passes_oversample [label="Centroid PSFs"];
-  stray_light_segmentation [label="Segment stray light"];
   stray_light_mask_real [label="Mask the real PSF"];
+  stray_light_segmentation [label="Segment stray light"];
   stray_light_spatial_scales [label="Classify spatial scales", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
   stray_light_background_measurement [label="Measure background", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
   stray_light_peak_illumination_per_region [label="Peak illumination per region", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
 
   generate_fov_sim -> fov_calc;
   generate_distortion_sim -> image_distortion;
-  strehl_psfs -> process_one_psf;
   generate_psf_quality_sim -> strehl_psfs;
+  strehl_psfs -> process_one_psf;
   generate_stray_light_sim -> populate_result_obj_info;
-  stray_light_segmentation -> stray_light_brightness_spectrum;
   populate_result_obj_info -> centroid_2passes_oversample;
-  stray_light_mask_real -> stray_light_segmentation;
   centroid_2passes_oversample -> stray_light_mask_real;
+  stray_light_mask_real -> stray_light_segmentation;
   stray_light_segmentation -> stray_light_spatial_scales;
   stray_light_spatial_scales -> stray_light_background_measurement;
   stray_light_background_measurement -> stray_light_peak_illumination_per_region;

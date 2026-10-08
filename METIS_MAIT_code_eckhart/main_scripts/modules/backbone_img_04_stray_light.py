@@ -1,3 +1,5 @@
+import os
+from pathlib import Path
 import numpy as np
 import numpy.ma as ma
 from . import psf_grid_prep, helpers
@@ -15,6 +17,9 @@ from typing import Literal
 import logging
 import pandas as pd
 from pipeline_registry import CLUSTER_STRAY, COLOR_STRAY, pipeline_stage
+
+# where IMG-OPT-04 analysis plots are written (METIS_MAIT_code_eckhart/results/IMG_04_analysis_results/)
+RESULTS_DIR_IMG_04 = str(Path(__file__).resolve().parents[2] / "results" / "IMG_04_analysis_results")
 
 
 # class for containing information about a stray light region
@@ -88,17 +93,7 @@ def populate_result_obj_info(result_obj, data_state, observing_config):
     for key, value in data_state.items():
         setattr(result_obj, key, value)
 
-    # add the central wavelength for the filter
-    filters = observing_config["monochromatic_observing_filters_lm"]
-    try:
-        result_obj.wavel_central = float(filters[result_obj.filter_name])  # in m
-    except KeyError as exc:
-        raise KeyError(
-            f"No central wavelength for filter {result_obj.filter_name!r} "
-            f"in monochromatic_observing_filters_lm"
-        ) from exc
-
-    # pixel scale: detector label (LM/N) → analysis key (img_lm/img_n) → mas/pixel
+    # detector label (LM/N) → analysis key (img_lm/img_n)
     detector_to_scale_key = observing_config["scope_sim_to_analysis"]
     try:
         scale_key = detector_to_scale_key[result_obj.detector]
@@ -107,6 +102,18 @@ def populate_result_obj_info(result_obj, data_state, observing_config):
             f"No ScopeSim→analysis mapping for detector {result_obj.detector!r} "
             f"in scope_sim_to_analysis"
         ) from exc
+
+    # add the central wavelength for the filter, from the table for this band (img_lm → _lm, img_n → _n)
+    filters_key = "monochromatic_observing_filters_" + scale_key.removeprefix("img_")
+    try:
+        result_obj.wavel_central = float(observing_config[filters_key][result_obj.filter_name])  # in m
+    except KeyError as exc:
+        raise KeyError(
+            f"No central wavelength for filter {result_obj.filter_name!r} "
+            f"in {filters_key}"
+        ) from exc
+
+    # pixel scale: analysis key → mas/pixel
     try:
         result_obj.pixel_scale = float(observing_config["pixel_scales"][scale_key])
     except KeyError as exc:
@@ -243,17 +250,58 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
     #plt.yscale('log')
     plt.axvline(x=lambda_over_D_pix, color='red', linestyle='--', label='Size scale: lambda/D')
     plt.axhline(y=noise_3sig, color='green', linestyle='--', label='Counts: 3-sigma of background noise')
-    plt.axhline(y=0.004 * psf_max, color='orange', linestyle='--', label='Counts: 0.04% of PSF peak')
+    plt.axhline(y=0.0004 * psf_max, color='orange', linestyle='--', label='Counts: 0.04% of PSF peak')
     plt.axhline(y=psf_max, color='blue', linestyle='--', label='Counts: PSF peak')
     plt.xlabel("Radius of equiv. circle (pixels)")
     plt.ylabel("Avg. surf. brightness (counts)")
     plt.legend()
     plt.title("Stray Light Fluxes vs. Radius")
-    plt.show()
-    ipdb.set_trace()
-    plot_file_name = f"stray_light_brightness_spectrum_{result_obj.file_absname}.png"
-    plt.savefig(plot_file_name)
+    # save before plt.show(), which discards the figure in interactive sessions
+    os.makedirs(RESULTS_DIR_IMG_04, exist_ok=True)
+    fits_stem = os.path.splitext(os.path.basename(result_obj.file_absname))[0]
+    plot_file_name = os.path.join(
+        RESULTS_DIR_IMG_04, f"stray_light_brightness_spectrum_{fits_stem}.png"
+    )
+    fig.savefig(plot_file_name)
     logging.info(f"Saved plot of brightness spectrum to {plot_file_name}")
+    plt.show()
+    plt.close(fig)
+
+    # display where each region is on the 2D readout (colors match the brightness spectrum)
+    image = result_obj.image.astype(float)
+    vmin, vmax = np.nanpercentile(image, [1.0, 99.5])
+    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+    im = ax.imshow(image, origin="lower", cmap="gray", vmin=vmin, vmax=vmax)
+    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="Counts")
+    ax.contour(
+        result_obj.real_psf_mask.astype(float), levels=[0.5], colors="red",
+        linewidths=1.0, linestyles="--",
+    )
+    ax.plot([], [], color="red", linestyle="--", label="PSF mask")
+    for i, region in enumerate(result_obj.regions):
+        mask_this = result_obj.stray_light_masks[i] > 0
+        color = f"C{i % 10}"
+        ax.contour(mask_this.astype(float), levels=[0.5], colors=color, linewidths=1.5)
+        # label just above-right of the region, so it doesn't hide the outline
+        ys, xs = np.nonzero(mask_this)
+        ax.text(
+            xs.max() + 10, ys.max() + 10, str(region.label), color=color,
+            fontsize=12, fontweight="bold", ha="left", va="bottom",
+        )
+        ax.plot([], [], color=color, label=f"Region {region.label}")
+    ax.set_xlabel("x (pixels)")
+    ax.set_ylabel("y (pixels)")
+    ax.set_title(f"Stray light regions ({result_obj.segmentation_method})\n{fits_stem}", fontsize=10)
+    ax.legend(loc="upper right", fontsize=8)
+    regions_plot_file_name = os.path.join(
+        RESULTS_DIR_IMG_04, f"stray_light_regions_{fits_stem}.png"
+    )
+    fig.savefig(regions_plot_file_name)
+    logging.info(f"Saved plot of stray light region locations to {regions_plot_file_name}")
+    plt.show()
+    plt.close(fig)
+
+    ipdb.set_trace()
 
     # displ
 

@@ -95,6 +95,10 @@ def main():
             hdu_index=1
         )
 
+        print('CHECK ALL THE CENTRAL WAVELENGTHS OF THE N-BAND FILTERS ARE RIGHT!')
+        ipdb.set_trace()
+        
+
         # init the result object 
         result = b04.StrayLightResult(
             file_absname=file_name,
