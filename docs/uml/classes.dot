@@ -1,4 +1,9 @@
 digraph "classes_METIS_MAIT" {
 rankdir=BT
 charset="utf-8"
+"modules.psf_grid_prep.PsfGridPrep" [color="black", fontcolor="black", label=<PsfGridPrep>, shape="record", style="solid"];
+"modules.backbone_img_03_psf_quality.SinglePsfFitResult" [color="black", fontcolor="black", label=<SinglePsfFitResult>, shape="record", style="solid"];
+"modules.backbone_img_02.SinglePsfFitResult" [color="black", fontcolor="black", label=<SinglePsfFitResult>, shape="record", style="solid"];
+"modules.backbone_img_04_stray_light.StrayLightRegion" [color="black", fontcolor="black", label=<StrayLightRegion>, shape="record", style="solid"];
+"modules.backbone_img_04_stray_light.StrayLightResult" [color="black", fontcolor="black", label=<StrayLightResult>, shape="record", style="solid"];
 }

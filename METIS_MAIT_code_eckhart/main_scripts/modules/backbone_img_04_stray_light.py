@@ -253,7 +253,8 @@ def _metis_9522_limits(result_obj, observing_config):
 
 @pipeline_stage(
     name="stray_light_brightness_spectrum",
-    depends_on=("stray_light_segmentation",),
+    # either segmentation stage (single method, or weighted combination) feeds this
+    depends_on=("stray_light_segmentation", "stray_light_segmentation_combined"),
     cluster=CLUSTER_STRAY,
     cluster_color=COLOR_STRAY,
     label="Arrange segments into brightnesses as function of spatial scales",
