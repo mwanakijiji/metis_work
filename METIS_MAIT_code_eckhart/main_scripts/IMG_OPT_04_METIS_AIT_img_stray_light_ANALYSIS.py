@@ -8,7 +8,7 @@ import ipdb
 
 from modules.helpers import load_config_and_pipe, setup_logging
 from modules.psf_grid_prep import load_fits_data
-import modules.backbone_img_04_stray_light as b04
+import modules.backbone_img_04_stray_light as sl
 
 # Analyze data for the IMG-OPT-04 stray light test
 
@@ -96,7 +96,7 @@ def main():
         )        
 
         # init the result object 
-        result = b04.StrayLightResult(
+        result = sl.StrayLightResult(
             file_absname=file_name,
             filter_name=data_state["filter_name"],
             detector=data_state["detector"],
@@ -104,41 +104,41 @@ def main():
         )
 
         # populate object with data state info
-        result = b04.populate_result_obj_info(
+        result = sl.populate_result_obj_info(
             result, data_state, observing_config=observing_config
         )
 
         # center on the real PSF
-        result = b04.centroid_2passes_oversample(
+        result = sl.centroid_2passes_oversample(
             result_obj=result,
             config_coords_guesses_file_name=coords_guesses_config_file,
         )
 
         # make the mask for the real PSF
-        result = b04.stray_light_mask_real(
+        result = sl.stray_light_mask_real(
             result_obj=result, observing_config=observing_config
         )
 
         # segment the remaining light; method/params can be set per data state
-        # (see b04.SEGMENTATION_METHODS and b04.SEGMENTATION_DEFAULT_PARAMS)
+        # (see sl.SEGMENTATION_METHODS and sl.SEGMENTATION_DEFAULT_PARAMS)
         segmentation_method = data_state.get("segmentation_method", "combined")
         if segmentation_method == "combined":
             # weighted combination of all methods (weights and vote fraction N from the data state)
-            result = b04.stray_light_segmentation_combined(
+            result = sl.stray_light_segmentation_combined(
                 result,
                 weights=data_state.get("segmentation_weights"),
                 vote_fraction=data_state.get("segmentation_vote_fraction"),
                 params=data_state.get("segmentation_params"),
             )
         else:
-            result = b04.stray_light_segmentation(
+            result = sl.stray_light_segmentation(
                 result,
                 method=segmentation_method,
                 params=data_state.get("segmentation_params"),
             )
 
         # sort out the segments into different spatial scales, keeping track of illumination
-        result = b04.stray_light_brightness_spectrum(
+        result = sl.stray_light_brightness_spectrum(
             result_obj=result, 
             observing_config=observing_config)
 

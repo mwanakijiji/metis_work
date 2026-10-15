@@ -54,7 +54,7 @@ import scopesim as sim
 
 import ipdb
 
-import modules.backbone_img_rad_07_phot as backbone
+import modules.backbone_img_rad_07_phot as pp
 from modules.helpers import pipe_2_log
 from pipeline_registry import pipeline_stage
 
@@ -70,6 +70,7 @@ sim.link_irdb("../../../../")
 
 # print versions of things
 sim.bug_report()
+
 
 
 def sanity_check_user_inputs(metis, obs_filter, fp_mask, pp_mask):
