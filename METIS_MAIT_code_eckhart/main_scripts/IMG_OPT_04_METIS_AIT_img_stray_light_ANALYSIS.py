@@ -96,7 +96,6 @@ def main():
         )
 
         print('CHECK ALL THE CENTRAL WAVELENGTHS OF THE N-BAND FILTERS ARE RIGHT!')
-        ipdb.set_trace()
         
 
         # init the result object 
@@ -125,11 +124,21 @@ def main():
 
         # segment the remaining light; method/params can be set per data state
         # (see b04.SEGMENTATION_METHODS and b04.SEGMENTATION_DEFAULT_PARAMS)
-        result = b04.stray_light_segmentation(
-            result,
-            method=data_state.get("segmentation_method", "active_contour"),
-            params=data_state.get("segmentation_params"),
-        )
+        segmentation_method = data_state.get("segmentation_method", "combined")
+        if segmentation_method == "combined":
+            # weighted combination of all methods (weights and vote fraction N from the data state)
+            result = b04.stray_light_segmentation_combined(
+                result,
+                weights=data_state.get("segmentation_weights"),
+                vote_fraction=data_state.get("segmentation_vote_fraction"),
+                params=data_state.get("segmentation_params"),
+            )
+        else:
+            result = b04.stray_light_segmentation(
+                result,
+                method=segmentation_method,
+                params=data_state.get("segmentation_params"),
+            )
 
         # sort out the segments into different spatial scales, keeping track of illumination
         result = b04.stray_light_brightness_spectrum(

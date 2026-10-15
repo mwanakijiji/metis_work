@@ -38,6 +38,24 @@ polychromatic_observing_filters_lm_leaf_name:
   HCI_L_long: '/METIS/filters/TC_filter_HCI_L_long.dat'
   HCI_M: '/METIS/filters/TC_filter_HCI_M.dat'
 
+# N-band equivalents of the two blocks above; central wavelengths are
+# transmission-weighted means of the TC_filter_*.dat curves (same as in the IMG-OPT-03 config)
+monochromatic_observing_filters_n:
+  N1: 8.648e-6
+  N2: 11.201e-6
+  N3: 12.261e-6
+  PAH_8.6: 8.614e-6
+  S_IV: 10.549e-6
+  Ne_II: 12.739e-6
+
+polychromatic_observing_filters_n_leaf_name:
+  N1: '/METIS/filters/TC_filter_N1.dat'
+  N2: '/METIS/filters/TC_filter_N2.dat'
+  N3: '/METIS/filters/TC_filter_N3.dat'
+  PAH_8.6: '/METIS/filters/TC_filter_PAH_8.6.dat'
+  S_IV: '/METIS/filters/TC_filter_S_IV.dat'
+  Ne_II: '/METIS/filters/TC_filter_Ne_II.dat'
+
 
 # units are mas/pixel
 pixel_scales:

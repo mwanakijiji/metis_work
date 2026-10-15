@@ -1,16 +1,41 @@
 # Optional per data state:
-#   segmentation_method: one of threshold, hough_circle, active_contour (default), watershed, kmeans, meanshift
+#   segmentation_method: combined (default), or a single method: threshold, hough_circle,
+#     active_contour, watershed, kmeans, meanshift
 #   segmentation_params: dict overriding the defaults in
 #     backbone_img_04_stray_light.SEGMENTATION_DEFAULT_PARAMS[<method>], e.g.
 #       segmentation_method: watershed
 #       segmentation_params: {threshold_kind: otsu, min_distance: 15}
+#     for 'combined', nest them per method, e.g.
+#       segmentation_params: {watershed: {min_distance: 15}, kmeans: {k: 4}}
+#   For 'combined' only:
+#     segmentation_weights: weight in [0,1] per method; omitted methods default to 1, 0 disables a method
+#     segmentation_vote_fraction: N in [0,1] (default 0.5); a pixel is stray light if the summed
+#       weight of the methods detecting it > N * (sum of all weights)
 data_states:
+
   - file_name: data/IMG_04_simmed_stray_light_data/IMG_OPT_04_stray_light_pinhole_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
     filter_name: Br_alpha
     detector: LM
-    segmentation_method: active_contour
+    segmentation_method: combined
+    segmentation_vote_fraction: 0.5
+    segmentation_weights:
+      threshold: 1.0
+      hough_circle: 1.0
+      active_contour: 1.0
+      watershed: 1.0
+      kmeans: 1.0
+      meanshift: 1.0
 
   - file_name: data/IMG_04_simmed_stray_light_data/IMG_OPT_04_stray_light_pinhole_n_pupil_mask_PPS-CFO2_filter_N2.fits
     filter_name: N2
     detector: N
-    segmentation_method: active_contour
+    segmentation_method: combined
+    segmentation_vote_fraction: 0.5
+    segmentation_weights:
+      threshold: 1.0
+      hough_circle: 1.0
+      active_contour: 1.0
+      watershed: 1.0
+      kmeans: 1.0
+      meanshift: 1.0
+

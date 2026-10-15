@@ -37,6 +37,7 @@ digraph pipeline {
     stray_light_brightness_spectrum;
     centroid_2passes_oversample;
     stray_light_segmentation;
+    stray_light_segmentation_combined;
     stray_light_mask_real;
     stray_light_spatial_scales;
     stray_light_background_measurement;
@@ -55,6 +56,7 @@ digraph pipeline {
   stray_light_brightness_spectrum [label="Arrange segments into brightnesses as function of spatial scales"];
   centroid_2passes_oversample [label="Centroid PSFs"];
   stray_light_segmentation [label="Segment stray light"];
+  stray_light_segmentation_combined [label="Segment stray light (weighted combination of methods)"];
   stray_light_mask_real [label="Mask the real PSF"];
   stray_light_spatial_scales [label="Classify spatial scales", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
   stray_light_background_measurement [label="Measure background", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
@@ -68,6 +70,7 @@ digraph pipeline {
   stray_light_segmentation -> stray_light_brightness_spectrum;
   populate_result_obj_info -> centroid_2passes_oversample;
   stray_light_mask_real -> stray_light_segmentation;
+  stray_light_mask_real -> stray_light_segmentation_combined;
   centroid_2passes_oversample -> stray_light_mask_real;
   stray_light_segmentation -> stray_light_spatial_scales;
   stray_light_spatial_scales -> stray_light_background_measurement;
