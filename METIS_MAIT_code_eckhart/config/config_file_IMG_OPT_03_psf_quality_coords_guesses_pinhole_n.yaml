@@ -1,0 +1,7 @@
+# Coordinate guesses (native pixels) for the single WCU pinhole_n PSF in IMG-N (wcu_img_n) frames
+# written by IMG_OPT_03_METIS_AIT_img_cal_psf_quality_SIM.py
+
+psf_coordinate_guesses:
+  - id: 1
+    x: 1023
+    y: 1023

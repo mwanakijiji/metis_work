@@ -204,6 +204,53 @@ def _overplot_method_brightnesses(ax, result_obj, final_labels):
         )
 
 
+def _metis_9522_limits(result_obj, observing_config):
+    """
+    METIS-9522 sensitivity limits in counts, from the sensitivities in the observing
+    config (for an FYI comparison; pass/fail uses the measured background).
+
+    OUTPUTS:
+    - point_limit_counts (float): total flux limit of a point-like (PSF-sized) region
+    - extended_limit_counts_per_pix (float): mean surface brightness limit of an
+      extended region, per pixel
+    - band (str): sensitivity band used (e.g. 'lprime')
+    - is_placeholder (bool): whether the Jy-to-counts conversion is a placeholder
+    """
+    scale_key = observing_config["scope_sim_to_analysis"][result_obj.detector]
+    band = observing_config["sensitivity_band"][scale_key]
+    counts_per_jy = float(observing_config["jy_to_counts"][scale_key])
+    is_placeholder = bool(observing_config.get("jy_to_counts_is_placeholder", False))
+    if is_placeholder:
+        logging.warning(
+            "Jy-to-counts conversion (%s counts/Jy for %s) is a PLACEHOLDER",
+            counts_per_jy,
+            scale_key,
+        )
+
+    # solid angle seen by one pixel
+    pixel_solid_angle_arcsec2 = (result_obj.pixel_scale / 1000.0) ** 2
+
+    point_limit_jy = float(observing_config["mode_sensitivity_point"][band])
+    extended_limit_jy_per_arcsec2 = float(
+        observing_config["mode_sensitivity_extended"][band]
+    )
+    point_limit_counts = point_limit_jy * counts_per_jy
+    extended_limit_counts_per_pix = (
+        extended_limit_jy_per_arcsec2 * pixel_solid_angle_arcsec2 * counts_per_jy
+    )
+    logging.info(
+        "METIS-9522 sensitivity limits, FYI (%s): point source %.4g Jy = %.4g "
+        "counts; extended source %.4g Jy/arcsec**2 = %.4g counts/pixel (%.4g arcsec**2/pixel)",
+        band,
+        point_limit_jy,
+        point_limit_counts,
+        extended_limit_jy_per_arcsec2,
+        extended_limit_counts_per_pix,
+        pixel_solid_angle_arcsec2,
+    )
+    return point_limit_counts, extended_limit_counts_per_pix, band, is_placeholder
+
+
 @pipeline_stage(
     name="stray_light_brightness_spectrum",
     depends_on=("stray_light_segmentation",),
@@ -348,6 +395,17 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
     # threshold for significant stray light (req. METIS-9522)
     noise_3sig = 3.0 * stdev_background_only
 
+    # point/extended source sensitivities, for an FYI comparison only
+    (
+        point_limit_counts,
+        extended_limit_counts_per_pix,
+        sensitivity_band,
+        jy_to_counts_is_placeholder,
+    ) = _metis_9522_limits(result_obj, observing_config)
+    placeholder_note = (
+        " [placeholder Jy-to-counts]" if jy_to_counts_is_placeholder else ""
+    )
+
     # dividing line between point-like (i.e., size of PSF) and extended stray light
     # wavel = float(observing_config['filter_name']['wavelength'])
     lambda_over_d_asec = (
@@ -382,7 +440,8 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
     _overplot_method_brightnesses(
         ax, result_obj, final_labels=[r.label for r in result_obj.regions]
     )
-    # plt.yscale('log')
+    # log scale: the METIS-9522 limits can be orders of magnitude below the regions
+    plt.yscale("log")
     plt.axvline(
         x=lambda_over_d_pix, color="red", linestyle="--", label="Size scale: lambda/D"
     )
@@ -390,7 +449,33 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
         y=noise_3sig,
         color="green",
         linestyle="--",
-        label="Counts: 3-sigma of background noise",
+        label="Counts: 3-sigma of background noise (METIS-9522 pass/fail)",
+    )
+    # METIS-9522 limits as surface brightness: point-like regions are limited in total
+    # flux (so flux / area of the region), extended regions in surface brightness
+    radii_point = np.linspace(0.5, lambda_over_d_pix, 100)
+    plt.plot(
+        radii_point,
+        point_limit_counts / (np.pi * radii_point**2),
+        color="purple",
+        linestyle="--",
+        label=(
+            f"FYI: point-source sensitivity ({sensitivity_band}), flux / area"
+            f"{placeholder_note}"
+        ),
+    )
+    plt.hlines(
+        y=extended_limit_counts_per_pix,
+        xmin=lambda_over_d_pix,
+        xmax=max(
+            [lambda_over_d_pix * 2]
+            + [r.spatial_scale * 1.1 for r in result_obj.regions]
+        ),
+        color="purple",
+        linestyle="-",
+        label=(
+            f"FYI: extended-source sensitivity ({sensitivity_band}){placeholder_note}"
+        ),
     )
     plt.axhline(
         y=0.0004 * psf_max,
@@ -479,10 +564,10 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
             )
             check_metis_1189_1429_array.append(False)
 
-    # Req. METIS-9522: is the flux in optical artefacts and ghosts shall be
-    # less than the 3-sigma thermal background noise for one hour of observations and
-    # for
-    # the respective spatial scale of the ghost?
+    # Req. METIS-9522: is the flux in optical artefacts and ghosts less than the
+    # 3-sigma thermal background noise for one hour of observations, for the respective
+    # spatial scale of the ghost? Pass/fail: peak irradiance of each region vs. 3-sigma
+    # of the measured background.
     check_metis_9522_array = []
     for region_this in result_obj.regions:
         if region_this.peak_irradiance < noise_3sig:
@@ -497,6 +582,48 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
                 region_this.label,
             )
             check_metis_9522_array.append(False)
+
+    # FYI only (not used for pass/fail): comparison with the point/extended-source
+    # sensitivities. Point-like (PSF-sized: equivalent radius <= lambda/D) regions:
+    # total flux vs. the point-source sensitivity. Extended (larger) regions: mean
+    # surface brightness vs. the extended-source sensitivity.
+    logging.info("--------------------------------------------------")
+    logging.info(
+        "FYI: comparison with METIS-9522 sensitivity limits (not used for pass/fail)"
+    )
+    if jy_to_counts_is_placeholder:
+        logging.info(
+            "NOTE: the Jy-to-counts conversions are based on PLACEHOLDER values, so "
+            "this comparison is not yet meaningful"
+        )
+    for region_this in result_obj.regions:
+        if region_this.spatial_scale <= lambda_over_d_pix:
+            kind, value, limit, unit = (
+                "point-like",
+                region_this.total_flux,
+                point_limit_counts,
+                "counts",
+            )
+        else:
+            kind, value, limit, unit = (
+                "extended",
+                region_this.surface_brightness,
+                extended_limit_counts_per_pix,
+                "counts/pixel",
+            )
+        logging.info(
+            "  Region %s (%s, r_equiv = %.1f pix vs. lambda/D = %.1f pix): "
+            "%.4g %s %s sensitivity limit %.4g %s",
+            region_this.label,
+            kind,
+            region_this.spatial_scale,
+            lambda_over_d_pix,
+            value,
+            unit,
+            "<" if value < limit else ">=",
+            limit,
+            unit,
+        )
 
     # check if all the regions passed the checks
     logging.info("--------------------------------------------------")

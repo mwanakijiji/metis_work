@@ -62,6 +62,36 @@ pixel_scales:
   img_lm: 5.47
   img_n: 6.79
 
+mode_sensitivity_point:
+  lprime: 0.587e-6
+  n2: 1.285e-4
+# units Jy
+# Ref.: Table 3.1 in 'Ghost Light Analysis in Direct
+# Imaging Modes E-REP-NOVA-MET-1338'
+
+mode_sensitivity_extended:
+  lprime: 1.230e-3
+  n2: 2.915e-2
+# units Jy/arcsec**2
+# Ref.: Table 3.1 in 'Ghost Light Analysis in Direct
+# Imaging Modes E-REP-NOVA-MET-1338'
+
+# which of the sensitivity bands above to use for each detector (pixel_scales keys);
+# n.b. the L'/N2 values are applied to all filters on that detector
+sensitivity_band:
+  img_lm: lprime
+  img_n: n2
+
+# Jy -> counts conversion: counts in the analysed readout per Jy of source flux
+# (i.e., for the DIT/NDIT of the simulated frames). Extended-source limits are first
+# converted from Jy/arcsec**2 to Jy/pixel with the pixel solid angle,
+# (pixel_scales / 1000)**2 arcsec**2
+# PLACEHOLDER VALUES: replace with the real photometric zero points
+jy_to_counts_is_placeholder: true
+jy_to_counts:
+  img_lm: 1.0e8
+  img_n: 1.0e6
+
 D_aperture:
   full: 34.6878
   D_obscuration: 12.8502
