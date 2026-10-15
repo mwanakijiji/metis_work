@@ -18,8 +18,8 @@ import logging
 import pandas as pd
 from pipeline_registry import CLUSTER_STRAY, COLOR_STRAY, pipeline_stage
 
-# where IMG-OPT-04 analysis plots are written (METIS_MAIT_code_eckhart/results/IMG_04_analysis_results/)
-RESULTS_DIR_IMG_04 = str(Path(__file__).resolve().parents[2] / "results" / "IMG_04_analysis_results")
+# where IMG-OPT-04 analysis plots are written (METIS_MAIT_code_eckhart/results/IMG_04_stray_light_analysis_results/)
+RESULTS_DIR_IMG_04 = str(Path(__file__).resolve().parents[2] / "results" / "IMG_04_stray_light_analysis_results")
 
 
 # class for containing information about a stray light region
@@ -126,6 +126,46 @@ def populate_result_obj_info(result_obj, data_state, observing_config):
     return result_obj
 
 
+def _overplot_method_brightnesses(ax, result_obj, final_labels):
+    """
+    Overplot surface brightness vs. radius of the area-equivalent circle for each region as found by
+    each segmentation method (combined segmentation only; no-op otherwise). One hollow marker shape
+    and colour per method; each point is annotated with its group label, marked if the group is not in
+    'final_labels' (i.e. rejected by the weighted vote).
+    """
+    method_label_maps = getattr(result_obj, "method_label_maps", None)
+    if not method_label_maps:
+        return
+    weights = getattr(result_obj, "segmentation_weights", None) or {}
+    image = result_obj.image.astype(float)
+    markers = ["o", "s", "^", "D", "v", "P"]
+
+    for i, (method, label_map) in enumerate(method_label_maps.items()):
+        color = SEGMENTATION_METHOD_COLORS.get(method, "gray")
+        marker = markers[i % len(markers)]
+        for lab in np.unique(label_map):
+            if lab <= 0:
+                continue
+            inside = label_map == lab
+            area = int(inside.sum())
+            radius = np.sqrt(area / np.pi)
+            surface_brightness = float(np.nansum(image[inside])) / area
+            ax.scatter(
+                radius, surface_brightness, marker=marker, facecolors="none",
+                edgecolors=color, s=60, linewidths=1.5, zorder=4,
+            )
+            is_final = int(lab) in final_labels
+            ax.annotate(
+                str(lab) if is_final else f"{lab} (rejected)", (radius, surface_brightness),
+                textcoords="offset points", xytext=(5, -10), fontsize=7,
+                color=color if is_final else "gray",
+            )
+        ax.scatter(
+            [], [], marker=marker, facecolors="none", edgecolors=color, linewidths=1.5,
+            label=f"{method} (w={weights.get(method, float('nan')):g})",
+        )
+
+
 @pipeline_stage(
     name="stray_light_brightness_spectrum",
     depends_on=("stray_light_segmentation",),
@@ -167,6 +207,9 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
         fig, ax = plt.subplots(1, 1, figsize=(10, 10))
         ax.set_xlabel("Radius of equiv. circle (pixels)")
         ax.set_ylabel("Avg. surf. brightness (counts)")
+        _overplot_method_brightnesses(ax, result_obj, final_labels=[])
+        if ax.get_legend_handles_labels()[0]:
+            ax.legend(fontsize=8)
         ax.set_title("Stray Light Fluxes vs. Radius (no stray light regions found)")
         os.makedirs(RESULTS_DIR_IMG_04, exist_ok=True)
         fits_stem = os.path.splitext(os.path.basename(result_obj.file_absname))[0]
@@ -254,9 +297,18 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
 
     # display the brightness spectrum
     fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-    for region in result_obj.regions:
-        # flux vs. radius
-        plt.scatter(region.spatial_scale, region.surface_brightness, label=f'Region {region.label}')
+    for i, region in enumerate(result_obj.regions):
+        # flux vs. radius (colors match the regions plot below)
+        plt.scatter(
+            region.spatial_scale, region.surface_brightness, color=f"C{i % 10}", s=150,
+            edgecolors="black", zorder=3, label=f'Region {region.label}',
+        )
+        ax.annotate(
+            str(region.label), (region.spatial_scale, region.surface_brightness),
+            textcoords="offset points", xytext=(8, 8), fontsize=11, fontweight="bold",
+        )
+    # combined segmentation: also each region as found by each method
+    _overplot_method_brightnesses(ax, result_obj, final_labels=[r.label for r in result_obj.regions])
     #plt.yscale('log')
     plt.axvline(x=lambda_over_D_pix, color='red', linestyle='--', label='Size scale: lambda/D')
     plt.axhline(y=noise_3sig, color='green', linestyle='--', label='Counts: 3-sigma of background noise')

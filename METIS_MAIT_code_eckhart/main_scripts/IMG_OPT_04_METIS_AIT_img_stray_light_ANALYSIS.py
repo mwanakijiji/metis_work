@@ -93,10 +93,7 @@ def main():
         data_readout, _ = load_fits_data(
             file_name, 
             hdu_index=1
-        )
-
-        print('CHECK ALL THE CENTRAL WAVELENGTHS OF THE N-BAND FILTERS ARE RIGHT!')
-        
+        )        
 
         # init the result object 
         result = b04.StrayLightResult(
