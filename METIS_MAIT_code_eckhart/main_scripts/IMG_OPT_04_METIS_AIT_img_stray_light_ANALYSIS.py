@@ -1,14 +1,15 @@
-# Does some simple analysis of simulated images written out by the sim
-# notebook.
+"""
+Does some simple analysis of simulated images written out by the sim
+notebook.
+"""
 
-import os
 import datetime
 import logging
-import ipdb
+import os
 
+import modules.backbone_img_04_stray_light as sl
 from modules.helpers import load_config_and_pipe, setup_logging
 from modules.psf_grid_prep import load_fits_data
-import modules.backbone_img_04_stray_light as sl
 
 # Analyze data for the IMG-OPT-04 stray light test
 
@@ -41,6 +42,7 @@ import modules.backbone_img_04_stray_light as sl
 
 
 def main():
+    """Run the IMG-OPT-04 stray light analysis for each data state."""
 
     stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
     # config file with the observing parameters
@@ -80,22 +82,21 @@ def main():
     )
 
     # loop over each data state (corresponding to one FITS image)
-    for data_state in data_states_config["data_states"]:  # [0:1]: # if just for a small test
+    for data_state in data_states_config[
+        "data_states"
+    ]:  # [0:1]: # if just for a small test
 
         # Resolve relative paths against the project stem
         file_name = data_state["file_name"]
         if not os.path.isabs(file_name):
             file_name = os.path.join(stem, file_name)
         data_state["file_absname"] = file_name
-        logging.info(f"Processing file: {file_name}")
+        logging.info("Processing file: %s", file_name)
 
         # HDU 1 = BCKGD_SUBTED from the SIM writer
-        data_readout, _ = load_fits_data(
-            file_name, 
-            hdu_index=1
-        )        
+        data_readout, _ = load_fits_data(file_name, hdu_index=1)
 
-        # init the result object 
+        # init the result object
         result = sl.StrayLightResult(
             file_absname=file_name,
             filter_name=data_state["filter_name"],
@@ -123,7 +124,8 @@ def main():
         # (see sl.SEGMENTATION_METHODS and sl.SEGMENTATION_DEFAULT_PARAMS)
         segmentation_method = data_state.get("segmentation_method", "combined")
         if segmentation_method == "combined":
-            # weighted combination of all methods (weights and vote fraction N from the data state)
+            # weighted combination of all methods (weights and vote fraction N from the
+            # data state)
             result = sl.stray_light_segmentation_combined(
                 result,
                 weights=data_state.get("segmentation_weights"),
@@ -137,10 +139,11 @@ def main():
                 params=data_state.get("segmentation_params"),
             )
 
-        # sort out the segments into different spatial scales, keeping track of illumination
+        # sort out the segments into different spatial scales, keeping track of
+        # illumination
         result = sl.stray_light_brightness_spectrum(
-            result_obj=result, 
-            observing_config=observing_config)
+            result_obj=result, observing_config=observing_config
+        )
 
 
 if __name__ == "__main__":

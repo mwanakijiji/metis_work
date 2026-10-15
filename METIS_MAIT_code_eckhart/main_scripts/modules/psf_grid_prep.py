@@ -1,25 +1,27 @@
 """
 Prepare oversampled PSF grid data and first-pass centroids for strehl_psfs.
 
-The core entry point is oversample_1st_pass_centroid(): pass in-memory arrays and a coords
+The core entry point is oversample_1st_pass_centroid(): pass in-memory arrays and a
+coords
 config dict so unit tests do not need FITS or YAML on disk.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Callable, Mapping, Union
-
 import copy
 import logging
 import os
+import subprocess
+import tempfile
+from dataclasses import dataclass
+from typing import Any, Callable, Mapping, Union
+
 import numpy as np
-from photutils.centroids import centroid_2dg, centroid_sources
-from . import helpers
-from scipy.ndimage import zoom
 from astropy.io import fits
-import ipdb
-import matplotlib.pyplot as plt
+from photutils.centroids import centroid_2dg, centroid_sources
+from scipy.ndimage import zoom
+
+from . import helpers
 
 
 @dataclass(frozen=True)
@@ -216,7 +218,8 @@ def refine_2nd_pass_centroids(
     ----------
     prep : PsfGridPrep
         Dataclass containing the original and oversampled grids, first-pass centroid
-        coordinates in both oversampled and native pixel units, and some other (legacy) stuff
+        coordinates in both oversampled and native pixel units, and some other (legacy)
+        stuff
 
     OUTPUTS:
     -------
@@ -234,16 +237,8 @@ def refine_2nd_pass_centroids(
             y_cen_1st_pass_native,
         )
 
-        # make the cookie cutout around this PSF
-        edge_size_native_sampling = 20  # length of one side of a box around the PSF, native sampling (KEEP EVEN)
-        grid_data_original_cutout_this_psf = data_original[
-            int(x_cen_1st_pass_native - 0.5 * edge_size_native_sampling) : int(
-                x_cen_1st_pass_native + 0.5 * edge_size_native_sampling
-            ),
-            int(y_cen_1st_pass_native - 0.5 * edge_size_native_sampling) : int(
-                y_cen_1st_pass_native + 0.5 * edge_size_native_sampling
-            ),
-        ]
+        # length of one side of a box around the PSF, native sampling (KEEP EVEN)
+        edge_size_native_sampling = 20
 
         # fit a Gaussian to the PSF
         xy_coords_2nd_pass, _ = helpers.fit_psf_gaussian_from_native_array(
@@ -268,9 +263,6 @@ def _local_copy_of_fits(file_name: str) -> str:
     Needed when Podman virtiofs on macOS raises errno 35 on direct reads.
     Tries several copy methods because ``cp``/``shutil`` can hit the same deadlock.
     """
-    import subprocess
-    import tempfile
-
     dest = os.path.join(
         tempfile.gettempdir(),
         f"metis_fits_cache_{os.path.basename(file_name)}",
@@ -381,8 +373,12 @@ def load_fits_data(file_name: str, hdu_index: int = 1) -> tuple[np.ndarray, Any]
         hdu, used_index = _select_image_hdu(hdul, preferred_index=hdu_index)
         if used_index != hdu_index:
             logging.warning(
-                f"FITS {file_name}: requested HDU {hdu_index} unavailable or empty; "
-                f"using HDU {used_index} instead (file has {len(hdul)} HDU(s))."
+                "FITS %s: requested HDU %s unavailable or empty; using HDU %s instead "
+                "(file has %s HDU(s)).",
+                file_name,
+                hdu_index,
+                used_index,
+                len(hdul),
             )
         data = np.array(np.asarray(hdu.data), copy=True)
         header = hdu.header.copy()

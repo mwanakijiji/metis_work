@@ -1,21 +1,18 @@
+"""Strehl ratio estimators: annular-aperture model fits, ESO definition, MTF ratios."""
+
 import logging
 import os
 import time
+from pathlib import Path
 
-import numpy as np
-import matplotlib
-
-matplotlib.use("Agg")  # put this before importing pyplot
 import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
-from mpl_toolkits.axes_grid1 import make_axes_locatable
+import numpy as np
 from astropy.modeling.models import AiryDisk2D
 from astropy.visualization import ZScaleInterval
+from matplotlib.colors import LogNorm
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.optimize import curve_fit
-from scipy.ndimage import zoom
-import ipdb
 from skimage.measure import block_reduce
-from pathlib import Path
 
 from .amoeba import amoeba_minimize
 from .helpers import (
@@ -23,6 +20,9 @@ from .helpers import (
     model_for_fit_fixed,
     mtf_arrays,
 )
+
+# non-interactive backend: this module only writes plots to files
+plt.switch_backend("Agg")
 
 
 def imaging_band_from_fp_mask(fp_mask: str) -> str:
@@ -62,7 +62,12 @@ def pinhole_diam_rad_from_observing_config(config_observing: dict, fp_mask: str)
 
 
 def strehl_from_eso_def(data_empirical, model):
-    ## ## TODO: make the mask around the psf within which we sum the flux more circular, maybe larger
+    """
+    Strehl ratio as ESO defines it (hdrl_strehl.c): (peak/flux) of data over (peak/flux)
+    of model.
+    """
+    # ## TODO: make the mask around the psf within which we sum the flux more circular,
+    # maybe larger
     if data_empirical.shape != model.shape:
         raise ValueError("Data and model must have the same shape")
     ratio_img = np.max(data_empirical) / np.sum(data_empirical)
@@ -113,10 +118,10 @@ def debug_fit_model_scale_and_offset(
 
     logging.info("--------------------------------")
     logging.info("Debug fit: scale + additive offset on native annular model")
-    logging.info(f"  scale            = {scale:.6f}")
-    logging.info(f"  additive_offset  = {additive_offset:.6f}")
-    logging.info(f"  RSS before       = {rss_before:.6f}")
-    logging.info(f"  RSS after        = {rss_after:.6f}")
+    logging.info("  scale            = %.6f", scale)
+    logging.info("  additive_offset  = %.6f", additive_offset)
+    logging.info("  RSS before       = %.6f", rss_before)
+    logging.info("  RSS after        = %.6f", rss_after)
     logging.info("--------------------------------")
 
     os.makedirs(results_write_dir, exist_ok=True)
@@ -191,7 +196,7 @@ def debug_fit_model_scale_and_offset(
     )
     _savefig_atomic_with_retry(fig, out_path)
     plt.close(fig)
-    logging.info(f"Saved {out_path}")
+    logging.info("Saved %s", out_path)
 
     return {
         "debug_scale": scale,
@@ -226,7 +231,10 @@ def _savefig_atomic_with_retry(fig, file_name_plot, max_attempts=5, retry_sleep_
 
             if exc.errno == 35 and attempt < max_attempts:
                 logging.warning(
-                    f"savefig retry {attempt}/{max_attempts} for {file_name_plot} after errno 35"
+                    "savefig retry %s/%s for %s after errno 35",
+                    attempt,
+                    max_attempts,
+                    file_name_plot,
                 )
                 time.sleep(retry_sleep_s)
                 continue
@@ -242,7 +250,6 @@ def _savefig_atomic_with_retry(fig, file_name_plot, max_attempts=5, retry_sleep_
 
 def fit_airy_psf(
     cookie_cut_out_sci,
-    data_empirical_original,
     obs_filter,
     x_center_pix_gaussian_best_fit_oversamp,
     y_center_pix_gaussian_best_fit_oversamp,
@@ -279,23 +286,18 @@ def fit_airy_psf(
     -------
     strehl_results : dict
         Dictionary containing the Strehl ratios from the different methods.
-        - 'strehl_airy_max' : Strehl ratio from the Airy PSF fit with the same total power as the empirical PSF.
+        - 'strehl_airy_max' : Strehl ratio from the Airy PSF fit with the same total
+          power as the empirical PSF.
     """
 
     total_power_empirical = np.sum(cookie_cut_out_sci)
     # generate an Airy PSF with the same total power as the empirical PSF
-    r_rad_2d = angle_from_center_2d(
-        array_passed_in=cookie_cut_out_sci,
-        y_center=y_center_pix_gaussian_best_fit_oversamp,
-        x_center=x_center_pix_gaussian_best_fit_oversamp,
-        pixel_scale_mas=config_observing["pixel_scale_mas"],
-        fac_oversamp=fac_oversamp,
-        units="radians",
-    )
     # radius of first zero in pixel space of cookie_cut_out_sci
     rad_per_pix = (
-        (config_observing["pixel_scale_mas"] / 1000.0) / 206265.0
-    ) / fac_oversamp  # radians per pixel, where pixels are those of the input array, not the detector
+        (config_observing["pixel_scale_mas"] / 1000.0)
+        / 206265.0
+        # radians per pixel, where pixels are those of the input array, not the detector
+    ) / fac_oversamp
     radius_pix = (
         1.22
         * (
@@ -406,11 +408,12 @@ def fit_airy_psf(
     file_path = os.path.join(results_write_dir, plot_filename)
     _savefig_atomic_with_retry(fig, file_path)
     plt.close(fig)
-    logging.info(f"Saved {file_path}")
+    logging.info("Saved %s", file_path)
 
     strehl_airy_max = peak_flux_empirical / peak_flux_airy
     logging.info(
-        f"Strehl from unobstructed circular aperture (-> Airy), max vals: {strehl_airy_max}"
+        "Strehl from unobstructed circular aperture (-> Airy), max vals: %s",
+        strehl_airy_max,
     )
 
     strehl_results = {"strehl_airy_max": strehl_airy_max}
@@ -430,7 +433,8 @@ def fit_annular_aperture_fixed_parameters(
     results_write_dir="figs_dump",
 ):
     """
-    Calculate the Strehl ratio based on a PSF fit using a model with fixed aperture dimensions.
+    Calculate the Strehl ratio based on a PSF fit using a model with fixed aperture
+    dimensions.
 
     INPUTS
     ----------
@@ -447,9 +451,11 @@ def fit_annular_aperture_fixed_parameters(
     y_center_2nd_pass_cookie_oversamp : float
         Y coordinate of the PSF center (in cutout coordinates, oversampled).
     config_observing : dict
-        Configuration object containing observing parameters (pixel scales, aperture diameters, etc.).
+        Configuration object containing observing parameters (pixel scales, aperture
+        diameters, etc.).
     fac_oversamp : float or int
-        The oversampling factor of the model/empirical PSF with respect to detector grid.
+        The oversampling factor of the model/empirical PSF with respect to detector
+        grid.
     polychromatic : bool, optional
         If True, use a polychromatic PSF by reading a filter curve.
         If False, a single wavelength value will be read in from a config file.
@@ -460,8 +466,10 @@ def fit_annular_aperture_fixed_parameters(
     -------
     strehl_results : dict
         Dictionary containing calculated Strehl ratios using different methods.
-        - 'strehl_fix_ann_ap_max' : Strehl ratio from the max of the empirical and model PSFs.
-        - 'strehl_fix_ann_ap_pow' : Strehl ratio from the enclosed power in the central region.
+        - 'strehl_fix_ann_ap_max' : Strehl ratio from the max of the empirical and model
+          PSFs.
+        - 'strehl_fix_ann_ap_pow' : Strehl ratio from the enclosed power in the central
+          region.
         - 'strehl_fix_ann_ap_mtf' : Strehl ratio from the MTF ratios.
     """
 
@@ -498,12 +506,12 @@ def fit_annular_aperture_fixed_parameters(
 
     # Apply the SAME mask to both arrays
     r_rad_1d_oversamp_masked = r_rad_1d_oversamp[mask_valid]
-    test_empirical_1d_oversamp_masked = test_empirical_1d_oversamp[mask_valid]
 
     # to avoid interfering updates downstream
     valid_mask = mask_valid.copy()
 
-    # generate a fixed model PSF (output in 1D, for vestigial reasons); note this involves oversampled images
+    # generate a fixed model PSF (output in 1D, for vestigial reasons); note this
+    # involves oversampled images
     if polychromatic:
         filters_stem = str(
             (Path(__file__).resolve().parent / "inst_pkgs").resolve()
@@ -515,16 +523,17 @@ def fit_annular_aperture_fixed_parameters(
         ]  # leaf path of filter file name
         filter_file_abs = os.path.join(filters_stem, filter_file_leaf)
         logging.info(
-            f"Making a polychromatic PSF for filter file: {os.path.basename(filter_file_abs)}"
+            "Making a polychromatic PSF for filter file: %s",
+            os.path.basename(filter_file_abs),
         )
         print(
-            "Pinhole machinery still missing from this function; implement first before using"
+            "Pinhole machinery still missing from this function; implement first "
+            "before using"
         )
-        exit
         intensity_1d_full_1d = model_for_fit_fixed(
             r_rad_1d_oversamp_masked,
-            D_aperture=config_observing["D_aperture"]["full"],
-            D_obscuration=config_observing["D_aperture"]["D_obscuration"],
+            d_aperture=config_observing["D_aperture"]["full"],
+            d_obscuration=config_observing["D_aperture"]["D_obscuration"],
             ampl=1,
             centroid_yx_oversamp=(
                 y_center_2nd_pass_cookie_oversamp,
@@ -540,11 +549,11 @@ def fit_annular_aperture_fixed_parameters(
         )
     else:  # monochromatic
         wavel_mono = config_observing["monochromatic_observing_filters"][filter_name]
-        logging.info(f"Making a monochromatic PSF for wavelength: {wavel_mono} um")
+        logging.info("Making a monochromatic PSF for wavelength: %s um", wavel_mono)
         intensity_1d_full_1d = model_for_fit_fixed(
             r_rad_1d_oversamp_masked,
-            D_aperture=config_observing["D_aperture"]["full"],
-            D_obscuration=config_observing["D_aperture"]["D_obscuration"],
+            d_aperture=config_observing["D_aperture"]["full"],
+            d_obscuration=config_observing["D_aperture"]["D_obscuration"],
             ampl=1,
             shape_oversamp=shape_oversamp,
             pixel_scale_mas=config_observing["pixel_scale_mas"],
@@ -555,13 +564,16 @@ def fit_annular_aperture_fixed_parameters(
         )
     model_annular_2d_oversamp = intensity_1d_full_1d.reshape(shape_oversamp)
 
-    # normalize the model PSF to the empirical PSF, so that they have the same total power
+    # normalize the model PSF to the empirical PSF, so that they have the same total
+    # power
     model_annular_2d_oversamp_norm = (
         model_annular_2d_oversamp / np.sum(model_annular_2d_oversamp)
     ) * np.sum(cookie_cut_out_sci_oversamp)
 
-    # make mask corresponding to first dark ring for an Airy (but not annular) aperture, so as to see how much power is in the central region
-    # note this is just the first dark Airy ring for a monochromatic PSF, but this should be good enough for the polychromatic case as well
+    # make mask corresponding to first dark ring for an Airy (but not annular) aperture,
+    # so as to see how much power is in the central region
+    # note this is just the first dark Airy ring for a monochromatic PSF, but this
+    # should be good enough for the polychromatic case as well
     dark_ring_loc_rad = 1.22 * (
         config_observing["monochromatic_observing_filters"][filter_name]
         / config_observing["D_aperture"]["full"]
@@ -581,25 +593,29 @@ def fit_annular_aperture_fixed_parameters(
         data_cookie_empirical_original
     ) / np.max(model_annular_2d_oversamp_norm_native)
 
-    # strehl given the enclosed power in the central region (note this uses the oversampled model PSF; is that the best way?)
+    # strehl given the enclosed power in the central region (note this uses the
+    # oversampled model PSF; is that the best way?)
     model_annular_2d_full_norm_masked = model_annular_2d_oversamp_norm * mask_central
     test_empirical_2d_masked = nonan_empirical_2d_oversamp * mask_central
     strehl_from_fixed_annular_aperture_power_enclosed = np.sum(
         test_empirical_2d_masked
     ) / np.sum(model_annular_2d_full_norm_masked)
-    # test_factor = np.copy(strehl_from_fixed_annular_aperture_power_enclosed) # use this as a normalization factor downstream
+    # test_factor = np.copy(strehl_from_fixed_annular_aperture_power_enclosed) # use
+    # this as a normalization factor downstream
 
     ############################################################
     # another method: Fourier transform and use the ratios of the MTF
-    # (note this masks based on max frequency, but not based on the dark rings in physical space)
+    # (note this masks based on max frequency, but not based on the dark rings in
+    # physical space)
 
-    # Compute the Modulation Transfer Function (MTF) arrays for both empirical and model PSFs
+    # Compute the Modulation Transfer Function (MTF) arrays for both empirical and model
+    # PSFs
     (
         fft_model_power_cutoff,
         fft_empirical_power_cutoff,
         cutoff_freq,
         fx,
-        fy,
+        _,  # fy
         n_fft,
     ) = mtf_arrays(
         array_empirical=cookie_cut_out_sci_oversamp,
@@ -622,12 +638,10 @@ def fit_annular_aperture_fixed_parameters(
 
     # strehl in the way ESO does it (hdrl_strehl.c):
 
-    """
-    ratio_img = ipeak.data / iflux.data;   // observed peak / observed flux
-    ratio_psf = ppeak / pflux.data;        // synthetic PSF peak / synthetic PSF flux
-    strehl = ratio_img / ratio_psf;        // final Strehl
-    double strehl = ratio_img / ratio_psf;
-    """
+    # ratio_img = ipeak.data / iflux.data;   // observed peak / observed flux
+    # ratio_psf = ppeak / pflux.data;        // synthetic PSF peak / synthetic PSF flux
+    # strehl = ratio_img / ratio_psf;        // final Strehl
+    # double strehl = ratio_img / ratio_psf;
 
     strehl_from_fixed_annular_aperture_eso = strehl_from_eso_def(
         data_empirical=data_cookie_empirical_original,
@@ -638,7 +652,8 @@ def fit_annular_aperture_fixed_parameters(
     fig, axs = plt.subplots(1, 3, figsize=(15, 5))
     im0 = axs[0].imshow(cookie_cut_out_sci_oversamp, origin="lower", cmap="gray_r")
     axs[0].set_title(
-        f"Empirical oversampled PSF\nFilter={filter_name}, oversampling={fac_oversamp:.2f}"
+        f"Empirical oversampled PSF\nFilter={filter_name}, "
+        f"oversampling={fac_oversamp:.2f}"
     )
     fig.colorbar(im0, ax=axs[0])
     im1 = axs[1].imshow(model_annular_2d_oversamp_norm, origin="lower", cmap="gray_r")
@@ -658,7 +673,8 @@ def fit_annular_aperture_fixed_parameters(
         f"Fixed: D_aperture={config_observing['D_aperture']['full']:.2f} m, "
         f"D_obscuration={config_observing['D_aperture']['D_obscuration']:.2f} m\n"
         f"Strehl from max: {strehl_from_fixed_annular_aperture_max:.2f}\n"
-        f"Strehl from enclosed power: {strehl_from_fixed_annular_aperture_power_enclosed:.2f}\n"
+        "Strehl from enclosed power: "
+        f"{strehl_from_fixed_annular_aperture_power_enclosed:.2f}\n"
         f"Strehl from ESO def: {strehl_from_fixed_annular_aperture_eso:.2f}\n"
         f"Strehl from MTF: {strehl_from_fixed_annular_aperture_mtf:.2f}"
     )
@@ -669,7 +685,7 @@ def fit_annular_aperture_fixed_parameters(
     )
     _savefig_atomic_with_retry(fig, file_name_plot)
     plt.close(fig)
-    logging.info(f"Saved {file_name_plot}")
+    logging.info("Saved %s", file_name_plot)
 
     # plot a cross-section through the FTs of the empirical and model PSFs
     fig, ax = plt.subplots(1, 1, figsize=(15, 5))
@@ -698,7 +714,8 @@ def fit_annular_aperture_fixed_parameters(
     ax.legend()
     ax.set_title(
         f"Fixed-annular-aperture MTF comparison\n"
-        f"Filter={filter_name}, Strehl from MTF={strehl_from_fixed_annular_aperture_mtf:.2f}"
+        f"Filter={filter_name}, Strehl from "
+        f"MTF={strehl_from_fixed_annular_aperture_mtf:.2f}"
     )
     fig.tight_layout()
     file_name_plot = os.path.join(
@@ -706,19 +723,23 @@ def fit_annular_aperture_fixed_parameters(
     )
     _savefig_atomic_with_retry(fig, file_name_plot)
     plt.close(fig)
-    logging.info(f"Saved {file_name_plot}")
+    logging.info("Saved %s", file_name_plot)
 
     logging.info(
-        f"Strehl from fixed annular aperture, max: {strehl_from_fixed_annular_aperture_max}"
+        "Strehl from fixed annular aperture, max: %s",
+        strehl_from_fixed_annular_aperture_max,
     )
     logging.info(
-        f"Strehl from fixed annular aperture, enclosed power: {strehl_from_fixed_annular_aperture_power_enclosed}"
+        "Strehl from fixed annular aperture, enclosed power: %s",
+        strehl_from_fixed_annular_aperture_power_enclosed,
     )
     logging.info(
-        f"Strehl from fixed annular aperture, MTF: {strehl_from_fixed_annular_aperture_mtf}"
+        "Strehl from fixed annular aperture, MTF: %s",
+        strehl_from_fixed_annular_aperture_mtf,
     )
     logging.info(
-        f"Strehl from fixed annular aperture, ESO def: {strehl_from_fixed_annular_aperture_eso}"
+        "Strehl from fixed annular aperture, ESO def: %s",
+        strehl_from_fixed_annular_aperture_eso,
     )
 
     # strehls based on
@@ -751,7 +772,8 @@ def fit_annular_aperture_free_parameters(
     pp_mask=None,
 ):
     """
-    Fit an analytical 2D PSF model to a given science frame. If the frame is oversampled, the fit is done to that oversampled image.
+    Fit an analytical 2D PSF model to a given science frame. If the frame is
+    oversampled, the fit is done to that oversampled image.
 
     INPUTS
     ----------
@@ -770,12 +792,14 @@ def fit_annular_aperture_free_parameters(
     fac_oversamp : float or int
         Oversampling factor for the model/empirical PSF relative to detector grid.
     config_observing : dict
-        Configuration object containing observing parameters (pixel scales, aperture diameters, etc.).
+        Configuration object containing observing parameters (pixel scales, aperture
+        diameters, etc.).
     fit_method : str
         Optimizer to use; 'curve_fit' (default) or 'amoeba'.
     fp_mask : str
         Focal-plane mask label (e.g. ``grid_lm``, ``pinhole_n``); used to select the
-        LM vs N pinhole diameter from ``config_observing`` when ``pinhole_diam_rad`` is None.
+        LM vs N pinhole diameter from ``config_observing`` when ``pinhole_diam_rad`` is
+        None.
     pinhole_diam_rad : float or None, optional
         Size of the pinhole in radians. If omitted (default), derived from
         ``config_observing['pinhole_diam_um']`` for the LM/N band implied by
@@ -790,7 +814,8 @@ def fit_annular_aperture_free_parameters(
     -------
     strehl_results : dict
         Dictionary containing Strehl ratio results and fit diagnostics.
-        - strehl_from_free_annular_aperture_mtf: Strehl ratio from the MTF of the free-parameter annular aperture.
+        - strehl_from_free_annular_aperture_mtf: Strehl ratio from the MTF of the
+          free-parameter annular aperture.
     """
 
     # Sentinel: function-arg None means "read from config" (config null → no pinhole).
@@ -802,14 +827,19 @@ def fit_annular_aperture_free_parameters(
         )
         if pinhole_diam_rad is None:
             logging.info(
-                f"Pinhole from observing config: band={band}, diam=None "
-                f"(delta-function / analytic PSF only; fp_mask={fp_mask})"
+                "Pinhole from observing config: band=%s, diam=None (delta-function / "
+                "analytic PSF only; fp_mask=%s)",
+                band,
+                fp_mask,
             )
         else:
             logging.info(
-                f"Pinhole from observing config: band={band}, "
-                f"diam={float(pinhole_diam_um):.1f} um → {pinhole_diam_rad:.3e} rad "
-                f"(fp_mask={fp_mask})"
+                "Pinhole from observing config: band=%s, diam=%.1f um → %.3e rad "
+                "(fp_mask=%s)",
+                band,
+                float(pinhole_diam_um),
+                pinhole_diam_rad,
+                fp_mask,
             )
 
     # Build the model directly on the oversampled grid using the fitted
@@ -827,19 +857,19 @@ def fit_annular_aperture_free_parameters(
     dummy_x_native = np.arange(data_empirical_original_1d.size, dtype=float)
     dummy_x_oversamp = np.arange(np.prod(shape_oversampled_2d), dtype=float)
 
-    logging.info(f"Original data points: {dummy_x_native.size}")
-    logging.info(f"Oversampled data points: {dummy_x_oversamp.size}")
+    logging.info("Original data points: %s", dummy_x_native.size)
+    logging.info("Oversampled data points: %s", dummy_x_oversamp.size)
 
     os.makedirs(results_write_dir, exist_ok=True)
     save_fyi_plot_state = {"done": False}
 
-    def model_wrapper(xdata, D_aperture, D_obscuration, ampl):
+    def model_wrapper(xdata, d_aperture, d_obscuration, ampl):
         save_fyi_plot = not save_fyi_plot_state["done"]
         save_fyi_plot_state["done"] = True
         return model_for_fit_fixed(
             xdata,
-            D_aperture,
-            D_obscuration,
+            d_aperture,
+            d_obscuration,
             ampl,
             centroid_yx_oversamp=(
                 y_center_final_cookie_oversamp,
@@ -848,9 +878,9 @@ def fit_annular_aperture_free_parameters(
             shape_original_2d=shape_original_2d,
             fac_oversamp=fac_oversamp,
             pixel_scale_mas=config_observing["pixel_scale_mas"],
-            filter_file=config_observing[
-                "polychromatic_observing_filters_leaf_name"
-            ][filter_name],
+            filter_file=config_observing["polychromatic_observing_filters_leaf_name"][
+                filter_name
+            ],
             pinhole_diam_rad=pinhole_diam_rad,
             save_fyi_plot=save_fyi_plot,
             results_write_dir=results_write_dir,
@@ -885,7 +915,7 @@ def fit_annular_aperture_free_parameters(
             bounds=(lower_bounds, upper_bounds),
         )
         pcov = None  # amoeba does not provide covariance
-        logging.info(f"Fit method: amoeba (Nelder-Mead), chi_sq = {fopt:.2f}")
+        logging.info("Fit method: amoeba (Nelder-Mead), chi_sq = %.2f", fopt)
     elif fit_method == "curve_fit":
         # Perform the fit with curve_fit
         logging.info("Fitting PSF with curve_fit algorithm")
@@ -893,26 +923,30 @@ def fit_annular_aperture_free_parameters(
         #########################################################
         # Begin Example call to test model_for_fit_fixed in one line
         # loop over a few test pinhole sizes
-        """
-        for pinhole_diam_rad_test in [None, 1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0]:
-            test = model_for_fit_fixed(
-                r_rad_1d_original=r_rad_1d_original, 
-                D_aperture=34.6878,             # D_aperture [example value in meters]
-                D_obscuration=12.8502,              # D_obscuration [example value in meters]
-                ampl=1.2e6,              # ampl [example value]
-                centroid_yx_original=(y_center_final_cookie_oversamp,x_center_final_cookie_oversamp),
-                shape_original_2d=shape_original_2d,
-                fac_oversamp=fac_oversamp,
-                filter_file=config_observing['polychromatic_observing_filters_leaf_name'][filter_name],
-                pinhole_diam_rad=pinhole_diam_rad_test
-            )
-
-            test_2d = test.reshape(shape_original_2d)
-            plt.imshow(test_2d)
-            plt.savefig(f'Figure_1_test_model_pinhole_{pinhole_diam_rad_test}.png')
-            print(f'Saved Figure_1_test_model_pinhole_{pinhole_diam_rad_test}.png')
-            plt.close()
-            """
+        # for pinhole_diam_rad_test in [None, 1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7,
+        # 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0]:
+        #     test = model_for_fit_fixed(
+        #         r_rad_1d_original=r_rad_1d_original,
+        #         D_aperture=34.6878,             # D_aperture [example value in meters]
+        #         D_obscuration=12.8502,              # D_obscuration [example value in
+        # meters]
+        #         ampl=1.2e6,              # ampl [example value]
+        # centroid_yx_original=(
+        #     y_center_final_cookie_oversamp, x_center_final_cookie_oversamp
+        # ),
+        #         shape_original_2d=shape_original_2d,
+        #         fac_oversamp=fac_oversamp,
+        # filter_file=config_observing[
+        #     'polychromatic_observing_filters_leaf_name'
+        # ][filter_name],
+        #         pinhole_diam_rad=pinhole_diam_rad_test
+        #     )
+        #
+        #     test_2d = test.reshape(shape_original_2d)
+        #     plt.imshow(test_2d)
+        #     plt.savefig(f'Figure_1_test_model_pinhole_{pinhole_diam_rad_test}.png')
+        #     print(f'Saved Figure_1_test_model_pinhole_{pinhole_diam_rad_test}.png')
+        #     plt.close()
 
         # End example call
         #########################################################
@@ -923,35 +957,43 @@ def fit_annular_aperture_free_parameters(
             p0=initial_guess,
             bounds=(lower_bounds, upper_bounds),
             method="trf",  # Trust Region Reflective algorithm supports bounds
+        )[:2]
+
+    else:
+        raise ValueError(
+            f"fit_method must be 'amoeba' or 'curve_fit', got {fit_method!r}"
         )
 
     # Extract best-fit parameters and uncertainties
-    D_aperture_fit = popt[0]
-    D_obscuration_fit = popt[1]
+    d_aperture_fit = popt[0]
+    d_obscuration_fit = popt[1]
     ampl_fit = popt[2]
 
     # Calculate parameter uncertainties from covariance matrix (curve_fit only)
     if pcov is not None:
         param_errors = np.sqrt(np.diag(pcov))
-        D_aperture_err = param_errors[0]
-        D_obscuration_err = param_errors[1]
+        d_aperture_err = param_errors[0]
+        d_obscuration_err = param_errors[1]
         ampl_err = param_errors[2]
     else:
-        D_aperture_err = D_obscuration_err = ampl_err = np.nan
+        d_aperture_err = d_obscuration_err = ampl_err = np.nan
 
     # Print results
     logging.info("--------------------------------")
     logging.info("Fixed observing parameters, annular aperture:")
     logging.info(
-        f"filter: {filter_name}, λ={config_observing['monochromatic_observing_filters'][filter_name]*1e6:.2f}μm, ps={config_observing['pixel_scale_mas']:.2f}mas",
+        "filter: %s, λ=%.2fμm, ps=%.2fmas",
+        filter_name,
+        config_observing["monochromatic_observing_filters"][filter_name] * 1000000.0,
+        config_observing["pixel_scale_mas"],
     )
     logging.info("--------------------------------")
     logging.info("Best-fit parameters, annular aperture:")
-    logging.info(f"D_aperture = {D_aperture_fit:.2f} ± {D_aperture_err:.2f} meters")
+    logging.info("D_aperture = %.2f ± %.2f meters", d_aperture_fit, d_aperture_err)
     logging.info(
-        f"D_obscuration = {D_obscuration_fit:.2f} ± {D_obscuration_err:.2f} meters"
+        "D_obscuration = %.2f ± %.2f meters", d_obscuration_fit, d_obscuration_err
     )
-    logging.info(f"ampl = {ampl_fit:.2f} ± {ampl_err:.2f}")
+    logging.info("ampl = %.2f ± %.2f", ampl_fit, ampl_err)
 
     # Check if covariance matrix has infs (curve_fit only)
     if pcov is not None:
@@ -963,30 +1005,12 @@ def fit_annular_aperture_free_parameters(
                 "Covariance matrix is finite - fit MAY have converged successfully"
             )
 
-    # generate the best-fit model based on the fit parameters (same r_rad grid as curve_fit)
-    initial_guess_model_1d = model_for_fit_fixed(
-        dummy_x_native,
-        initial_guess[0],
-        initial_guess[1],
-        initial_guess[2],
-        centroid_yx_oversamp=(
-            y_center_final_cookie_oversamp,
-            x_center_final_cookie_oversamp,
-        ),
-        shape_original_2d=shape_original_2d,
-        fac_oversamp=fac_oversamp,
-        pixel_scale_mas=config_observing["pixel_scale_mas"],
-        filter_file=config_observing["polychromatic_observing_filters_leaf_name"][
-            filter_name
-        ],
-        pinhole_diam_rad=pinhole_diam_rad,
-        save_fyi_plot=False,
-        results_write_dir=results_write_dir,
-    )
+    # generate the best-fit model based on the fit parameters (same r_rad grid as
+    # curve_fit)
     best_fit_model_1d = model_for_fit_fixed(
         dummy_x_native,
-        D_aperture_fit,
-        D_obscuration_fit,
+        d_aperture_fit,
+        d_obscuration_fit,
         ampl_fit,
         centroid_yx_oversamp=(
             y_center_final_cookie_oversamp,
@@ -1003,7 +1027,6 @@ def fit_annular_aperture_free_parameters(
         results_write_dir=results_write_dir,
     )
 
-    initial_guess_model_2d = initial_guess_model_1d.reshape(shape_original_2d)
     best_fit_model_2d = best_fit_model_1d.reshape(shape_original_2d)
 
     data_original_2d = np.asarray(cookie_cut_out_sci_original, dtype=float)
@@ -1062,9 +1085,7 @@ def fit_annular_aperture_free_parameters(
     # Bottom-middle/right: 1D cross-sections through the row and column of the empirical
     # PSF peak (not the cutout center)
     ny, nx = data_original_2d.shape
-    peak_y, peak_x = np.unravel_index(
-        np.nanargmax(data_original_2d), data_original_2d.shape
-    )
+    peak_y, peak_x = divmod(int(np.nanargmax(data_original_2d)), nx)
     x_pix = np.arange(nx)
     y_pix = np.arange(ny)
     for ax in (ax_triple[0, 0], ax_triple[0, 1]):
@@ -1106,6 +1127,7 @@ def fit_annular_aperture_free_parameters(
     )
     cbar_res.set_label("Δ counts")
 
+    wavel_um = config_observing["monochromatic_observing_filters"][filter_name] * 1e6
     pinhole_label = (
         "None (delta pinhole)"
         if pinhole_diam_rad is None
@@ -1117,11 +1139,13 @@ def fit_annular_aperture_free_parameters(
         f"ampl=[{lower_bounds[2]:.1e}, {upper_bounds[2]:.1e}]"
     )
     fig_triple.suptitle(
-        f"Free-annular-aperture fit on native detector grid — {filter_name}, pp_mask={pp_mask} "
-        f"(λ={config_observing['monochromatic_observing_filters'][filter_name]*1e6:.2f} μm)\n"
-        f"Init: D_aper={initial_guess[0]:.2f}, D_obsc={initial_guess[1]:.2f}, ampl={initial_guess[2]:.2e}\n"
-        f"Fit:  D_aper={D_aperture_fit:.2f}±{D_aperture_err:.2f}, "
-        f"D_obsc={D_obscuration_fit:.2f}±{D_obscuration_err:.2f}, "
+        f"Free-annular-aperture fit on native detector grid — {filter_name}, "
+        f"pp_mask={pp_mask} "
+        f"(λ={wavel_um:.2f} μm)\n"
+        f"Init: D_aper={initial_guess[0]:.2f}, D_obsc={initial_guess[1]:.2f}, "
+        f"ampl={initial_guess[2]:.2e}\n"
+        f"Fit:  D_aper={d_aperture_fit:.2f}±{d_aperture_err:.2f}, "
+        f"D_obsc={d_obscuration_fit:.2f}±{d_obscuration_err:.2f}, "
         f"ampl={ampl_fit:.2e}±{ampl_err:.2e}\n"
         f"{bounds_label}\n"
         f"pinhole_diam={pinhole_label}",
@@ -1133,7 +1157,7 @@ def fit_annular_aperture_free_parameters(
         f"free_ann_ap_data_model_resid_native_{plot_string}.png",
     )
     _savefig_atomic_with_retry(fig_triple, file_triple)
-    logging.info(f"Saved {file_triple}")
+    logging.info("Saved %s", file_triple)
     plt.close(fig_triple)
 
     fig_cs, (ax_lin, ax_log) = plt.subplots(
@@ -1195,8 +1219,8 @@ def fit_annular_aperture_free_parameters(
     ).reshape(shape_oversampled_2d)
     best_fit_model_2d_oversamp = model_for_fit_fixed(
         dummy_x_oversamp,
-        D_aperture_fit,
-        D_obscuration_fit,
+        d_aperture_fit,
+        d_obscuration_fit,
         ampl_fit,
         centroid_yx_oversamp=(
             y_center_final_cookie_oversamp,
@@ -1224,9 +1248,9 @@ def fit_annular_aperture_free_parameters(
 
     # best_fit_model_2d is already created above
 
-    logging.info(f"\nChi-squared = {chi_squared:.2f}")
-    logging.info(f"Degrees of freedom = {dof}")
-    logging.info(f"Reduced chi-squared = {reduced_chi_squared:.6f}")
+    logging.info("\nChi-squared = %.2f", chi_squared)
+    logging.info("Degrees of freedom = %s", dof)
+    logging.info("Reduced chi-squared = %.6f", reduced_chi_squared)
 
     ############################################################
     # Find the Strehl from the MTF, like in fit_annular_aperture_fixed
@@ -1235,7 +1259,7 @@ def fit_annular_aperture_free_parameters(
         fft_empirical_power_cutoff,
         cutoff_freq,
         fx,
-        fy,
+        _,  # fy
         n_fft,
     ) = mtf_arrays(
         array_empirical=cookie_cut_out_sci_oversamp,
@@ -1255,7 +1279,8 @@ def fit_annular_aperture_free_parameters(
         fft_model_power_cutoff_norm
     )
     logging.info(
-        f"Strehl from free annular aperture, MTF: {strehl_from_free_annular_aperture_mtf}"
+        "Strehl from free annular aperture, MTF: %s",
+        strehl_from_free_annular_aperture_mtf,
     )
 
     # ESO Strehl (peak/total flux ratio): use the native detector grid, matching
@@ -1267,7 +1292,8 @@ def fit_annular_aperture_free_parameters(
         model=best_fit_model_2d,
     )
     logging.info(
-        f"Strehl from free annular aperture, ESO def: {strehl_from_free_annular_aperture_eso}"
+        "Strehl from free annular aperture, ESO def: %s",
+        strehl_from_free_annular_aperture_eso,
     )
     # plot a cross-section through the FTs of the empirical and model PSFs
     fig_mtf, ax_mtf = plt.subplots(1, 1, figsize=(30, 5))
@@ -1295,13 +1321,14 @@ def fit_annular_aperture_free_parameters(
     ax_mtf.legend()
     ax_mtf.set_title(
         f"Free-annular-aperture MTF comparison\n"
-        f"Filter={filter_name}, Strehl from MTF={strehl_from_free_annular_aperture_mtf:.2f}"
+        f"Filter={filter_name}, Strehl from "
+        f"MTF={strehl_from_free_annular_aperture_mtf:.2f}"
     )
     file_name_plot = os.path.join(
         results_write_dir, f"mtf_free_ann_ap_{plot_string}.png"
     )
     _savefig_atomic_with_retry(fig_mtf, file_name_plot)
-    logging.info(f"Saved {file_name_plot}")
+    logging.info("Saved %s", file_name_plot)
     plt.close(fig_mtf)
 
     zscale = ZScaleInterval()
@@ -1322,13 +1349,14 @@ def fit_annular_aperture_free_parameters(
     axs[0, 0].set_title(f"Empirical oversampled PSF\nFilter={filter_name}")
 
     # Panel 2: Best fit
-    im1 = axs[0, 1].imshow(best_fit_model_2d_oversamp, vmin=vmin, vmax=vmax)
+    axs[0, 1].imshow(best_fit_model_2d_oversamp, vmin=vmin, vmax=vmax)
     axs[0, 1].set_title("Best-fit free-annular-aperture model")
 
-    # Panel 3: Cross-section between empirical and best-fit PSF, along the row through the
+    # Panel 3: Cross-section between empirical and best-fit PSF, along the row through
+    # the
     # empirical PSF peak (not the cutout center)
-    peak_y, _ = np.unravel_index(
-        np.nanargmax(nonan_empirical_2d_oversamp), nonan_empirical_2d_oversamp.shape
+    peak_y = int(np.nanargmax(nonan_empirical_2d_oversamp)) // (
+        nonan_empirical_2d_oversamp.shape[1]
     )
     cross_empirical = nonan_empirical_2d_oversamp[peak_y, :]
     cross_best_fit = best_fit_model_2d_oversamp[peak_y, :]
@@ -1348,12 +1376,12 @@ def fit_annular_aperture_free_parameters(
     axs[1, 1].legend()
 
     # Panel 3: Initial guess
-    im2 = axs[2, 0].imshow(initial_guess_model_2d_oversamp, vmin=vmin, vmax=vmax)
+    axs[2, 0].imshow(initial_guess_model_2d_oversamp, vmin=vmin, vmax=vmax)
     axs[2, 0].set_title("Initial free-annular-aperture guess")
 
     # Panel 4: Residuals
     residuals = nonan_empirical_2d_oversamp - best_fit_model_2d_oversamp
-    im2 = axs[2, 1].imshow(residuals, vmin=vmin, vmax=vmax)
+    axs[2, 1].imshow(residuals, vmin=vmin, vmax=vmax)
     axs[2, 1].set_title("Residuals: empirical minus best-fit model")
 
     # degbug: write FITS file
@@ -1361,9 +1389,10 @@ def fit_annular_aperture_free_parameters(
 
     plt.suptitle(
         f"Free-annular-aperture fit on oversampled PSF\n"
-        f"Filter: {filter_name}, pp_mask={pp_mask}, λ={config_observing['monochromatic_observing_filters'][filter_name]*1e6:.2f}μm, pix={config_observing['pixel_scale_mas']:.2f}mas, \n"
-        f"Best fits: D_aper={D_aperture_fit:.2f}±{D_aperture_err:.2f}m, "
-        f"D_obsc={D_obscuration_fit:.2f}±{D_obscuration_err:.2f}m, "
+        f"Filter: {filter_name}, pp_mask={pp_mask}, λ={wavel_um:.2f}μm, "
+        f"pix={config_observing['pixel_scale_mas']:.2f}mas, \n"
+        f"Best fits: D_aper={d_aperture_fit:.2f}±{d_aperture_err:.2f}m, "
+        f"D_obsc={d_obscuration_fit:.2f}±{d_obscuration_err:.2f}m, "
         f"Amp={ampl_fit:.2f}±{ampl_err:.2f}, "
         f"Strehl_MTF={strehl_from_free_annular_aperture_mtf:.3f}\n"
         f"Strehl_ESO={strehl_from_free_annular_aperture_eso:.3f}\n"
@@ -1380,17 +1409,17 @@ def fit_annular_aperture_free_parameters(
         results_write_dir, f"free_ann_ap_best_fit_{plot_string}.png"
     )
     _savefig_atomic_with_retry(fig, file_name_plot)
-    logging.info(f"Saved {file_name_plot}")
+    logging.info("Saved %s", file_name_plot)
     plt.close(fig)
 
     # return dict of Strehl ratios found with different methods
     strehl_results = {
         "strehl_free_ann_ap_mtf": strehl_from_free_annular_aperture_mtf,
         "strehl_free_ann_ap_eso": strehl_from_free_annular_aperture_eso,
-        "D_aperture_fit": D_aperture_fit,
-        "D_aperture_err": D_aperture_err,
-        "D_obscuration_fit": D_obscuration_fit,
-        "D_obscuration_err": D_obscuration_err,
+        "D_aperture_fit": d_aperture_fit,
+        "D_aperture_err": d_aperture_err,
+        "D_obscuration_fit": d_obscuration_fit,
+        "D_obscuration_err": d_obscuration_err,
         "debug_scale": debug_fit_results["debug_scale"],
         "debug_additive_offset": debug_fit_results["debug_additive_offset"],
         "debug_rss": debug_fit_results["debug_rss"],

@@ -1,22 +1,25 @@
-# Does some simple analysis of simulated images written out by the sim notebook.
+"""
+Does some simple analysis of simulated images written out by the sim notebook.
+"""
 
-import os
 import datetime
 import logging
-import yaml
-import ipdb
+import os
+
 import numpy as np
 from astropy.io import fits
 
-from modules.helpers import load_config_and_pipe, setup_logging
 from modules.backbone_img_03_psf_quality import strehl_psfs
+from modules.helpers import load_config_and_pipe, setup_logging
 from modules.strehl_fcns import imaging_band_from_fp_mask
 
 
 def check_saturation(file_name_abs, fp_mask, config_observing, hdu_index=2, frac=0.75):
     """
-    Log an error if the max counts in image extension ``hdu_index`` (the raw readout, before
-    background subtraction) exceed ``frac`` of the detector saturation level. Does not stop the analysis.
+    Log an error if the max counts in image extension ``hdu_index`` (the raw readout,
+    before
+    background subtraction) exceed ``frac`` of the detector saturation level. Does not
+    stop the analysis.
     """
     band = imaging_band_from_fp_mask(fp_mask)
     saturation_adu = float(config_observing["saturation_adu"][f"img_{band}"])
@@ -24,34 +27,51 @@ def check_saturation(file_name_abs, fp_mask, config_observing, hdu_index=2, frac
         max_counts = float(np.nanmax(hdul[hdu_index].data))
     if max_counts > frac * saturation_adu:
         logging.error(
-            f"! ------- {os.path.basename(file_name_abs)}: max counts in extension {hdu_index} "
-            f"= {max_counts:.0f} ADU > {frac} x saturation ({frac * saturation_adu:.0f} of "
-            f"{saturation_adu:.0f} ADU, img_{band})"
+            "! ------- %s: max counts in extension %s = %.0f ADU > %s x saturation "
+            "(%.0f of %.0f ADU, img_%s)",
+            os.path.basename(file_name_abs),
+            hdu_index,
+            max_counts,
+            frac,
+            frac * saturation_adu,
+            saturation_adu,
+            band,
         )
     else:
         logging.info(
-            f"Saturation check OK for {os.path.basename(file_name_abs)}: "
-            f"max counts in extension {hdu_index} = {max_counts:.0f} ADU "
-            f"<= {frac} x saturation ({frac * saturation_adu:.0f} ADU, img_{band})"
+            "Saturation check OK for %s: max counts in extension %s = %.0f ADU <= %s x "
+            "saturation (%.0f ADU, img_%s)",
+            os.path.basename(file_name_abs),
+            hdu_index,
+            max_counts,
+            frac,
+            frac * saturation_adu,
+            band,
         )
+
 
 # Reqs.:
 # - Ref. Overleaf doc IMG_OPT_04_Test_Description_PSF_Image_Quality
 #
-# 1. METIS-1408: Quality and alignment of the optical components within Mid-infrared ELT Imager and
+# 1. METIS-1408: Quality and alignment of the optical components within Mid-infrared ELT
+# Imager and
 # Spectrograph (METIS) shall provide diffraction limited performance (Strehl ≥ 80 %)
 # at λ > 3μm in all modes over the entire FOV.
-# 2. METIS-1409: The Instrument Wavefront Error (WFE) shall satisfy the diffraction limit requirement
+# 2. METIS-1409: The Instrument Wavefront Error (WFE) shall satisfy the diffraction
+# limit requirement
 # (Strehl>0.8) at lambda = 3 μm for IMG (both LM and NQ) and IMG. The minimum
 # RMS WFE below shall be satisfied over the full Field Of View (FOV) relevant to the
 # given optical path.
-# 3. METIS-2864: The minimum Strehl ratio of the WCU+CFO+IMG-LM optical path shall be >80% at
+# 3. METIS-2864: The minimum Strehl ratio of the WCU+CFO+IMG-LM optical path shall be
+# >80% at
 # 3.3μm over the entire field of view.
-# 4. METIS-3503: METIS shall be able to characterise the shape of the instrument PSF across the entire
+# 4. METIS-3503: METIS shall be able to characterise the shape of the instrument PSF
+# across the entire
 # FoV using the WCU.
 
 
 def main():
+    """Run the IMG-OPT-03 Strehl analysis for each data state."""
 
     stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
     # config file with the observing parameters
@@ -87,7 +107,8 @@ def main():
     defaults = data_states_config.get("defaults", {})
     runs = data_states_config.get("runs", [])
 
-    # to set up the data states, merge config data state defaults with overrides that are specific for each run
+    # to set up the data states, merge config data state defaults with overrides that
+    # are specific for each run
     data_states = []
 
     for entry in runs:
@@ -101,7 +122,8 @@ def main():
             merged["results_write_dir"] = stem + results_write_dir
         data_states.append(merged)
 
-    # loop over each data state (which likely means a single input FITS file; but that file can include multiple PSFs)
+    # loop over each data state (which likely means a single input FITS file; but that
+    # file can include multiple PSFs)
     for state in data_states:  # data_states[0:1]: if just for a small test
         check_saturation(
             state["file_name_abs"],

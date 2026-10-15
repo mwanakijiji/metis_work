@@ -1,6 +1,9 @@
-# Modules package for PSF/Strehl analysis.
-# Put METIS_MAIT_code_eckhart/misc on sys.path so
-# ``from pipeline_registry import pipeline_stage`` works.
+"""
+Modules package for PSF/Strehl analysis.
+Put METIS_MAIT_code_eckhart/misc on sys.path so
+``from pipeline_registry import pipeline_stage`` works.
+"""
+
 import sys
 from pathlib import Path
 

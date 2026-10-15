@@ -1,19 +1,23 @@
-# Analysis of simulated images written out by IMG_OPT_01_METIS_AIT_img_cal_fov_SIM.py
+"""
+Analysis of simulated images written out by IMG_OPT_01_METIS_AIT_img_cal_fov_SIM.py
+"""
 
 import datetime
 import logging
 
-from modules.helpers import load_config_and_pipe, setup_logging
 from modules.backbone_img_01 import fov_calc
+from modules.helpers import load_config_and_pipe, setup_logging
 
 # Reqs.:
-# - Ref. Overleaf doc IMG_OPT_01_Test_Description_Field_of_View_and_Ghost_Measurement.pdf
+# - Ref. Overleaf doc
+# IMG_OPT_01_Test_Description_Field_of_View_and_Ghost_Measurement.pdf
 #
 # 1. METIS-1095: The FoV shall be 10.0 +1.0/-0.0 arcsec for the LM-arm and
 #    13.47 +0.50/-0.99 arcsec for the N-arm of the IMG.
 
 
 def main():
+    """Run the IMG-OPT-01 field-of-view analysis on the simulated frames."""
 
     stem = "/podman-share/metis_work/playing_with_scopesim/"
     analysis_states_config_file = (
@@ -44,7 +48,7 @@ def main():
             merged["results_write_dir"] = stem + results_write_dir
         analysis_states.append(merged)
 
-    logging.info(f"Number of analysis states (filters): {len(analysis_states)}")
+    logging.info("Number of analysis states (filters): %s", len(analysis_states))
 
     for state in analysis_states:
         fov_calc(run_state=state, stem=stem)

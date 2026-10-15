@@ -1,16 +1,18 @@
+"""Analysis backbone for the IMG-OPT-01 field-of-view test."""
+
 import logging
 import os
 import pickle
-import numpy as np
-import ipdb
 
-from .helpers import fit_psf_gaussian_from_native_array
-from .psf_grid_prep import load_grid_data_from_fits
+import numpy as np
 from pipeline_registry import (
     CLUSTER_FOV,
     COLOR_FOV,
     pipeline_stage,
 )
+
+from .helpers import fit_psf_gaussian_from_native_array
+from .psf_grid_prep import load_grid_data_from_fits
 
 
 def _resolve_path(path: str, stem: str = "") -> str:
@@ -69,10 +71,13 @@ def fov_calc(
 
     os.makedirs(results_write_dir, exist_ok=True)
     logging.info(
-        f"FOV analysis: filter={filter_name}, fp_mask={fp_mask}, "
-        f"pp_mask={pp_mask}, {len(dithers)} dither file(s)"
+        "FOV analysis: filter=%s, fp_mask=%s, pp_mask=%s, %s dither file(s)",
+        filter_name,
+        fp_mask,
+        pp_mask,
+        len(dithers),
     )
-    logging.info(f"PSF oversampling factor: {oversample_factor}")
+    logging.info("PSF oversampling factor: %s", oversample_factor)
 
     centroid_results_all = {}
 
@@ -82,7 +87,7 @@ def fov_calc(
         guess_y = float(dither["guess_y"])
 
         logging.info(
-            f"Dither {i}: file={file_name}, guess_x={guess_x}, guess_y={guess_y}"
+            "Dither %s: file=%s, guess_x=%s, guess_y=%s", i, file_name, guess_x, guess_y
         )
 
         grid_data, _grid_header = load_grid_data_from_fits(file_name, hdu_index=1)
@@ -96,7 +101,7 @@ def fov_calc(
 
         x_cen = gaussian_fit_outputs["x_center_pix_fullarray_normsamp"]
         y_cen = gaussian_fit_outputs["y_center_pix_fullarray_normsamp"]
-        logging.info(f"  centroid (native): x={x_cen:.3f}, y={y_cen:.3f}")
+        logging.info("  centroid (native): x=%.3f, y=%.3f", x_cen, y_cen)
 
         centroid_results_all[f"dither_{i:02d}"] = {
             "file_name": file_name,
@@ -112,12 +117,13 @@ def fov_calc(
             "angle_theta_deg": gaussian_fit_outputs["angle_theta_deg"],
         }
 
-    # measure distances in pixel space between the corners of the grid (i.e., PSFs in frame 0 and 1; 1 and 2; 2 and 3; 3 and 0)
+    # measure distances in pixel space between the corners of the grid (i.e., PSFs in
+    # frame 0 and 1; 1 and 2; 2 and 3; 3 and 0)
     distances_corner_psfs_pixel = []
 
     for i in range(len(centroid_results_all)):
-        key_0 = "dither_{:02d}".format(i)
-        key_1 = "dither_{:02d}".format((i + 1) % 4)
+        key_0 = f"dither_{i:02d}"
+        key_1 = f"dither_{(i + 1) % 4:02d}"
         distances_corner_psfs_pixel.append(
             np.sqrt(
                 (
@@ -134,7 +140,8 @@ def fov_calc(
         )
     distances_corner_psfs_pixel = np.array(distances_corner_psfs_pixel)
 
-    # given a known offset in arcseconds between the PSFs, what is the effective pixel scale?
+    # given a known offset in arcseconds between the PSFs, what is the effective pixel
+    # scale?
     distances_corner_psfs_arcsec = run_state.get("distances_corner_psfs_arcsec", 0)
     effective_pixel_scale = distances_corner_psfs_arcsec / distances_corner_psfs_pixel
 
@@ -148,8 +155,6 @@ def fov_calc(
     # convert distances in pixel space to arcseconds
     # distances_corner_psfs_arcsec = distances_corner_psfs_pixel * pixel_scale
 
-    distances_corner_psfs = run_state.get("distances_corner_psfs", 0)
-
     pass_fail_list = [False for _ in centroid_results_all]
     pass_fail_all = all(pass_fail_list)
 
@@ -157,25 +162,17 @@ def fov_calc(
 
     if detector == "LM":
         pass_fail_list = [
-            (
-                True
-                if effective_fov_x_arcsec > 10.0
-                and effective_fov_x_arcsec < 11.0
-                and effective_fov_y_arcsec > 10.0
-                and effective_fov_y_arcsec < 11.0
-                else False
+            bool(
+                10.0 < effective_fov_x_arcsec < 11.0
+                and 10.0 < effective_fov_y_arcsec < 11.0
             )
             for _ in centroid_results_all
         ]
     elif detector == "N":
         pass_fail_list = [
-            (
-                True
-                if effective_fov_x_arcsec > 12.48
-                and effective_fov_x_arcsec < 13.97
-                and effective_fov_y_arcsec > 12.48
-                and effective_fov_y_arcsec < 13.97
-                else False
+            bool(
+                12.48 < effective_fov_x_arcsec < 13.97
+                and 12.48 < effective_fov_y_arcsec < 13.97
             )
             for _ in centroid_results_all
         ]
@@ -185,18 +182,24 @@ def fov_calc(
     logging.info("--------------------------------")
     logging.info("--------------------------------")
     logging.info(
-        "Reqs (Ref. Overleaf doc IMG_OPT_01_Test_Description_Field_of_View_and_Ghost_Measurement):\n"
+        "Reqs (Ref. Overleaf doc "
+        "IMG_OPT_01_Test_Description_Field_of_View_and_Ghost_Measurement):\n"
         "1) METIS-1095: The FoV shall be 10.0 +1.0/-0.0 arcsec for the LM-arm and "
         "13.47 +0.50/-0.99 arcsec for the N-arm of the IMG."
     )
     logging.info("--------------------------------")
     logging.info("--------------------------------")
     logging.info(
-        f"EFFECTIVE FOV, DETECTOR {detector}: x: {effective_fov_x_arcsec:.2f} +/- {effective_fov_x_sigma_arcsec:.2f}; arcsec; y: {effective_fov_y_arcsec:.2f} +/- {effective_fov_y_sigma_arcsec:.2f} arcsec"
+        "EFFECTIVE FOV, DETECTOR %s: x: %.2f +/- %.2f; arcsec; y: %.2f +/- %.2f arcsec",
+        detector,
+        effective_fov_x_arcsec,
+        effective_fov_x_sigma_arcsec,
+        effective_fov_y_arcsec,
+        effective_fov_y_sigma_arcsec,
     )
     logging.info("--------------------------------")
     logging.info("--------------------------------")
-    logging.info(f"PASS/FAIL: {all(pass_fail_list)}")
+    logging.info("PASS/FAIL: %s", all(pass_fail_list))
     logging.info("--------------------------------")
     logging.info("--------------------------------")
 
@@ -213,6 +216,6 @@ def fov_calc(
             },
             f,
         )
-    logging.info(f"Saved FOV analysis results to {abs_file_name_pickle}")
+    logging.info("Saved FOV analysis results to %s", abs_file_name_pickle)
 
     return centroid_results_all

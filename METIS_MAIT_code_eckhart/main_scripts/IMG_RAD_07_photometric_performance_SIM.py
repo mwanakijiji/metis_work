@@ -1,46 +1,47 @@
-# Make simulated data for the IMG-RAD-07 photometric performance test
+"""
+Make simulated data for the IMG-RAD-07 photometric performance test
 
-# Reqs.:
-# - Ref. IMG-RAD-07 Photometric performance, E-XXX-NOVA-MET-NNNN 0-1,
-#   Table 1-1
-#
-# 1. METIS-2594 (verified by test at System level): METIS internal
-# calibration shall provide a range of flux levels matching that
-# encountered in scientific operation as defined in METIS-3137 -
-# E-TNT-MPIA-MET-1004.
+Reqs.:
+- Ref. IMG-RAD-07 Photometric performance, E-XXX-NOVA-MET-NNNN 0-1,
+  Table 1-1
 
-# 2. METIS-2595 (verified by test at Observatory level, applicable to
-# IMG): Relative photometric accuracy shall be better than 0.97% rms.
+1. METIS-2594 (verified by test at System level): METIS internal
+calibration shall provide a range of flux levels matching that
+encountered in scientific operation as defined in METIS-3137 -
+E-TNT-MPIA-MET-1004.
 
-# 3. METIS-2595 (verified by test at Observatory level, applicable to
-# IMG): Uncertainty in color correction should be less than 1% rms.
+2. METIS-2595 (verified by test at Observatory level, applicable to
+IMG): Relative photometric accuracy shall be better than 0.97% rms.
 
-# 4. METIS-2883 (verified by test at subsystem level): The source used
-# for detector linearity calibration METIS-3289 shall provide an
-# illumination that is spatially homogeneous within +/- 3%
-# peak-to-valley over the science field of view of METIS.
-# ------> Procedure: see Calibration Plan E-PLA-NOVA-MET-1066 4-0 24-08-2022, Sec. 2.3
+3. METIS-2595 (verified by test at Observatory level, applicable to
+IMG): Uncertainty in color correction should be less than 1% rms.
 
-# 5. METIS-3291 (verified by test at System level, applicable to WCU and
-# PIP): METIS shall allow the characterisation and correction of the
-# relative spectral response function (RSRF) with 3% precision over the
-# wavelength range specified in METIS-1090.
-# ------> Procedure: see Calibration Plan E-PLA-NOVA-MET-1066 4-0 24-08-2022, p. 23-4
+4. METIS-2883 (verified by test at subsystem level): The source used
+for detector linearity calibration METIS-3289 shall provide an
+illumination that is spatially homogeneous within +/- 3%
+peak-to-valley over the science field of view of METIS.
+------> Procedure: see Calibration Plan E-PLA-NOVA-MET-1066 4-0 24-08-2022, Sec. 2.3
 
-# 6. METIS-3300 (verified by test at System level, applicable to WCU):
-# The level of flux of the flat field shall be tunable to 15 discrete
-# values and shall be known at each step to 0.3%. The resulting spatial
-# illumination pattern shall remain constant across the field within
-# 0.5% (0.3% as goal) after tuning.
+5. METIS-3291 (verified by test at System level, applicable to WCU and
+PIP): METIS shall allow the characterisation and correction of the
+relative spectral response function (RSRF) with 3% precision over the
+wavelength range specified in METIS-1090.
+------> Procedure: see Calibration Plan E-PLA-NOVA-MET-1066 4-0 24-08-2022, p. 23-4
 
-# 7. METIS-3301 (verified by test at subsystem level, applicable to
-# WCU): After calibration, the distortions introduced by METIS shall be
-# removed to better than 0.5 mas (ca. 1/10 px for the L band imager) over
-# the full field of view.
+6. METIS-3300 (verified by test at System level, applicable to WCU):
+The level of flux of the flat field shall be tunable to 15 discrete
+values and shall be known at each step to 0.3%. The resulting spatial
+illumination pattern shall remain constant across the field within
+0.5% (0.3% as goal) after tuning.
 
-# 8. Stretch goal 1 (not an FDR req.): Aperture correction factor shall
-# be known.
+7. METIS-3301 (verified by test at subsystem level, applicable to
+WCU): After calibration, the distortions introduced by METIS shall be
+removed to better than 0.5 mas (ca. 1/10 px for the L band imager) over
+the full field of view.
 
+8. Stretch goal 1 (not an FDR req.): Aperture correction factor shall
+be known.
+"""
 
 import datetime
 import logging
@@ -48,13 +49,10 @@ import os
 import sys
 
 import numpy as np
+import scopesim as sim
 from astropy import units as u
 from astropy.io import fits
-import scopesim as sim
 
-import ipdb
-
-import modules.backbone_img_rad_07_phot as pp
 from modules.helpers import pipe_2_log
 from pipeline_registry import pipeline_stage
 
@@ -62,7 +60,8 @@ from pipeline_registry import pipeline_stage
 CLUSTER_PHOT = "IMG-RAD-07 Photometric performance"
 COLOR_PHOT = "#9467bd"
 
-# Edit this path if you have a custom install directory, otherwise comment it out. [For ReadTheDocs only]
+# Edit this path if you have a custom install directory, otherwise comment it out. [For
+# ReadTheDocs only]
 sim.link_irdb("../../../../")
 
 # simulate observations with METIS (comment this out if packages already exist)
@@ -72,10 +71,23 @@ sim.link_irdb("../../../../")
 sim.bug_report()
 
 
-
 def sanity_check_user_inputs(metis, obs_filter, fp_mask, pp_mask):
-    """Exit if configured filters/masks do not match the OpticalTrain."""
-    pass
+    """Exit if the filter/masks the OpticalTrain uses do not match the user inputs."""
+    checks = (
+        ("OBS filter", "!OBS.filter_name", obs_filter),
+        ("WCU FP mask", "!WCU.current_fpmask", fp_mask),
+        ("OBS PP mask", "!OBS.pupil_mask", pp_mask),
+    )
+    for label, key, user_value in checks:
+        if metis.cmds.get(key) != user_value:
+            logging.error(
+                "! ------- %s: %s does not match user input: %s",
+                label,
+                metis.cmds.get(key),
+                user_value,
+            )
+            sys.exit(1)
+    logging.info("User filter inputs match instrument inputs")
 
 
 @pipeline_stage(
@@ -108,8 +120,10 @@ def make_flat_frames(
     - dit: dit time
     - ndit: number of DITs
     - exptime: exposure time
-    - use_exp_time_only: if True, only use the exposure time to set the exposure time; but this will be broken
-        down into dit and ndit to avoid saturation, so integration parameters may change accordingly
+    - use_exp_time_only: if True, only use the exposure time to set the exposure time;
+      but this will be broken
+        down into dit and ndit to avoid saturation, so integration parameters may change
+        accordingly
     - out_dir: directory to write the simulated data to
     - intrapixel_capacitance: if False, turn off inter-pixel capacitance
 
@@ -129,7 +143,7 @@ def make_flat_frames(
                 "!WCU.current_fpmask": fp_mask,
                 "!OBS.pupil_mask": pp_mask,
                 "!OBS.nd_filter_name": nd_filter,
-                "!SIM.psf.interp_order": 1
+                "!SIM.psf.interp_order": 1,
             },
             # ignore_effects=["shot_noise", "readout_noise", "dark_current", "ipc"]
         )
@@ -141,7 +155,7 @@ def make_flat_frames(
                 "!OBS.filter_name": obs_filter,
                 "!WCU.current_fpmask": fp_mask,
                 "!OBS.pupil_mask": pp_mask,
-                "!SIM.psf.interp_order": 1
+                "!SIM.psf.interp_order": 1,
             },
             # ignore_effects=["shot_noise", "readout_noise", "dark_current", "ipc"]
         )
@@ -150,19 +164,21 @@ def make_flat_frames(
     # metis['ipc'].included = False # turn off inter-pixel capacitance for now
 
     if not intrapixel_capacitance:
-        # metis['ipc'].update(alpha_edge=0.0, alpha_corner=0.0, alpha_aniso=0.0) # turn off inter-pixel capacitance for now
+        # metis['ipc'].update(alpha_edge=0.0, alpha_corner=0.0, alpha_aniso=0.0) # turn
+        # off inter-pixel capacitance for now
         metis["ipc"].include = False
         logging.info("Turning off inter-pixel capacitance for now")
     else:
         logging.info("Using default inter-pixel capacitance")
 
-    # Set the pupil mask (transmission) and the matching PSF kernel (ScopeSim doesn't link the two)
+    # Set the pupil mask (transmission) and the matching PSF kernel (ScopeSim doesn't
+    # link the two)
     if psf_kernel is None:
         psf_kernel = pp_mask + "_WCU"
     metis["pupil_masks"].change_mask(pp_mask)
     metis["psf"].update(pupil_mask=psf_kernel)
-    logging.info("Setting WCU PP mask to be: " + str(pp_mask))
-    logging.info("Setting PSF kernel to be: " + str(psf_kernel))
+    logging.info("Setting WCU PP mask to be: %s", pp_mask)
+    logging.info("Setting PSF kernel to be: %s", psf_kernel)
 
     wcu = metis["wcu_source"]
 
@@ -179,11 +195,12 @@ def make_flat_frames(
     # loop over the integration times; each one gives one frame
     for t_int in t_integration:
 
-        # integration parameters for this frame: one DIT of length t_int (or exptime=t_int)
+        # integration parameters for this frame: one DIT of length t_int (or
+        # exptime=t_int)
         dit = float(t_int)
         ndit = 1
-        exptime = np.nan # dont modify for now
-        logging.info(f"Integration time: {t_int} s")
+        exptime = np.nan  # dont modify for now
+        logging.info("Integration time: %s s", t_int)
 
         logging.info("Closing WCU BB to get a background ...")
         wcu.set_bb_aperture(value=0.0)
@@ -192,7 +209,8 @@ def make_flat_frames(
 
         # save a perfect background (for debugging)
         # hdul_perfect_background = metis.image_planes[0].hdu
-        # hdul_perfect_background.writeto(out_dir + 'junk_perfect_background.fits', overwrite=True)
+        # hdul_perfect_background.writeto(out_dir + 'junk_perfect_background.fits',
+        # overwrite=True)
 
         pipe_2_log(
             lambda m=metis: m.effects.pprint_all(),
@@ -208,52 +226,22 @@ def make_flat_frames(
 
         logging.info("--------------------------------")
         logging.info("Background readout:")
-        logging.info("OBS filter: " + str(metis.cmds.get("!OBS.filter_name")))
-        logging.info("WCU FP mask: " + str(metis.cmds.get("!WCU.current_fpmask")))
-        logging.info("OBS PP mask: " + str(metis.cmds.get("!OBS.pupil_mask")))
-        logging.info("OBS ND filter: " + str(metis.cmds.get("!OBS.nd_filter_name")))
-        logging.info("NDIT: " + str(metis.cmds["!OBS.ndit"]))
-        logging.info("DIT: " + str(metis.cmds["!OBS.dit"]))
+        logging.info("OBS filter: %s", metis.cmds.get("!OBS.filter_name"))
+        logging.info("WCU FP mask: %s", metis.cmds.get("!WCU.current_fpmask"))
+        logging.info("OBS PP mask: %s", metis.cmds.get("!OBS.pupil_mask"))
+        logging.info("OBS ND filter: %s", metis.cmds.get("!OBS.nd_filter_name"))
+        logging.info("NDIT: %s", metis.cmds["!OBS.ndit"])
+        logging.info("DIT: %s", metis.cmds["!OBS.dit"])
         logging.info("WCU source state:")
         pipe_2_log(
             lambda m=metis: metis["wcu_source"].info(),
             msg="Optical train effects (background)",
         )
 
-        # sanity check that user inputs really are the same as what the instrument is using
-        def sanity_check_user_inputs(metis, obs_filter, fp_mask, pp_mask):
-            if metis.cmds.get("!OBS.filter_name") != obs_filter:
-                logging.error(
-                    "! ------- OBS filter: "
-                    + str(metis.cmds.get("!OBS.filter_name"))
-                    + " does not match user input: "
-                    + str(obs_filter)
-                )
-                exit()
-            if metis.cmds.get("!WCU.current_fpmask") != fp_mask:
-                logging.error(
-                    "! ------- WCU FP mask: "
-                    + str(metis.cmds.get("!WCU.current_fpmask"))
-                    + " does not match user input: "
-                    + str(fp_mask)
-                )
-                exit()
-            if metis.cmds.get("!OBS.pupil_mask") != pp_mask:
-                logging.error(
-                    "! ------- OBS PP mask: "
-                    + str(metis.cmds.get("!OBS.pupil_mask"))
-                    + " does not match user input: "
-                    + str(pp_mask)
-                )
-                exit()
-            else:
-                logging.info("User filter inputs match instrument inputs")
-            return
-
         # check for background-taking
-        # sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask, pp_mask=pp_mask)
+        # sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask,
+        # pp_mask=pp_mask)
 
-    
         if use_exp_time_only:
             # Method 1 for setting exposure times: exptime alone
             outhdul_off = metis.readout(exptime=exptime, reset=False)[0]
@@ -303,14 +291,12 @@ def make_flat_frames(
 
         hdul_new.writeto(abs_file_name_write, overwrite=True)
         logging.info(
-            "Saved background-subtracted readout without aberrations to "
-            + abs_file_name_write
+            "Saved background-subtracted readout without aberrations to %s",
+            abs_file_name_write,
         )
 
         logging.info("--------------------------------")
-        logging.info(f"Median of dark frame: {np.median(bckgd_subted):.4f}")
-
-    pass
+        logging.info("Median of dark frame: %.4f", np.median(bckgd_subted))
 
 
 def main():
@@ -343,18 +329,22 @@ def main():
     )
     os.makedirs(out_dir, exist_ok=True)
 
-    logging.info(f'Log file created at {now.strftime("%Y-%m-%d %H:%M:%S")}')
-    logging.info(f"Log file name: {log_file_name}")
-    logging.info(f'Log file directory: {stem + log_dir}')
-    logging.info(f"Simmed file output directory: {out_dir}")
+    logging.info("Log file created at %s", now.strftime("%Y-%m-%d %H:%M:%S"))
+    logging.info("Log file name: %s", log_file_name)
+    logging.info("Log file directory: %s", stem + log_dir)
+    logging.info("Simmed file output directory: %s", out_dir)
 
     # observing configurations (filters, masks, ND filters, integration times)
     lm_dark_configs = [
         {
-            "fp_mask": "grid_lm", "pp_mask": "SPM-LM", "psf_kernel": "SPM-LM",
-            "obs_filter": "HCI_L_short", "nd_filter": None,
-            "obs_mode": "wcu_img_lm", "use_exp_time_only": False
-            }
+            "fp_mask": "grid_lm",
+            "pp_mask": "SPM-LM",
+            "psf_kernel": "SPM-LM",
+            "obs_filter": "HCI_L_short",
+            "nd_filter": None,
+            "obs_mode": "wcu_img_lm",
+            "use_exp_time_only": False,
+        }
     ]
 
     # use different integration times (need at least 15 background levels)
@@ -362,8 +352,6 @@ def main():
     make_flat_frames(**lm_dark_configs[0], t_integration=t_integration, out_dir=out_dir)
 
     # loop over configurations and generate the simulated data
-
-    pass
 
 
 if __name__ == "__main__":

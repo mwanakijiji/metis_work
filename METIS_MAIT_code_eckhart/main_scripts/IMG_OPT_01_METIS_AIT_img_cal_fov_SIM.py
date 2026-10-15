@@ -1,45 +1,37 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # DRAFT IMG-OPT-01
+"""
+DRAFT IMG-OPT-01
 
-# Maked simulated data for the IMG-OPT-1 FOV, distortion, and ghost measurements
+Maked simulated data for the IMG-OPT-1 FOV, distortion, and ghost measurements
 
-# Reqs.:
-# - Ref. Overleaf doc IMG_OPT_01_Test_Description_Field_of_View_and_Ghost_Measurement.pdf
-#
-# 1. METIS-1095: The FoV shall be 10.0 +1.0/-0.0 arcsec for the LM-arm and 13.47 +0.50/-0.99 arcsec
-# for the N-arm of the IMG.
+Reqs.:
+- Ref. Overleaf doc IMG_OPT_01_Test_Description_Field_of_View_and_Ghost_Measurement.pdf
+
+1. METIS-1095: The FoV shall be 10.0 +1.0/-0.0 arcsec for the LM-arm and 13.47
+   +0.50/-0.99 arcsec
+for the N-arm of the IMG.
+"""
+
+import datetime
+import logging
+import os
+import time
 
 import numpy as np
-from astropy.io import fits
-from astropy import units as u
-from astropy.wcs import WCS
-
-import scipy
-
-from matplotlib import pyplot as plt
-from matplotlib import colors
-
-import time
-import ipdb
-import itertools
-import logging
-import datetime
-import io
-import os
-import sys
-import yaml
-
 import scopesim as sim
+import yaml
+from astropy import units as u
+from astropy.io import fits
 
-from modules.helpers import pipe_2_log, setup_logging, load_config_and_pipe
+from modules.helpers import load_config_and_pipe, pipe_2_log, setup_logging
 from pipeline_registry import CLUSTER_FOV, COLOR_FOV, pipeline_stage
 
 
 def read_simulation_configurations(simulation_config_file):
-    # filters, etc. to set for each simulated data file
-    with open(simulation_config_file, "r") as f:
+    """Read the filters, etc. to set for each simulated data file from a YAML file."""
+    with open(simulation_config_file, "r", encoding="utf-8") as f:
         simulation_configs = yaml.load(f, Loader=yaml.FullLoader)
     return simulation_configs
 
@@ -51,13 +43,9 @@ def read_simulation_configurations(simulation_config_file):
     label="Generate FOV sims",
 )
 def main():
+    """Simulate the IMG-OPT-01 field-of-view data with ScopeSim."""
 
     stem = "/podman-share/metis_work/playing_with_scopesim/"
-
-    # config file with the observing parameters
-    observing_config_file = (
-        stem + "config/config_file_IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_observing.yaml"
-    )
 
     now = datetime.datetime.now()
     log_dir = stem + "IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_logs/"
@@ -71,88 +59,89 @@ def main():
     # initialize logging
     setup_logging(log_dir=log_dir, log_file_name=log_file_name, now=now)
 
-    pipe_2_log(lambda: sim.bug_report(), msg="ScopeSim bug report")
+    pipe_2_log(sim.bug_report, msg="ScopeSim bug report")
 
-    # Edit this path if you have a custom install directory, otherwise comment it out. [For ReadTheDocs only]
+    # Edit this path if you have a custom install directory, otherwise comment it out.
+    # [For ReadTheDocs only]
     sim.link_irdb("../../../")
 
     # simulate observations with METIS (comment this out if packages already exist)
     # sim.download_packages(["METIS", "ELT", "Armazones"])
 
-    """
-    # for creating permutations of all observing configurations
-
-    # lists of imaging filters
-    filter_list_img_lm = [
-        'Lp',
-        'H2Oice',
-        'shortL',
-        'IB4.05',
-        'PAH3.3',
-        'PAH3.3ref',
-        'Br-alpha',
-        'Br-alpharef',
-        'Mp',
-        'CO(1-0)/ice',
-        'COref',
-        'HCIL-short',
-        'HCIL-long',
-        'full_L',
-        'full_M'
-    ]
-
-    filter_list_img_n = [
-        'N1', 
-        'N2',
-        'PAH8.6',
-        'PAH8.6_ref',
-        'PAH11.25',
-        'PAH11.25_ref',
-        '[NeII]',
-        '[NeII]_ref',
-        '[SIV]',
-        '[SIV]_ref',
-        'N3',
-        'full_N'
-    ]
-
-    # WCU FP2 focal planemask wheel
-    wcu_fp2_masks_lm = ["pinhole_lm", "grid_lm", "grid_lms"]
-    wcu_fp2_masks_n = ["pinhole_n"]
-
-    dict_config = {}
-
-    # Generate permutations for LM filters and masks
-    obs_counter = 1
-    for filt, mask in itertools.product(filter_list_img_lm, wcu_fp2_masks_lm):
-        obs_name = f"obs{obs_counter}"
-        dict_config[obs_name] = {
-            'mode': 'wcu_img_lm',
-            'filter': filt,
-            'fpmask': mask,
-            'ndit': 10,
-            'dit': 1.
-        }
-        obs_counter += 1
-
-    # Generate permutations for N filters and masks
-    for filt, mask in itertools.product(filter_list_img_n, wcu_fp2_masks_n):
-        obs_name = f"obs{obs_counter}"
-        dict_config[obs_name] = {
-            'mode': 'wcu_img_lm',
-            'filter': filt,
-            'fpmask': mask,
-            'ndit': 10,
-            'dit': 1.
-        }
-        obs_counter += 1
-    """
+    # # for creating permutations of all observing configurations
+    #
+    # # lists of imaging filters
+    # filter_list_img_lm = [
+    #     'Lp',
+    #     'H2Oice',
+    #     'shortL',
+    #     'IB4.05',
+    #     'PAH3.3',
+    #     'PAH3.3ref',
+    #     'Br-alpha',
+    #     'Br-alpharef',
+    #     'Mp',
+    #     'CO(1-0)/ice',
+    #     'COref',
+    #     'HCIL-short',
+    #     'HCIL-long',
+    #     'full_L',
+    #     'full_M'
+    # ]
+    #
+    # filter_list_img_n = [
+    #     'N1',
+    #     'N2',
+    #     'PAH8.6',
+    #     'PAH8.6_ref',
+    #     'PAH11.25',
+    #     'PAH11.25_ref',
+    #     '[NeII]',
+    #     '[NeII]_ref',
+    #     '[SIV]',
+    #     '[SIV]_ref',
+    #     'N3',
+    #     'full_N'
+    # ]
+    #
+    # # WCU FP2 focal planemask wheel
+    # wcu_fp2_masks_lm = ["pinhole_lm", "grid_lm", "grid_lms"]
+    # wcu_fp2_masks_n = ["pinhole_n"]
+    #
+    # dict_config = {}
+    #
+    # # Generate permutations for LM filters and masks
+    # obs_counter = 1
+    # for filt, mask in itertools.product(filter_list_img_lm, wcu_fp2_masks_lm):
+    #     obs_name = f"obs{obs_counter}"
+    #     dict_config[obs_name] = {
+    #         'mode': 'wcu_img_lm',
+    #         'filter': filt,
+    #         'fpmask': mask,
+    #         'ndit': 10,
+    #         'dit': 1.
+    #     }
+    #     obs_counter += 1
+    #
+    # # Generate permutations for N filters and masks
+    # for filt, mask in itertools.product(filter_list_img_n, wcu_fp2_masks_n):
+    #     obs_name = f"obs{obs_counter}"
+    #     dict_config[obs_name] = {
+    #         'mode': 'wcu_img_lm',
+    #         'filter': filt,
+    #         'fpmask': mask,
+    #         'ndit': 10,
+    #         'dit': 1.
+    #     }
+    #     obs_counter += 1
+    #
 
     # read in the observing configurations
     # dict_config = read_simulation_configurations(observing_config_file)
 
     # read in the simulation configurations
-    # instrument_configs = read_simulation_configurations(simulation_config_file = stem + 'config/config_file_IMG_01_METIS_AIT_img_cal_fov_SIM.yaml')
+    # instrument_configs = read_simulation_configurations(simulation_config_file = stem
+    # + 'config/config_file_IMG_01_METIS_AIT_img_cal_fov_SIM.yaml')
 
     sim_states_config_file = (
         stem + "config/config_file_IMG_01_METIS_AIT_img_cal_fov_SIM.yaml"
@@ -163,18 +152,18 @@ def main():
     defaults = sim_states_config.get("defaults", {})
     runs = sim_states_config.get("simulation_configs", [])
 
-    # to set up the data states, merge config data state defaults with overrides that are specific for each run
+    # to set up the data states, merge config data state defaults with overrides that
+    # are specific for each run
     sim_states = []
     for entry in runs:
         merged = {**defaults, **entry}
-        fname = merged["file_name_abs_trunc"]
         sim_states.append(merged)
 
     # dictionary of all observing configurations
-    logging.info("Number of observing configurations: " + str(len(sim_states)))
+    logging.info("Number of observing configurations: %s", len(sim_states))
     for idx, config in enumerate(sim_states):
         obs_name = f"obs{idx}"
-        logging.info(f"\n{obs_name}: {config}")
+        logging.info("\n%s: %s", obs_name, config)
 
     # fpmasks_list = ["open", "pinhole_lm", "pinhole_n", "grid_lm"]
 
@@ -189,10 +178,10 @@ def main():
         )  # arcsec; absolute position (x,y)
 
         for i, pos_dither in enumerate(dither_positions):
-            logging.info(f"Dither {i}: pos={pos_dither} arcsec")
+            logging.info("Dither %s: pos=%s arcsec", i, pos_dither)
 
             logging.info("--------------------------------")
-            logging.info("Running config: " + str(config_params))
+            logging.info("Running config: %s", config_params)
             logging.info("--------------------------------")
 
             obs_mode = config_params["obs_mode"]
@@ -240,10 +229,10 @@ def main():
                 angle=0.0,
             )
             metis["pupil_masks"].change_mask(pp_mask)
-            logging.info("OBS filter: " + str(metis.cmds.get("!OBS.filter_name")))
-            logging.info("WCU FP mask: " + str(metis.cmds.get("!WCU.current_fpmask")))
-            logging.info("OBS PP mask: " + str(metis.cmds.get("!OBS.pupil_mask")))
-            logging.info("OBS ND filter: " + str(metis.cmds.get("!OBS.nd_filter_name")))
+            logging.info("OBS filter: %s", metis.cmds.get("!OBS.filter_name"))
+            logging.info("WCU FP mask: %s", metis.cmds.get("!WCU.current_fpmask"))
+            logging.info("OBS PP mask: %s", metis.cmds.get("!OBS.pupil_mask"))
+            logging.info("OBS ND filter: %s", metis.cmds.get("!OBS.nd_filter_name"))
 
             pipe_2_log(
                 lambda m=metis: m.effects.pprint_all(),
@@ -254,16 +243,16 @@ def main():
             #########################################################
             # Set the WCU Flux Controlling Mask to "CLOSED" (redundant?)
             closed_value = 0.0
-            logging.info(f"Setting the WCU BB aperture to {closed_value}")
+            logging.info("Setting the WCU BB aperture to %s", closed_value)
             wcu.set_bb_aperture(value=float(closed_value))
-            logging.info(f"wcu.bb_aperture: {wcu.bb_aperture}")
+            logging.info("wcu.bb_aperture: %s", wcu.bb_aperture)
 
             #########################################################
             # Set the WCU BB source to 1000 K.
             bb_temp = 1000 * u.K
-            logging.info(f"Setting the WCU BB temperature to {bb_temp}.")
+            logging.info("Setting the WCU BB temperature to %s.", bb_temp)
             wcu.set_temperature(bb_temp=bb_temp)
-            logging.info(f"wcu.bb_temp: {wcu.bb_temp}")
+            logging.info("wcu.bb_temp: %s", wcu.bb_temp)
 
             #########################################################
             # Wait for BB source to reach temperature.
@@ -282,7 +271,7 @@ def main():
             # see current observing params
             logging.info("All OBS parameters:")
             for key, value in cmd["OBS"].items():
-                logging.info(f"  {key}: {value}")
+                logging.info("  %s: %s", key, value)
 
             # compile the observation
             logging.info("Compiling the observation.")
@@ -362,8 +351,8 @@ def main():
 
             hdul_new.writeto(abs_file_name_write, overwrite=True)
             logging.info(
-                "Saved background-subtracted readout without aberrations to "
-                + abs_file_name_write
+                "Saved background-subtracted readout without aberrations to %s",
+                abs_file_name_write,
             )
 
 

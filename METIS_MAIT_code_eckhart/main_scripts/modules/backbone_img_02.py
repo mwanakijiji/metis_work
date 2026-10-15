@@ -1,34 +1,30 @@
+"""Analysis backbone for the IMG-OPT-02 geometric distortion test."""
+
 import logging
 import os
+import pickle
 from dataclasses import dataclass
-import ipdb
-import numpy as np
+
 import matplotlib.pyplot as plt
-from .helpers import (
-    fit_psf_gaussian_from_native_array,
-    fit_simmed_psfs,
-    load_config_and_pipe,
-)
-from .psf_grid_prep import (
-    load_grid_data_from_fits,
-    oversample_1st_pass_centroid,
-)
+import numpy as np
 from pipeline_registry import (
     CLUSTER_DISTORTION,
     COLOR_DISTORTION,
     pipeline_stage,
 )
-from .strehl_fcns import (
-    fit_annular_aperture_fixed_parameters,
-    fit_annular_aperture_free_parameters,
+
+from .helpers import fit_psf_gaussian_from_native_array, load_config_and_pipe
+from .psf_grid_prep import (
+    load_grid_data_from_fits,
+    oversample_1st_pass_centroid,
 )
-from photutils.centroids import centroid_2dg, centroid_sources
-import pickle
 
 
 @dataclass(frozen=True)
 class SinglePsfFitResult:
-    """Per-PSF outputs from Gaussian fit (native pixel coords) and optional Strehl dicts."""
+    """
+    Per-PSF outputs from Gaussian fit (native pixel coords) and optional Strehl dicts.
+    """
 
     # coord_x_fullarray_normsamp: float
     # coord_y_fullarray_normsamp: float
@@ -70,7 +66,8 @@ def process_one_psf_image_distortion(
     oversample_factor : int
         Factor used to oversample the PSF cutout before centroiding and model fitting.
     coords_1st_pass_oversamp : list[float, float]
-        X and Y coordinates of the 1st-pass centroid in oversampled pixel coordinates (using the full 2D array)
+        X and Y coordinates of the 1st-pass centroid in oversampled pixel coordinates
+        (using the full 2D array)
     filter_name : str
         Name of the observing filter associated with the PSF.
     fp_mask : str
@@ -94,9 +91,13 @@ def process_one_psf_image_distortion(
     -------
     SinglePsfFitResult
         Dataclass containing the Gaussian-fit centroid/FWHM/amplitude values in native
-        pixel units, the Gaussian-based Strehl estimate, and any optional Strehl metrics.
+        pixel units, the Gaussian-based Strehl estimate, and any optional Strehl
+        metrics.
     """
-    logging.info(f"Processing PSF {num_coord} of {num_psfs_to_process}")
+    # not used yet: accepted so the caller can pass the same settings as IMG-03
+    del filter_name, fp_mask, pp_mask, config_observing, fit_method
+    del fit_simmed_psf, fit_annular_aperture_fixed, fit_annular_aperture_free
+    logging.info("Processing PSF %s of %s", num_coord, num_psfs_to_process)
 
     # cookie_edge_size_original = original_array.shape[0]
 
@@ -115,12 +116,6 @@ def process_one_psf_image_distortion(
     ]
     y_center_pix_gaussian_best_fit_fullarray_oversamp = gaussian_fit_outputs[
         "y_center_pix_fullarray_oversamp"
-    ]
-    fwhm_x_pix_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs[
-        "fwhm_x_pix_cookie_oversamp"
-    ]
-    fwhm_y_pix_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs[
-        "fwhm_y_pix_cookie_oversamp"
     ]
     amplitude_counts_gaussian_best_fit_cookie_oversamp = gaussian_fit_outputs[
         "amplitude_counts_cookie_oversamp"
@@ -144,10 +139,14 @@ def process_one_psf_image_distortion(
     # y_cen_oversamp = cookie_cutout_this_psf_oversamp.shape[0] / 2
 
     logging.info(
-        f"Gaussian-fit FWHM (x, y) (native sampling): ({fwhm_x_pix_gaussian_best_fit_fullarray_normsamp:.2f}, {fwhm_y_pix_gaussian_best_fit_fullarray_normsamp:.2f})"
+        "Gaussian-fit FWHM (x, y) (native sampling): (%.2f, %.2f)",
+        fwhm_x_pix_gaussian_best_fit_fullarray_normsamp,
+        fwhm_y_pix_gaussian_best_fit_fullarray_normsamp,
     )
     logging.info(
-        f"Gaussian-fit centroid (x, y) (native sampling): ({x_center_pix_gaussian_best_fit_fullarray_normsamp:.2f}, {y_center_pix_gaussian_best_fit_fullarray_normsamp:.2f})"
+        "Gaussian-fit centroid (x, y) (native sampling): (%.2f, %.2f)",
+        x_center_pix_gaussian_best_fit_fullarray_normsamp,
+        y_center_pix_gaussian_best_fit_fullarray_normsamp,
     )
 
     # save an FYI plot of oversampled region around PSF
@@ -196,7 +195,7 @@ def process_one_psf_image_distortion(
         f"fyi_plot_oversampled_region_around_psf_{num_coord}.png",
     )
     plt.savefig(file_name_plot)
-    logging.info(f"Saved {file_name_plot}")
+    logging.info("Saved %s", file_name_plot)
     plt.close()
 
     centroid_results = {
@@ -215,15 +214,18 @@ def process_one_psf_image_distortion(
         "amplitude_counts": float(amplitude_counts_gaussian_best_fit_cookie_oversamp),
     }
 
-    """
-    return SinglePsfFitResult(
-        coord_x_fullarray_normsamp=float(x_center_pix_gaussian_best_fit_fullarray_normsamp),
-        coord_y_fullarray_normsamp=float(y_center_pix_gaussian_best_fit_fullarray_normsamp),
-        fwhm_x_fullarray_normsamp=float(fwhm_x_pix_gaussian_best_fit_fullarray_normsamp),
-        fwhm_y_fullarray_normsamp=float(fwhm_y_pix_gaussian_best_fit_fullarray_normsamp),
-        amplitude_counts=float(amplitude_counts_gaussian_best_fit_cookie_oversamp),
-    )
-    """
+    # return SinglePsfFitResult(
+    #     coord_x_fullarray_normsamp=float(
+    #         x_center_pix_gaussian_best_fit_fullarray_normsamp
+    #     ),
+    #     coord_y_fullarray_normsamp=float(
+    #         y_center_pix_gaussian_best_fit_fullarray_normsamp
+    #     ),
+    # fwhm_x_fullarray_normsamp=float(fwhm_x_pix_gaussian_best_fit_fullarray_normsamp),
+    # fwhm_y_fullarray_normsamp=float(fwhm_y_pix_gaussian_best_fit_fullarray_normsamp),
+    #     amplitude_counts=float(amplitude_counts_gaussian_best_fit_cookie_oversamp),
+    # )
+    #
     return centroid_results
 
 
@@ -287,9 +289,10 @@ def image_distortion(
         and saves a detector-frame diagnostic plot annotated with Strehl values.
     """
 
-    # edge_size_original = 21 # pixels along one side of the cutout, original pixel sampling
+    # edge_size_original = 21 # pixels along one side of the cutout, original pixel
+    # sampling
     oversample_factor = 3  # try to keep odd to facilitate centering
-    logging.info(f"PSF oversampling factor: {oversample_factor}")
+    logging.info("PSF oversampling factor: %s", oversample_factor)
 
     # retrieve coord guesses as a starting point
     config_coords_guesses_config = load_config_and_pipe(
@@ -298,7 +301,8 @@ def image_distortion(
     )
 
     # retrieve data, oversample, and do 1st-pass centroiding
-    # (note oversampled empirical frame is only used for centroiding; the cost function for fitting later on just uses the frame as-is)
+    # (note oversampled empirical frame is only used for centroiding; the cost function
+    # for fitting later on just uses the frame as-is)
     grid_data, grid_header = load_grid_data_from_fits(file_name, hdu_index=1)
     prep = oversample_1st_pass_centroid(
         grid_data,
@@ -310,23 +314,6 @@ def image_distortion(
 
     # unpack quantities
     grid_data = prep.grid_data  # original data (native pixel scale)
-    grid_data_original = prep.grid_data_original  # original data (native pixel scale)
-    grid_data_oversamp = prep.grid_data_oversamp  # oversampled data
-    x_pos_pix_oversamp_1st_pass = (
-        prep.x_pos_pix_oversamp
-    )  # x-positions of the centroids (oversampled)
-    y_pos_pix_oversamp_1st_pass = (
-        prep.y_pos_pix_oversamp
-    )  # y-positions of the centroids (oversampled)
-    coords_centroided_1st_pass_all_oversamp = (
-        prep.coords_centroided_1st_pass_all_oversamp
-    )  # coordinates of the centroids (oversampled)
-    x_pos_pix_native_1st_pass = (
-        prep.x_pos_pix_native
-    )  # x-positions of the centroids (native pixel scale)
-    y_pos_pix_native_1st_pass = (
-        prep.y_pos_pix_native
-    )  # y-positions of the centroids (native pixel scale)
     coords_centroided_1st_pass_all_native = (
         prep.coords_centroided_1st_pass_all_native
     )  # coordinates of the centroids (native pixel scale)
@@ -337,26 +324,15 @@ def image_distortion(
     total_psfs = prep.total_psfs  # total number of PSFs in the grid
 
     logging.info("Finding PSF centroids, first pass (via oversample_1st_pass_centroid)")
-    logging.info(f"Raw PSF cutout size (oversampled): {raw_cutout_size_oversampled}")
-    logging.info(f"Total PSFs: {total_psfs}")
+    logging.info("Raw PSF cutout size (oversampled): %s", raw_cutout_size_oversampled)
+    logging.info("Total PSFs: %s", total_psfs)
     if psfs_subset == "all":
-        logging.info(f"Processing all {total_psfs} PSFs")
+        logging.info("Processing all %s PSFs", total_psfs)
     elif isinstance(psfs_subset, int):
-        logging.info(f"Processing {num_psfs_to_process} out of {total_psfs} PSFs")
-    logging.info(f"Processing {num_psfs_to_process} out of {total_psfs} PSFs")
+        logging.info("Processing %s out of %s PSFs", num_psfs_to_process, total_psfs)
+    logging.info("Processing %s out of %s PSFs", num_psfs_to_process, total_psfs)
 
-    # initialize arrays/dicts to store results
-    (
-        coord_x_array,
-        coord_y_array,
-        fwhm_x_pix_array,
-        fwhm_y_pix_array,
-        sigma_x_pix_array,
-        sigma_y_pix_array,
-        angle_theta_array,
-        amplitude_counts_array,
-        gaussian_based_strehl_array,
-    ) = (np.zeros(total_psfs) for _ in range(9))
+    # initialize dict to store results
     centroid_results_all = {}  # to contain info from all the PSFs
 
     # oversample the grid data
@@ -366,7 +342,8 @@ def image_distortion(
     for num_coord in range(num_psfs_to_process):
 
         # centroid_results_this_psf = {} # to contain info from this PSF alone
-        # make cutout of the PSF from the original array, using the closest int to the 1st pass centroids
+        # make cutout of the PSF from the original array, using the closest int to the
+        # 1st pass centroids
 
         # 1-st pass coords of the PSF in the original array
         x_cen_1st_pass_native = coords_centroided_1st_pass_all_native[num_coord][1]
@@ -397,54 +374,59 @@ def image_distortion(
             fit_annular_aperture_free=fit_annular_aperture_free,
         )
 
-        """
-        # for each coord value in result, put it in centroid_results_this_psf as a key-value pair
-        for key, value in result.centroid_results.items():
-            centroid_results_this_psf[key] = value
-        # also include the 1st-pass centroid coordinates
-        centroid_results_this_psf['x_cen_1st_pass_native'] = x_cen_1st_pass_native
-        centroid_results_this_psf['y_cen_1st_pass_native'] = y_cen_1st_pass_native
-        """
+        # # for each coord value in result, put it in centroid_results_this_psf as a
+        # key-value pair
+        # for key, value in result.centroid_results.items():
+        #     centroid_results_this_psf[key] = value
+        # # also include the 1st-pass centroid coordinates
+        # centroid_results_this_psf['x_cen_1st_pass_native'] = x_cen_1st_pass_native
+        # centroid_results_this_psf['y_cen_1st_pass_native'] = y_cen_1st_pass_native
+        #
         # put the results from this PSF into the overall dictionary
         centroid_results_all[f"psf_num_{num_coord:02d}"] = centroid_results_this_psf
 
     # pass/fail placeholder: criteria for distortion requirement TBD
-    pass_fail_list = []
-    criterion_key = "PLACEHOLDER"
-    for psf_results in centroid_results_all.values():
-        # pass_fail = True if psf_results[criterion_key] >= 0.8 else False
-        # pass_fail_list.append(pass_fail)
-        pass_fail_list.append(False)
+    # (eventually: pass_fail = psf_results[criterion_key] >= 0.8 for each PSF)
+    pass_fail_list = [False for _ in centroid_results_all.values()]
     pass_fail_all = all(pass_fail_list)
 
     logging.info("--------------------------------")
     logging.info("--------------------------------")
     logging.info(
         "Reqs (Ref. Overleaf doc IMG_OPT_02_Test_Geometric_Distortion):\n"
-        "1) METIS-1097: The Imager shall provide a pixel scale of 5.47 +0.26/-0.26 mas/pix "
+        "1) METIS-1097: The Imager shall provide a pixel scale of 5.47 +0.26/-0.26 "
+        "mas/pix "
         "for the LM-band and 6.79 +0.25/-0.50 mas/pix for the N-band.\n"
-        "2) METIS-3502: After calibration, the distortions introduced by METIS shall be "
-        "removed to better than 0.5 mas (ca. 1/10 px for the L-band imager) over the full "
+        "2) METIS-3502: After calibration, the distortions introduced by METIS shall "
+        "be "
+        "removed to better than 0.5 mas (ca. 1/10 px for the L-band imager) over the "
+        "full "
         "field of view.\n"
-        "3) METIS-8222: The center of the H2RG chip within IMG-LM-DET shall be offset from "
-        "the METIS optical axis by 175 mas +/- 25 mas on-sky PtV in the 'across H2RG stripe' "
-        "direction (i.e., perpendicular to the orientation of the 32 stripes in the H2RG detector).\n"
-        "4) METIS-9920: Image scale and distortion of METIS shall be constant (for each optical "
-        "configuration, even after change of observing modes) to an accuracy of 1e-3 (goal: 1e-4) "
-        "at L/M-band and 2e-3 (goal: 2e-4) at N-band with respect to the full field of view."
+        "3) METIS-8222: The center of the H2RG chip within IMG-LM-DET shall be offset "
+        "from "
+        "the METIS optical axis by 175 mas +/- 25 mas on-sky PtV in the 'across H2RG "
+        "stripe' "
+        "direction (i.e., perpendicular to the orientation of the 32 stripes in the "
+        "H2RG detector).\n"
+        "4) METIS-9920: Image scale and distortion of METIS shall be constant (for "
+        "each optical "
+        "configuration, even after change of observing modes) to an accuracy of 1e-3 "
+        "(goal: 1e-4) "
+        "at L/M-band and 2e-3 (goal: 2e-4) at N-band with respect to the full field of "
+        "view."
     )
     logging.info("--------------------------------")
     logging.info("--------------------------------")
-    logging.info(f"PIXEL SCALE CALCULATION MACHINERY TBD")
+    logging.info("PIXEL SCALE CALCULATION MACHINERY TBD")
     logging.info("--------------------------------")
     logging.info("--------------------------------")
-    logging.info(f"DISTORTION CALCULATION MACHINERY TBD")
+    logging.info("DISTORTION CALCULATION MACHINERY TBD")
     logging.info("--------------------------------")
     logging.info("--------------------------------")
-    logging.info(f"CENTERING CALCULATION MACHINERY TBD")
+    logging.info("CENTERING CALCULATION MACHINERY TBD")
     logging.info("--------------------------------")
     logging.info("--------------------------------")
-    logging.info(f"PASS/FAIL TBD: {all(pass_fail_list)}")
+    logging.info("PASS/FAIL TBD: %s", pass_fail_all)
     logging.info("--------------------------------")
     logging.info("--------------------------------")
 
@@ -461,6 +443,6 @@ def image_distortion(
             },
             f,
         )
-    logging.info(f"Saved centroid results to {abs_file_name_pickle}")
+    logging.info("Saved centroid results to %s", abs_file_name_pickle)
 
-    return  # centroid_results_all
+    # (could return centroid_results_all)

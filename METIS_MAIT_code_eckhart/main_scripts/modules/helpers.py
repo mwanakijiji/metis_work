@@ -1,23 +1,23 @@
+"""Shared helpers: config/logging, PSF models and fits, FYI plots, ScopeSim PSF sims."""
+
 import io
 import logging
 import os
 import sys
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from astropy.io import fits
-from astropy import units as u
-from astropy.visualization import ZScaleInterval
-from scipy.ndimage import zoom
-from scipy.special import j1
-from scipy.optimize import curve_fit
-from skimage import measure
 import scopesim as sim
 import yaml
+from astropy.io import fits
+from astropy.visualization import ZScaleInterval
+from scipy import special
+from scipy.ndimage import shift, zoom
+from scipy.optimize import curve_fit
 from scipy.signal import fftconvolve
+from skimage import measure
 from skimage.measure import block_reduce
-from scipy.ndimage import shift
-import ipdb
 
 
 def setup_logging(log_dir, log_file_name, now=None):
@@ -46,9 +46,9 @@ def setup_logging(log_dir, log_file_name, now=None):
         force=True,
     )
     if now is not None:
-        logging.info(f'Log file created at {now.strftime("%Y-%m-%d %H:%M:%S")}')
-    logging.info(f"Log file name: {log_file_name}")
-    logging.info(f"Log file directory: {log_dir}")
+        logging.info("Log file created at %s", now.strftime("%Y-%m-%d %H:%M:%S"))
+    logging.info("Log file name: %s", log_file_name)
+    logging.info("Log file directory: %s", log_dir)
 
 
 def load_config_and_pipe(config_file_choice, print_one_line=False):
@@ -69,31 +69,31 @@ def load_config_and_pipe(config_file_choice, print_one_line=False):
         The configuration dictionary loaded from file.
     """
 
-    with open(config_file_choice, "r") as config_file:
+    with open(config_file_choice, "r", encoding="utf-8") as config_file:
 
         logging.info("--------------------------------")
         config_this = yaml.safe_load(config_file)
 
-        logging.info(f"Loading config file: {config_file_choice}")
+        logging.info("Loading config file: %s", config_file_choice)
 
         # print stuff to log
         if print_one_line:
             # print everything on one line
-            logging.info(f"Config data: {config_this}")
+            logging.info("Config data: %s", config_this)
         else:
             # print in more readable format
             logging.info("Config data:")
             for key, value in config_this.items():
                 if isinstance(value, (list, tuple, dict)):
-                    logging.info(f"\t{key}:")
+                    logging.info("\t%s:", key)
                     if isinstance(value, dict):
                         for subkey, subval in value.items():
-                            logging.info(f"\t  {subkey}: {subval}")
+                            logging.info("\t  %s: %s", subkey, subval)
                     else:  # It's a list or tuple
                         for item in value:
-                            logging.info(f"\t  {item}")
+                            logging.info("\t  %s", item)
                 else:
-                    logging.info(f"\t{key}: {value}")
+                    logging.info("\t%s: %s", key, value)
 
     return config_this
 
@@ -149,7 +149,7 @@ def jinc(x):
     x = np.asarray(x)
     y = np.empty_like(x, dtype=float)
     mask = x != 0
-    y[mask] = j1(x[mask]) / x[mask]
+    y[mask] = special.jv(1, x[mask]) / x[mask]  # J_1(x) / x
     y[~mask] = 0.5
     return y
 
@@ -157,8 +157,8 @@ def jinc(x):
 def intensity_annular_aperture(
     r_rad_array,
     wavel,
-    D_aperture,
-    D_obscuration,
+    d_aperture,
+    d_obscuration,
     ampl=1,
     pinhole_diam_rad=None,
     pixel_scale_mas=5.47,
@@ -176,14 +176,15 @@ def intensity_annular_aperture(
         2D array of radial distances from the center (in radians).
     wavel : float
         Wavelength (in meters).
-    D_aperture : float
+    d_aperture : float
         Aperture diameter (in meters).
-    D_obscuration : float
+    d_obscuration : float
         Central obscuration diameter (in meters).
     ampl : float, optional
         Amplitude scaling factor for the intensity (default 1).
     pinhole_diam_rad : float or None, optional
-        Size of the pinhole in radians (if None, only the analytical PSF is used; equivalent to a pinhole delta function).
+        Size of the pinhole in radians (if None, only the analytical PSF is used;
+        equivalent to a pinhole delta function).
     pixel_scale_mas : float, optional
         Detector pixel scale in mas/pixel (default 5.47).
     fac_oversamp : float or int, optional
@@ -199,12 +200,13 @@ def intensity_annular_aperture(
         2D array of intensity on the detector.
     """
 
-    nu_ = np.pi * r_rad_array * D_aperture / wavel  # unitless
+    nu_ = np.pi * r_rad_array * d_aperture / wavel  # unitless
 
-    eps_ = D_obscuration / D_aperture  # unitless
+    eps_ = d_obscuration / d_aperture  # unitless
 
-    # see Eqn. 43 in 'E-REP-MPIA-1203 0-1 xx-10-2024', or Eqn. 1 in Tschunko 1974, Appl Opt
-    I_r = (1 / (1 - eps_**2) ** 2) * (
+    # see Eqn. 43 in 'E-REP-MPIA-1203 0-1 xx-10-2024', or Eqn. 1 in Tschunko 1974, Appl
+    # Opt
+    intensity = (1 / (1 - eps_**2) ** 2) * (
         (2 * jinc(nu_)) - eps_**2 * (2 * jinc(nu_ * eps_))
     ) ** 2
 
@@ -215,25 +217,22 @@ def intensity_annular_aperture(
             (pixel_scale_mas / 1000.0) / 206265.0
         ) / fac_oversamp  # this is for 'pixels' in the oversampled grid
 
-        # Shift I_r so that its maximum is exactly at the center of the array
+        # Shift intensity so that its maximum is exactly at the center of the array
 
-        # Find the coordinates of the maximum of I_r
-        max_pos = np.unravel_index(np.nanargmax(I_r), I_r.shape)
-        center_pos = ((I_r.shape[0] - 1) / 2.0, (I_r.shape[1] - 1) / 2.0)
+        # Find the coordinates of the maximum of intensity
+        max_pos = np.unravel_index(np.nanargmax(intensity), intensity.shape)
+        center_pos = ((intensity.shape[0] - 1) / 2.0, (intensity.shape[1] - 1) / 2.0)
         # Compute the shift required to move the max to the center
         shift_vals = (center_pos[0] - max_pos[0], center_pos[1] - max_pos[1])
         # Perform the shift
-        I_r = shift(I_r, shift_vals, order=3, mode="nearest")
+        intensity = shift(intensity, shift_vals, order=3, mode="nearest")
 
         ny, nx = r_rad_array.shape
         # Pixel coordinate grids with origin at array center
         y = np.arange(ny) - (ny - 1) / 2.0
         x = np.arange(nx) - (nx - 1) / 2.0
-        # Radius in pixels, then convert to radians using rad_per_pix
-        r_pix = np.sqrt(x[None, :] ** 2 + y[:, None] ** 2)
-        r_rad_centered = r_pix * rad_per_pix
-        # Hard pinhole (delta-function-like on the grid)
-        # = (r_rad_centered <= pinhole_diam_rad).astype(float)
+        # (a hard pinhole on the grid would be r_pix * rad_per_pix <= pinhole_diam_rad,
+        # with r_pix the radius in pixels)
 
         # Approximate the circle-square overlap with subpixel sampling.
         radius_pix = 0.5 * pinhole_diam_rad / rad_per_pix
@@ -266,23 +265,23 @@ def intensity_annular_aperture(
             ax.add_patch(circle)
             fig.colorbar(im, ax=ax)
             ax.set_title(
-                f"Pinhole footprint weights on oversampled PSF grid\n"
-                f"Blue: native-pixel boundaries; red: pinhole diameter"
+                "Pinhole footprint weights on oversampled PSF grid\n"
+                "Blue: native-pixel boundaries; red: pinhole diameter"
             )
             file_name_plot = os.path.join(results_write_dir, "pinhole_array_FYI.png")
             plt.savefig(file_name_plot)
-            logging.info("Saved plot of pinhole array as " + file_name_plot)
+            logging.info("Saved plot of pinhole array as %s", file_name_plot)
 
         # convolve with the pinhole array
-        I_r = fftconvolve(I_r, pinhole_array, mode="same")
+        intensity = fftconvolve(intensity, pinhole_array, mode="same")
 
-        # shift I_r back to the original position
-        I_r = shift(I_r, -np.array(shift_vals), order=3, mode="nearest")
+        # shift intensity back to the original position
+        intensity = shift(intensity, -np.array(shift_vals), order=3, mode="nearest")
 
     # normalize to the amplitude
-    I_r = ampl * I_r / np.nanmax(I_r)
+    intensity = ampl * intensity / np.nanmax(intensity)
 
-    return I_r
+    return intensity
 
 
 def gaussian_2d(xy_mesh, amplitude, xo, yo, sigma_x_pix, sigma_y_pix, theta):
@@ -334,7 +333,8 @@ def gaussian_2d(xy_mesh, amplitude, xo, yo, sigma_x_pix, sigma_y_pix, theta):
 # and params are the parameters to fit
 def _filter_curve_from_filter_file(filter_file):
     """
-    Load a filter transmission curve from file and return a decimated DataFrame for sampling.
+    Load a filter transmission curve from file and return a decimated DataFrame for
+    sampling.
 
     Parameters
     ----------
@@ -347,7 +347,7 @@ def _filter_curve_from_filter_file(filter_file):
         DataFrame containing a decimated sample of the filter curve.
     """
 
-    df_filter = pd.read_csv(filter_file, comment="#", sep="\s+")
+    df_filter = pd.read_csv(filter_file, comment="#", sep=r"\s+")
 
     # rename columns to wavel_um and trans
     df_filter.rename(
@@ -361,8 +361,8 @@ def _filter_curve_from_filter_file(filter_file):
     df_filter = df_filter[mask_trans_gt_05_max]
 
     # choose N evenly-spaced rows from df_filter (as a smaller DataFrame)
-    N_slices = 5
-    slice_idx = np.linspace(0, len(df_filter) - 1, N_slices, dtype=int)
+    n_slices = 5
+    slice_idx = np.linspace(0, len(df_filter) - 1, n_slices, dtype=int)
     decimated_df = df_filter.iloc[slice_idx].reset_index(drop=True)
 
     return decimated_df
@@ -370,8 +370,8 @@ def _filter_curve_from_filter_file(filter_file):
 
 def model_for_fit_fixed(
     r_rad_1d_original,
-    D_aperture,
-    D_obscuration,
+    d_aperture,
+    d_obscuration,
     ampl,
     centroid_yx_original=None,
     shape_original_2d=None,
@@ -394,11 +394,12 @@ def model_for_fit_fixed(
     INPUTS
     ----------
     r_rad_1d_original : array-like
-        Placeholder radial distance or flat index array for compatibility with curve_fit.
+        Placeholder radial distance or flat index array for compatibility with
+        curve_fit.
         Not used directly; required by curve_fit interface.
-    D_aperture : float
+    d_aperture : float
         Aperture diameter in meters.
-    D_obscuration : float
+    d_obscuration : float
         Central obscuration diameter in meters.
     ampl : float
         Overall intensity normalization.
@@ -437,6 +438,8 @@ def model_for_fit_fixed(
         A 1D array of model PSF intensity values mapped on the requested output grid,
         suitable for passing to fitting routines.
     """
+    # required by the curve_fit interface / kept for compatibility, but not used
+    del r_rad_1d_original, valid_mask
 
     if shape_original_2d is not None:
         shape_oversamp_2d = tuple(int(dim * fac_oversamp) for dim in shape_original_2d)
@@ -466,8 +469,8 @@ def model_for_fit_fixed(
         intensity_2d = intensity_annular_aperture(
             r_rad_array=r_rad_2d_oversamp,
             wavel=wavel,
-            D_aperture=D_aperture,
-            D_obscuration=D_obscuration,
+            d_aperture=d_aperture,
+            d_obscuration=d_obscuration,
             ampl=ampl,
             pinhole_diam_rad=pinhole_diam_rad,
             pixel_scale_mas=pixel_scale_mas,
@@ -483,12 +486,13 @@ def model_for_fit_fixed(
             wavel_um = row["wavel_um"] * 1e-6
             trans = row["trans"]
 
-            # make a PSF for this wavelength and multiply by the transmission before adding
+            # make a PSF for this wavelength and multiply by the transmission before
+            # adding
             intensity_2d += trans * intensity_annular_aperture(
                 r_rad_array=r_rad_2d_oversamp,
                 wavel=wavel_um,
-                D_aperture=D_aperture,
-                D_obscuration=D_obscuration,
+                d_aperture=d_aperture,
+                d_obscuration=d_obscuration,
                 ampl=ampl,
                 pinhole_diam_rad=pinhole_diam_rad,
                 pixel_scale_mas=pixel_scale_mas,
@@ -545,7 +549,6 @@ def angle_from_center_2d(
     """
 
     size = array_passed_in.shape[0]
-    baseline_shape = (size, size)
     pixel_scale_arcsec = pixel_scale_mas / 1000.0  # arcseconds per pixel
     y, x = np.indices((size, size))
     center = (y_center, x_center)
@@ -562,7 +565,8 @@ def angle_from_center_2d(
     else:
         raise ValueError(f"Invalid units: {units}. Must be 'radians' or 'arcseconds'.")
 
-    # rescale based on the oversampling factor to fit the input array (this effectively makes the plate scale smaller)
+    # rescale based on the oversampling factor to fit the input array (this effectively
+    # makes the plate scale smaller)
     r_rad_2d = r_rad_2d / fac_oversamp
 
     return r_rad_2d
@@ -577,7 +581,8 @@ def mtf_arrays(
     filter_name,
 ):
     """
-    Compute the Modulation Transfer Function (MTF) arrays for the empirical and model PSFs.
+    Compute the Modulation Transfer Function (MTF) arrays for the empirical and model
+    PSFs.
 
     INPUTS
     ----------
@@ -653,7 +658,8 @@ def mtf_arrays(
 
 def fit_empirical_fwhm(frame, plot_string, results_write_dir="figs_dump"):
     """
-    Calculate the FWHM in x and y by finding the region where the intensity is at least 50% of the peak value.
+    Calculate the FWHM in x and y by finding the region where the intensity is at least
+    50% of the peak value.
 
     INPUTS
     ----------
@@ -675,10 +681,6 @@ def fit_empirical_fwhm(frame, plot_string, results_write_dir="figs_dump"):
     # find the peak intensity
     peak_intensity = np.max(frame)
     # find where the intensity is 50% of the peak intensity
-    # Find the positions of the maximum value as the initial guess for the center
-    y_peak, x_peak = np.unravel_index(np.argmax(frame), frame.shape)
-    # Create x and y coordinate arrays
-    y, x = np.indices(frame.shape)
     # Define a threshold for 50% of the peak
     half_max = 0.5 * peak_intensity
 
@@ -688,14 +690,14 @@ def fit_empirical_fwhm(frame, plot_string, results_write_dir="figs_dump"):
     props = measure.regionprops(labeled)
     if len(props) > 0:
         # Select the largest region by area
-        prop_biggest = [max(props, key=lambda p: p.area)]
-    if len(props) == 0:
-        prop_biggest_dims = np.nan, np.nan
-
-    # use bounding box to get the dims in x and y (instead of just major and minor axis lengths)
-    min_row, min_col, max_row, max_col = prop_biggest[0].bbox
-    height_y = max_row - min_row  # axis-aligned y length
-    width_x = max_col - min_col  # axis-aligned x length
+        prop_biggest = max(props, key=lambda p: p.area)
+        # use bounding box to get the dims in x and y
+        # (instead of just major and minor axis lengths)
+        min_row, min_col, max_row, max_col = prop_biggest.bbox
+        height_y = max_row - min_row  # axis-aligned y length
+        width_x = max_col - min_col  # axis-aligned x length
+    else:
+        height_y, width_x = np.nan, np.nan
 
     # Plot the frame
     plt.figure()
@@ -721,14 +723,15 @@ def fit_empirical_fwhm(frame, plot_string, results_write_dir="figs_dump"):
     os.makedirs(results_write_dir, exist_ok=True)
     plt.savefig(os.path.join(results_write_dir, plot_filename), bbox_inches="tight")
     plt.close()
-    logging.info(f"Figure saved as {plot_filename}")
+    logging.info("Figure saved as %s", plot_filename)
 
     return height_y, width_x
 
 
 def fit_gaussian(frame, center_guess):
     """
-    Fit a 2D Gaussian to a given frame and return the fitted model and parameters. (This is the '2nd-pass' centroiding.)
+    Fit a 2D Gaussian to a given frame and return the fitted model and parameters. (This
+    is the '2nd-pass' centroiding.)
 
     INPUTS
     ----------
@@ -761,7 +764,7 @@ def fit_gaussian(frame, center_guess):
     y, x = np.indices(frame.shape)
     xy_mesh = (x, y)
     p0 = [np.max(frame), center_guess[0], center_guess[1], 1, 1, 0]
-    popt, pcov = curve_fit(gaussian_2d, xy_mesh, frame.ravel(), p0=p0)
+    popt = curve_fit(gaussian_2d, xy_mesh, frame.ravel(), p0=p0)[0]
     fitted_array = gaussian_2d(xy_mesh, *popt).reshape(frame.shape)
     fwhm_x_pix = 2 * np.sqrt(2 * np.log(2)) * np.abs(popt[3])
     fwhm_y_pix = 2 * np.sqrt(2 * np.log(2)) * np.abs(popt[4])
@@ -922,7 +925,7 @@ def fyi_plot_centroiding(
     array_to_plot,
     coords_to_plot,
     title_string=None,
-    zscale=False,
+    zscale=True,
     results_write_dir="figs_dump",
 ):
     """
@@ -937,7 +940,7 @@ def fyi_plot_centroiding(
     title_string : str, optional
         Title of the plot. Default is None.
     zscale : bool, optional
-        If True, use a zscale interval for the colorbar. Default is False.
+        If True, use a zscale interval for the colorbar. Default is True.
     results_write_dir : str, optional
         Directory to write the output plot to. Default is "figs_dump".
 
@@ -946,8 +949,10 @@ def fyi_plot_centroiding(
     None
         Saves the plot to the specified directory.
     """
-    interval = ZScaleInterval()
-    vmin, vmax = interval.get_limits(array_to_plot)
+    if zscale:
+        vmin, vmax = ZScaleInterval().get_limits(array_to_plot)
+    else:
+        vmin, vmax = None, None
     plt.clf()
     plt.imshow(array_to_plot, origin="lower", vmin=vmin, vmax=vmax, cmap="gray")
     plt.scatter(coords_to_plot[:, 1], coords_to_plot[:, 0], color="red", s=10)
@@ -962,7 +967,7 @@ def fyi_plot_centroiding(
     os.makedirs(results_write_dir, exist_ok=True)
     file_path = os.path.join(results_write_dir, plot_filename)
     plt.savefig(file_path, bbox_inches="tight")
-    logging.info(f"Saved {file_path}")
+    logging.info("Saved %s", file_path)
     plt.close()
 
 
@@ -977,7 +982,8 @@ def fit_gaussian_psf(
     results_write_dir="figs_dump",
 ):
     """
-    Fits a 2D Gaussian to the empirical PSF cutout and computes its FWHM and Strehl ratio.
+    Fits a 2D Gaussian to the empirical PSF cutout and computes its FWHM and Strehl
+    ratio.
 
     INPUTS
     ----------
@@ -1007,7 +1013,8 @@ def fit_gaussian_psf(
     amplitude_counts_oversamp_cutout : float
         Amplitude of the best-fit Gaussian (in counts, oversampled).
     gaussian_based_strehl : float
-        Estimated Strehl ratio: ratio of peaks, empirical / best-fit Gaussian, both oversampled.
+        Estimated Strehl ratio: ratio of peaks, empirical / best-fit Gaussian, both
+        oversampled.
     """
 
     logging.info("--------------------------------")
@@ -1020,9 +1027,9 @@ def fit_gaussian_psf(
         y_center_pix_oversamp_cutout,
         fwhm_x_pix_oversamp_cutout,
         fwhm_y_pix_oversamp_cutout,
-        sigma_x_pix_oversamp_cutout,
-        sigma_y_pix_oversamp_cutout,
-        angle_theta_deg,
+        _,  # sigma_x_pix_oversamp_cutout
+        _,  # sigma_y_pix_oversamp_cutout
+        _,  # angle_theta_deg
         amplitude_counts_oversamp_cutout,
     ) = fit_gaussian(cookie_cut_out_sci, center_guess=coords_guess)
     residuals = cookie_cut_out_sci - cookie_cut_out_best_fit
@@ -1033,14 +1040,15 @@ def fit_gaussian_psf(
     # print(f'PSF ID: {plot_string}')
     # print(f'Focal plane mask: {fp_mask}')
     # print(f'Pupil plane mask: {pp_mask}')
-    logging.info(f"Strehl from Gaussian best-fit: {gaussian_based_strehl:.2f}")
+    logging.info("Strehl from Gaussian best-fit: %.2f", gaussian_based_strehl)
 
     plot_context = (
         f"Filter={obs_filter}, FP mask={fp_mask}, PP mask={pp_mask}, "
         f"Oversampling={fac_oversamp:.2f}, Gaussian Strehl={gaussian_based_strehl:.3f}"
     )
 
-    # plot four subplots: 2D science, 2D best-fit, 2D residuals, and 1D overplotting of a cross-section of the science and best-fit
+    # plot four subplots: 2D science, 2D best-fit, 2D residuals, and 1D overplotting of
+    # a cross-section of the science and best-fit
     plt.clf()
     # Determine vmin and vmax for consistent color scaling across all 2D plots
     vmin = min(
@@ -1053,7 +1061,7 @@ def fit_gaussian_psf(
         np.nanmax(cookie_cut_out_best_fit),
         np.nanmax(residuals),
     )
-    fig, axs = plt.subplots(2, 2, figsize=(10, 8))
+    _, axs = plt.subplots(2, 2, figsize=(10, 8))
     # 2D Science image
     im0 = axs[0, 0].imshow(
         cookie_cut_out_sci, origin="lower", cmap="gray_r", vmin=vmin, vmax=vmax
@@ -1076,7 +1084,8 @@ def fit_gaussian_psf(
     )
     axs[1, 0].set_title("Residuals: empirical minus Gaussian")
     plt.colorbar(im2, ax=axs[1, 0], fraction=0.046, pad=0.04)
-    # Plot a cross-section through the maximum of the PSF (along the row/col with the peak)
+    # Plot a cross-section through the maximum of the PSF (along the row/col with the
+    # peak)
     max_index = np.unravel_index(
         np.argmax(cookie_cut_out_sci), cookie_cut_out_sci.shape
     )
@@ -1086,7 +1095,10 @@ def fit_gaussian_psf(
     axs[1, 1].plot(sci_row, label="Empirical")
     axs[1, 1].plot(best_fit_row, label="Best-fit")
     # Annotate plot with FWHM in x and y
-    fwhm_text = f"FWHM x = {fwhm_x_pix_oversamp_cutout:.2f} pix\nFWHM y = {fwhm_y_pix_oversamp_cutout:.2f} pix"
+    fwhm_text = (
+        f"FWHM x = {fwhm_x_pix_oversamp_cutout:.2f} pix\n"
+        f"FWHM y = {fwhm_y_pix_oversamp_cutout:.2f} pix"
+    )
     axs[1, 1].text(
         0.95,
         0.05,
@@ -1096,14 +1108,15 @@ def fit_gaussian_psf(
         color="black",
         verticalalignment="bottom",
         horizontalalignment="right",
-        bbox=dict(facecolor="white", alpha=0.8, boxstyle="round,pad=0.3"),
+        bbox={"facecolor": "white", "alpha": 0.8, "boxstyle": "round,pad=0.3"},
     )
     axs[1, 1].legend()
     axs[1, 1].set_title("Peak-row cross-section: empirical vs Gaussian")
     plt.suptitle(
-        f"Gaussian fit to oversampled PSF cutout\n"
+        "Gaussian fit to oversampled PSF cutout\n"
         f"{plot_context}\n"
-        f"Centroid (y, x)=({y_center_pix_oversamp_cutout:.2f}, {x_center_pix_oversamp_cutout:.2f}), "
+        f"Centroid (y, x)=({y_center_pix_oversamp_cutout:.2f}, "
+        f"{x_center_pix_oversamp_cutout:.2f}), "
         f"FWHM_x={fwhm_x_pix_oversamp_cutout:.2f} pix, "
         f"FWHM_y={fwhm_y_pix_oversamp_cutout:.2f} pix, "
         f"Peak amplitude={amplitude_counts_oversamp_cutout:.2f} counts"
@@ -1111,10 +1124,10 @@ def fit_gaussian_psf(
     plt.tight_layout()
     # plt.show()
     # Save the plot to file with num_coord as a 2-digit zero-padded string
-    plot_filename = f"psf_gaussian_best_fit_" + plot_string + ".png"
+    plot_filename = "psf_gaussian_best_fit_" + plot_string + ".png"
     os.makedirs(results_write_dir, exist_ok=True)
     plt.savefig(os.path.join(results_write_dir, plot_filename), bbox_inches="tight")
-    logging.info(f"Figure saved as {plot_filename}")
+    logging.info("Figure saved as %s", plot_filename)
     plt.close()
 
     return (
@@ -1139,7 +1152,8 @@ def fit_simmed_psfs(
     results_write_dir="figs_dump",
 ):
     """
-    Generate and analyze a perfect PSF using ScopeSim for direct comparison with empirical data.
+    Generate and analyze a perfect PSF using ScopeSim for direct comparison with
+    empirical data.
 
     INPUTS
     ----------
@@ -1152,9 +1166,11 @@ def fit_simmed_psfs(
     pp_mask : str
         Pupil plane mask name to use in the simulation.
     x_center_final_oversamp : float
-        X coordinate (in oversampled array) of center for cutout and analysis (no centroiding).
+        X coordinate (in oversampled array) of center for cutout and analysis (no
+        centroiding).
     y_center_final_oversamp : float
-        Y coordinate (in oversampled array) of center for cutout and analysis (no centroiding).
+        Y coordinate (in oversampled array) of center for cutout and analysis (no
+        centroiding).
     fac_oversamp : float or int
         Oversampling factor applied to the empirical data.
     config_observing : dict, optional
@@ -1165,8 +1181,10 @@ def fit_simmed_psfs(
     OUTPUTS
     -------
     psf_perfect_cutout_best_fit : numpy.ndarray
-        2D array of the cutout around the best-fit (simulated, "perfect") PSF generated by ScopeSim.
+        2D array of the cutout around the best-fit (simulated, "perfect") PSF generated
+        by ScopeSim.
     """
+    del config_observing  # vestigial; kept for call compatibility
 
     # set up instrument
     ## ## TO DO: MAKE THIS MORE GENERAL AND FLEXIBLE, FOR MULT OBSERVING MODES
@@ -1184,21 +1202,20 @@ def fit_simmed_psfs(
 
     metis.effects.pprint_all()
 
-    bb_temp = 1000 * u.K
-    NDIT, EXPTIME = 1, 0.2
+    ndit, exptime = 1, 0.2
 
     logging.info("--------------------------------")
     logging.info("Generating a ScopeSim simmed PSF to compare to the empirical input")
-    logging.info("Current Observing filter:", obs_filter)
-    logging.info("Current WCU FP mask:", wcu.fpmask)
-    logging.info("Current WCU PP mask:", pp_mask)
+    logging.info("Current Observing filter: %s", obs_filter)
+    logging.info("Current WCU FP mask: %s", wcu.fpmask)
+    logging.info("Current WCU PP mask: %s", pp_mask)
 
     # background
     logging.info("Closing WCU BB aperture first to get a background ...")
     # background
     wcu.set_bb_aperture(value=0.0)
     metis.observe()
-    outhdul_off = metis.readout(ndit=NDIT, exptime=EXPTIME)[0]
+    outhdul_off = metis.readout(ndit=ndit, exptime=exptime)[0]
     background = outhdul_off[1].data
 
     logging.info("Re-opening WCU BB aperture to get a PSF ...")
@@ -1207,24 +1224,25 @@ def fit_simmed_psfs(
     # metis["filter_wheel"].change_filter(obs_filter)
 
     logging.info("--------------------------------")
-    logging.info("Current Observing filter:", obs_filter)
-    logging.info("Current WCU FP mask:", wcu.fpmask)
-    logging.info("Current WCU PP mask:", pp_mask)
+    logging.info("Current Observing filter: %s", obs_filter)
+    logging.info("Current WCU FP mask: %s", wcu.fpmask)
+    logging.info("Current WCU PP mask: %s", pp_mask)
     logging.info("Opening WCU BB aperture...")
 
     metis.observe()
-    outhdul_on = metis.readout(ndit=NDIT, exptime=EXPTIME)[0]
+    outhdul_on = metis.readout(ndit=ndit, exptime=exptime)[0]
     sci = outhdul_on[1].data
     # Get perfect, background-subtracted PSF - no detector noise
     psf_perfect = sci - background
 
-    # Oversample the background-subtracted PSF to match the cookie_cut_out_sci_oversamp oversampling
+    # Oversample the background-subtracted PSF to match the cookie_cut_out_sci_oversamp
+    # oversampling
     psf_perfect_oversamp = zoom(psf_perfect, fac_oversamp, order=3)
 
     # for debugging
     file_name_plot = "psf_perfect_oversamp.fits"
     fits.writeto(file_name_plot, psf_perfect_oversamp, overwrite=True)
-    logging.info("Saved " + file_name_plot + " for checking.")
+    logging.info("Saved %s for checking.", file_name_plot)
 
     # take a cutout of the PSF at the exact same coordinates as the cookie cut-out
     psf_perfect_cutout = psf_perfect_oversamp[
@@ -1237,24 +1255,31 @@ def fit_simmed_psfs(
     ]
 
     # cut out the central region the same size as the cookie cut-out
-    # psf_perfect_cutout = psf_perfect[int(psf_perfect.shape[0]/2-0.5*cookie_cut_out_sci_oversamp.shape[0]):int(psf_perfect.shape[0]/2+0.5*cookie_cut_out_sci_oversamp.shape[0]), \
-    #    int(psf_perfect.shape[1]/2-0.5*cookie_cut_out_sci_oversamp.shape[1]):int(psf_perfect.shape[1]/2+0.5*cookie_cut_out_sci_oversamp.shape[1])]
+    # half_y = 0.5 * cookie_cut_out_sci_oversamp.shape[0]
+    # half_x = 0.5 * cookie_cut_out_sci_oversamp.shape[1]
+    # cen_y, cen_x = psf_perfect.shape[0] / 2, psf_perfect.shape[1] / 2
+    # psf_perfect_cutout = psf_perfect[
+    #     int(cen_y - half_y) : int(cen_y + half_y),
+    #     int(cen_x - half_x) : int(cen_x + half_x),
+    # ]
 
-    # multiply psf_perfect_cutout by a coefficient to make it a best-fit to cookie_cut_out_sci_oversamp
+    # multiply psf_perfect_cutout by a coefficient to make it a best-fit to
+    # cookie_cut_out_sci_oversamp
     coefficient = np.sum(cookie_cut_out_sci_oversamp) / np.sum(psf_perfect_cutout)
     psf_perfect_cutout_best_fit = psf_perfect_cutout * coefficient
 
     strehl_from_simmed_psf = np.max(cookie_cut_out_sci_oversamp) / np.max(
         psf_perfect_cutout_best_fit
     )
-    logging.info(f"Strehl from Scopesim simmed PSF: {strehl_from_simmed_psf:.2f}")
+    logging.info("Strehl from Scopesim simmed PSF: %.2f", strehl_from_simmed_psf)
 
     plot_context = (
         f"Filter={obs_filter}, FP mask={fp_mask}, PP mask={pp_mask}, "
         f"Oversampling={fac_oversamp:.2f}, ScopeSim Strehl={strehl_from_simmed_psf:.3f}"
     )
 
-    # Make subplots of cookie_cut_out_sci_oversamp, psf_perfect_cutout_best_fit, and the residuals
+    # Make subplots of cookie_cut_out_sci_oversamp, psf_perfect_cutout_best_fit, and the
+    # residuals
     plt.figure(figsize=(12, 4))
 
     # Panel 1: cookie_cut_out_sci_oversamp
@@ -1302,6 +1327,6 @@ def fit_simmed_psfs(
     plot_filename = "junk_psf_perfect_cutout_best_fit.png"
     os.makedirs(results_write_dir, exist_ok=True)
     plt.savefig(os.path.join(results_write_dir, plot_filename), bbox_inches="tight")
-    logging.info(f"Saved {plot_filename}")
+    logging.info("Saved %s", plot_filename)
 
     return psf_perfect_cutout_best_fit, strehl_from_simmed_psf

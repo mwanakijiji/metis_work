@@ -1,31 +1,33 @@
-# Make simulated data for the IMG-OPT-03 PSF image quality test
+"""
+Make simulated data for the IMG-OPT-04 in-field stray light test
 
-# Reqs.:
-# - Ref. Overleaf doc
-#   IMG_OPT_04_Test_Description_In_Field_Straylight_and_Ghosts
-#
-# 1. METIS-1189: The maximum allowed stray light irradiance from an
-# in-field source shall be less than 0.1 % of the peak irradiance in the
-# focal planes of the IMG. Hereby, stray light contains scattering from
-# opto-mechanical surfaces in Mid-infrared ELT Imager and Spectrograph
-# (METIS).
+Reqs.:
+- Ref. Overleaf doc
+  IMG_OPT_04_Test_Description_In_Field_Straylight_and_Ghosts
 
-# 2. METIS-1429: The maximum allowed stray light irradiance in the
-# CFO-FP2 plane from an in-field source positioned in the METIS input
-# focal plane shall be less than 0.06 % of the peak irradiance. The
-# maximum allowed stray light irradiance in the IMG-LM and IMG-N
-# detector planes from an in-field source positioned in the CFO-FP2
-# plane shall be less than 0.04% of the peak irradiance.
+1. METIS-1189: The maximum allowed stray light irradiance from an
+in-field source shall be less than 0.1 % of the peak irradiance in the
+focal planes of the IMG. Hereby, stray light contains scattering from
+opto-mechanical surfaces in Mid-infrared ELT Imager and Spectrograph
+(METIS).
 
-# 3. METIS-9522: After data reduction and calibration, the flux in
-# optical artefacts and ghosts shall be less than the 3-sigma thermal
-# background noise for one hour of observations and for the respective
-# spatial scale of the ghost, i.e. point-source-like ghosts shall
-# contain less flux than the point-source sensitivity limit; extended
-# ghosts shall contain less flux than the surface brightness limit for
-# that extension. This shall hold when the brightness of the celestial
-# source causing the artefact(s) corresponds to the saturation limit in
-# the fastest full-frame operation.
+2. METIS-1429: The maximum allowed stray light irradiance in the
+CFO-FP2 plane from an in-field source positioned in the METIS input
+focal plane shall be less than 0.06 % of the peak irradiance. The
+maximum allowed stray light irradiance in the IMG-LM and IMG-N
+detector planes from an in-field source positioned in the CFO-FP2
+plane shall be less than 0.04% of the peak irradiance.
+
+3. METIS-9522: After data reduction and calibration, the flux in
+optical artefacts and ghosts shall be less than the 3-sigma thermal
+background noise for one hour of observations and for the respective
+spatial scale of the ghost, i.e. point-source-like ghosts shall
+contain less flux than the point-source sensitivity limit; extended
+ghosts shall contain less flux than the surface brightness limit for
+that extension. This shall hold when the brightness of the celestial
+source causing the artefact(s) corresponds to the saturation limit in
+the fastest full-frame operation.
+"""
 
 import datetime
 import logging
@@ -33,9 +35,9 @@ import os
 import sys
 
 import numpy as np
+import scopesim as sim
 from astropy import units as u
 from astropy.io import fits
-import scopesim as sim
 
 import modules.backbone_img_04_stray_light as backbone
 from modules.helpers import pipe_2_log
@@ -123,6 +125,7 @@ def generate_stray_light_data(
     OUTPUTS:
     - None; writes out files
     """
+    del angle_array  # clocking angles not implemented yet
 
     # set up instrument
 
@@ -438,8 +441,10 @@ def main():
         #     "use_exp_time_only": True,
         # }
 
-        logging.info(f"! -- ScopeSim assumes blackbody injection efficiency of 1., but true value is expected\
-            to be between ~1/6 and 1.")
+        logging.info(
+            "! -- ScopeSim assumes blackbody injection efficiency of 1., but true "
+            "value is expected            to be between ~1/6 and 1."
+        )
 
         generate_stray_light_data(
             fp_mask=config["fp_mask"],

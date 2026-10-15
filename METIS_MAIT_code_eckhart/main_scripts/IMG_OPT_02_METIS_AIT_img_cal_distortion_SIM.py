@@ -1,41 +1,37 @@
-# Make simulated data for the IMG-OPT-02 image distorition test
+"""
+Make simulated data for the IMG-OPT-02 image distorition test
 
-# Reqs.:
-# - Ref. Overleaf doc IMG_OPT_02_Test_Geometric_Distortion
-#
-# 1. METIS-1097: The Imager shall provide a pixel scale of 5.47 +0.26/-0.26 mas/pix for the LM-band and
-#               6.79+0.25/-0.50 mas/pix for the N-band.
-# METIS-3502: After calibration, the distortions introduced by METIS shall be removed to better than
-#               0.5 mas (ca. 1/10 px for the L band imager) over the full field of view.
-# METIS-8222: The center of the H2RG chip within IMG-LM-DET shall be offset from the METIS optical axis
-#               by 175 mas ± 25 mas on-sky PtV in the "across H2RG stripe" direction (i.e., perpendicularly
-#               to the orientation of the 32 stripes in the H2RG detector).
-# METIS-9920: Image scale and distortion of METIS shall be constant (for each optical configuration, even after
-#               change of observing modes) to an accuracy of 10-3 (goal: 10-4) at L/M-band and 2×10-3 (goal: 2×10-4)
-#               at N-band with respect to the full field of view.
+Reqs.:
+- Ref. Overleaf doc IMG_OPT_02_Test_Geometric_Distortion
 
-import numpy as np
-from astropy.io import fits
-from astropy import units as u
-from astropy.wcs import WCS
+1. METIS-1097: The Imager shall provide a pixel scale of 5.47 +0.26/-0.26 mas/pix for
+   the LM-band and
+              6.79+0.25/-0.50 mas/pix for the N-band.
+METIS-3502: After calibration, the distortions introduced by METIS shall be removed to
+better than
+              0.5 mas (ca. 1/10 px for the L band imager) over the full field of view.
+METIS-8222: The center of the H2RG chip within IMG-LM-DET shall be offset from the METIS
+optical axis
+              by 175 mas ± 25 mas on-sky PtV in the "across H2RG stripe" direction
+              (i.e., perpendicularly
+              to the orientation of the 32 stripes in the H2RG detector).
+METIS-9920: Image scale and distortion of METIS shall be constant (for each optical
+configuration, even after
+              change of observing modes) to an accuracy of 10-3 (goal: 10-4) at L/M-band
+              and 2×10-3 (goal: 2×10-4)
+              at N-band with respect to the full field of view.
+"""
 
-import scipy
-
-from matplotlib import pyplot as plt
-from matplotlib import colors
-from astropy.visualization import ZScaleInterval
-
-from scipy import ndimage
-
-import time
-import ipdb
 import datetime
-import io
+import logging
 import os
 import sys
-import logging
 
+import numpy as np
 import scopesim as sim
+from astropy import units as u
+from astropy.io import fits
+
 from modules.helpers import pipe_2_log
 from pipeline_registry import (
     CLUSTER_DISTORTION,
@@ -43,7 +39,8 @@ from pipeline_registry import (
     pipeline_stage,
 )
 
-# Edit this path if you have a custom install directory, otherwise comment it out. [For ReadTheDocs only]
+# Edit this path if you have a custom install directory, otherwise comment it out. [For
+# ReadTheDocs only]
 sim.link_irdb("../../../")
 
 # simulate observations with METIS (comment this out if packages already exist)
@@ -51,6 +48,25 @@ sim.link_irdb("../../../")
 
 # print versions of things
 sim.bug_report()
+
+
+def sanity_check_user_inputs(metis, obs_filter, fp_mask, pp_mask):
+    """Exit if the filter/masks the OpticalTrain uses do not match the user inputs."""
+    checks = (
+        ("OBS filter", "!OBS.filter_name", obs_filter),
+        ("WCU FP mask", "!WCU.current_fpmask", fp_mask),
+        ("OBS PP mask", "!OBS.pupil_mask", pp_mask),
+    )
+    for label, key, user_value in checks:
+        if metis.cmds.get(key) != user_value:
+            logging.error(
+                "! ------- %s: %s does not match user input: %s",
+                label,
+                metis.cmds.get(key),
+                user_value,
+            )
+            sys.exit(1)
+    logging.info("User filter inputs match instrument inputs")
 
 
 @pipeline_stage(
@@ -85,11 +101,14 @@ def generate_psf_image_quality_data(
     - dit: dit time
     - ndit: number of dithered exposures
     - exptime: exposure time
-    - use_exp_time_only: if True, only use the exposure time to set the exposure time; but this will be broken down into dit and ndit to avoid saturation, so integration parameters may change accordingly
+    - use_exp_time_only: if True, only use the exposure time to set the exposure time;
+      but this will be broken down into dit and ndit to avoid saturation, so integration
+      parameters may change accordingly
 
     OUTPUTS:
     - None; writes out files
     """
+    del angle_array  # clocking angles not implemented yet
 
     # set up instrument
 
@@ -120,7 +139,7 @@ def generate_psf_image_quality_data(
     # Generate a circularly-symmetric PSF from an annular aperture
     metis["pupil_masks"].change_mask(pp_mask)
     metis["psf"].update(pupil_mask=pp_mask + "_WCU")
-    logging.info("Setting WCU PP mask to be: " + str(pp_mask + "_WCU"))
+    logging.info("Setting WCU PP mask to be: %s", pp_mask + "_WCU")
 
     wcu = metis["wcu_source"]
 
@@ -153,50 +172,21 @@ def generate_psf_image_quality_data(
 
     logging.info("--------------------------------")
     logging.info("Background readout:")
-    logging.info("OBS filter: " + str(metis.cmds.get("!OBS.filter_name")))
-    logging.info("WCU FP mask: " + str(metis.cmds.get("!WCU.current_fpmask")))
-    logging.info("OBS PP mask: " + str(metis.cmds.get("!OBS.pupil_mask")))
-    logging.info("OBS ND filter: " + str(metis.cmds.get("!OBS.nd_filter_name")))
-    logging.info("NDIT: " + str(metis.cmds["!OBS.ndit"]))
-    logging.info("DIT: " + str(metis.cmds["!OBS.dit"]))
+    logging.info("OBS filter: %s", metis.cmds.get("!OBS.filter_name"))
+    logging.info("WCU FP mask: %s", metis.cmds.get("!WCU.current_fpmask"))
+    logging.info("OBS PP mask: %s", metis.cmds.get("!OBS.pupil_mask"))
+    logging.info("OBS ND filter: %s", metis.cmds.get("!OBS.nd_filter_name"))
+    logging.info("NDIT: %s", metis.cmds["!OBS.ndit"])
+    logging.info("DIT: %s", metis.cmds["!OBS.dit"])
     logging.info("WCU source state:")
     pipe_2_log(
         lambda m=metis: metis["wcu_source"].info(),
         msg="Optical train effects (background)",
     )
 
-    # sanity check that user inputs really are the same as what the instrument is using
-    def sanity_check_user_inputs(metis, obs_filter, fp_mask, pp_mask):
-        if metis.cmds.get("!OBS.filter_name") != obs_filter:
-            logging.error(
-                "! ------- OBS filter: "
-                + str(metis.cmds.get("!OBS.filter_name"))
-                + " does not match user input: "
-                + str(obs_filter)
-            )
-            exit()
-        if metis.cmds.get("!WCU.current_fpmask") != fp_mask:
-            logging.error(
-                "! ------- WCU FP mask: "
-                + str(metis.cmds.get("!WCU.current_fpmask"))
-                + " does not match user input: "
-                + str(fp_mask)
-            )
-            exit()
-        if metis.cmds.get("!OBS.pupil_mask") != pp_mask:
-            logging.error(
-                "! ------- OBS PP mask: "
-                + str(metis.cmds.get("!OBS.pupil_mask"))
-                + " does not match user input: "
-                + str(pp_mask)
-            )
-            exit()
-        else:
-            logging.info("User filter inputs match instrument inputs")
-        return
-
     # check for background-taking
-    # sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask, pp_mask=pp_mask)
+    # sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask,
+    # pp_mask=pp_mask)
     background = outhdul_off[1].data
 
     #########################################################
@@ -206,11 +196,12 @@ def generate_psf_image_quality_data(
     wcu.set_bb_aperture(value=1.0)  # open BB source
     metis.observe()
     # print the ingredients of the PSF generation
-    # pipe_2_log(lambda m=metis: [print(f"{k}: {v}") for k, v in vars(m["psf"]).items()], msg="PSF ingredients") # this prints EVERYTHING
-    logging.info("PSF model wavel range: " + str(vars(metis["psf"])["_waveset"]))
-    logging.info("PSF model kernel shape: " + str(vars(metis["psf"])["kernel"].shape))
+    # pipe_2_log(lambda m=metis: [print(f"{k}: {v}") for k, v in
+    # vars(m["psf"]).items()], msg="PSF ingredients") # this prints EVERYTHING
+    logging.info("PSF model wavel range: %s", vars(metis["psf"])["_waveset"])
+    logging.info("PSF model kernel shape: %s", vars(metis["psf"])["kernel"].shape)
     logging.info(
-        "PSF model kernel file name: " + str(vars(metis["psf"])["meta"]["filename"])
+        "PSF model kernel file name: %s", vars(metis["psf"])["meta"]["filename"]
     )
     pipe_2_log(
         lambda m=metis: str(vars(m["psf"])["_waveset"]),
@@ -233,12 +224,12 @@ def generate_psf_image_quality_data(
         outhdul_on = metis.readout(ndit=ndit, dit=dit, reset=False)[0]
     logging.info("--------------------------------")
     logging.info("Science readout:")
-    logging.info("OBS filter: " + str(metis.cmds.get("!OBS.filter_name")))
-    logging.info("WCU FP mask: " + str(metis.cmds.get("!WCU.current_fpmask")))
-    logging.info("OBS PP mask: " + str(metis.cmds.get("!OBS.pupil_mask")))
-    logging.info("OBS ND filter: " + str(metis.cmds.get("!OBS.nd_filter_name")))
-    logging.info("NDIT:" + str(metis.cmds["!OBS.ndit"]))
-    logging.info("DIT:" + str(metis.cmds["!OBS.dit"]))
+    logging.info("OBS filter: %s", metis.cmds.get("!OBS.filter_name"))
+    logging.info("WCU FP mask: %s", metis.cmds.get("!WCU.current_fpmask"))
+    logging.info("OBS PP mask: %s", metis.cmds.get("!OBS.pupil_mask"))
+    logging.info("OBS ND filter: %s", metis.cmds.get("!OBS.nd_filter_name"))
+    logging.info("NDIT:%s", metis.cmds["!OBS.ndit"])
+    logging.info("DIT:%s", metis.cmds["!OBS.dit"])
     logging.info("WCU source state:")
     pipe_2_log(
         lambda m=metis: metis["wcu_source"].info(),
@@ -246,7 +237,8 @@ def generate_psf_image_quality_data(
     )
 
     # check for science-taking
-    # sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask, pp_mask=pp_mask)
+    # sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask,
+    # pp_mask=pp_mask)
     # hdul_perfect = metis.image_planes[0].hdu
 
     # background-subtract
@@ -289,19 +281,20 @@ def generate_psf_image_quality_data(
 
     hdul_new.writeto(abs_file_name_write, overwrite=True)
     logging.info(
-        "Saved background-subtracted readout without aberrations to "
-        + abs_file_name_write
+        "Saved background-subtracted readout without aberrations to %s",
+        abs_file_name_write,
     )
 
     logging.info("--------------------------------")
-    logging.info(f"Median of raw science readout: {np.median(raw_sci_readout):.4f}")
-    logging.info(f"Median of background: {np.median(background):.4f}")
+    logging.info("Median of raw science readout: %.4f", np.median(raw_sci_readout))
+    logging.info("Median of background: %.4f", np.median(background))
     logging.info(
-        f"Median of background-subtracted readout: {np.median(bckgd_subted):.4f}"
+        "Median of background-subtracted readout: %.4f", np.median(bckgd_subted)
     )
 
 
 def main():
+    """Simulate the IMG-OPT-02 distortion data for each observing configuration."""
 
     stem = "/podman-share/metis_work/playing_with_scopesim/"
 
@@ -325,18 +318,20 @@ def main():
     )
     os.makedirs(out_dir, exist_ok=True)
 
-    logging.info(f'Log file created at {now.strftime("%Y-%m-%d %H:%M:%S")}')
-    logging.info(f"Log file name: {log_file_name}")
-    logging.info(f'Log file directory: {stem + "IMG_02_logs/"}')
-    logging.info(f'Log file directory: {stem + "IMG_02_logs/"}')
-    logging.info(f"Simmed file output directory: {out_dir}")
+    logging.info("Log file created at %s", now.strftime("%Y-%m-%d %H:%M:%S"))
+    logging.info("Log file name: %s", log_file_name)
+    logging.info("Log file directory: %s", stem + "IMG_02_logs/")
+    logging.info("Log file directory: %s", stem + "IMG_02_logs/")
+    logging.info("Simmed file output directory: %s", out_dir)
 
     # clocking angles for the PSF
     # angle_array = [0, 45, 60]
     angle_array = [0]  # can be implemented later
 
     # LM filters
-    # dict_keys(['open', 'Lp', 'short-L', 'L_spec', 'Mp', 'M_spec', 'Br_alpha', 'Br_alpha_ref', 'PAH_3.3', 'PAH_3.3_ref', 'CO_1-0_ice', 'CO_ref', 'H2O-ice', 'IB_4.05', 'HCI_L_short', 'HCI_L_long', 'HCI_M'])
+    # dict_keys(['open', 'Lp', 'short-L', 'L_spec', 'Mp', 'M_spec', 'Br_alpha',
+    # 'Br_alpha_ref', 'PAH_3.3', 'PAH_3.3_ref', 'CO_1-0_ice', 'CO_ref', 'H2O-ice',
+    # 'IB_4.05', 'HCI_L_short', 'HCI_L_long', 'HCI_M'])
     lm_obs_configs = [
         {
             "fp_mask": "grid_lm",
@@ -517,22 +512,28 @@ def main():
     ]
 
     # for debug
-    """
-    ipdb.set_trace()
-    for config in lm_obs_configs:
-        #_ = debug_mwe(fp_mask = "grid_lm", pp_mask = "Open", nd_filter = None, obs_filter = "Br_alpha", obs_mode = "wcu_img_lm", exptime = 0.1)
-        #ipdb.set_trace()
-        _ = debug_mwe(fp_mask = 'open', pp_mask= config["pp_mask"], nd_filter = "ND_OD3", obs_filter= config["obs_filter"], obs_mode= config["obs_mode"], exptime=config["exptime"])
-        _ = debug_mwe(fp_mask = config["fp_mask"], pp_mask= config["pp_mask"], nd_filter = "ND_OD3", obs_filter= config["obs_filter"], obs_mode= config["obs_mode"], exptime=config["exptime"])
-        exit()
-        #ipdb.set_trace()
-    ipdb.set_trace()
-    """
+    # ipdb.set_trace()
+    # for config in lm_obs_configs:
+    #     #_ = debug_mwe(fp_mask = "grid_lm", pp_mask = "Open", nd_filter = None,
+    # obs_filter = "Br_alpha", obs_mode = "wcu_img_lm", exptime = 0.1)
+    #     #ipdb.set_trace()
+    #     _ = debug_mwe(fp_mask = 'open', pp_mask= config["pp_mask"], nd_filter =
+    # "ND_OD3", obs_filter= config["obs_filter"], obs_mode= config["obs_mode"],
+    # exptime=config["exptime"])
+    #     _ = debug_mwe(fp_mask = config["fp_mask"], pp_mask= config["pp_mask"],
+    # nd_filter = "ND_OD3", obs_filter= config["obs_filter"], obs_mode=
+    # config["obs_mode"], exptime=config["exptime"])
+    #     exit()
+    #     #ipdb.set_trace()
+    # ipdb.set_trace()
+    #
 
     for config in lm_obs_configs:
 
         # below line is kludge for testing just one combo
-        # config = {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Mp",           "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode": "wcu_img_lm", "use_exp_time_only": True}
+        # config = {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Mp",
+        # "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode":
+        # "wcu_img_lm", "use_exp_time_only": True}
 
         generate_psf_image_quality_data(
             fp_mask=config["fp_mask"],

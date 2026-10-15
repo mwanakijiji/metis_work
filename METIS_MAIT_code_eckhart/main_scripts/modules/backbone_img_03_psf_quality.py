@@ -1,15 +1,15 @@
+"""Analysis backbone for the IMG-OPT-03 PSF image quality (Strehl) test."""
+
 import logging
 import os
+import random
 from dataclasses import dataclass
-import ipdb
-import numpy as np
-import matplotlib
+
 import matplotlib.pyplot as plt
-from .helpers import (
-    fit_psf_gaussian_from_native_array,
-    fit_simmed_psfs,
-    load_config_and_pipe,
-)
+import numpy as np
+from pipeline_registry import CLUSTER_PSF, COLOR_PSF, pipeline_stage
+
+from .helpers import fit_psf_gaussian_from_native_array, load_config_and_pipe
 from .psf_grid_prep import (
     load_grid_data_from_fits,
     oversample_1st_pass_centroid,
@@ -19,12 +19,9 @@ from .strehl_fcns import (
     fit_annular_aperture_free_parameters,
     imaging_band_from_fp_mask,
 )
-from photutils.centroids import centroid_2dg, centroid_sources
-import pickle
-import random
-from pipeline_registry import CLUSTER_PSF, COLOR_PSF, pipeline_stage
 
-# Fixed canvas for oversampled vs native FYI PNGs (same pixel size for blink comparison).
+# Fixed canvas for oversampled vs native FYI PNGs (same pixel size for blink
+# comparison).
 _COOKIE_FYI_FIGSIZE_INCH = (7.0, 6.25)
 _COOKIE_FYI_DPI = 120
 
@@ -72,7 +69,9 @@ def _save_blinkable_cookie_fyi_plot(
     plt.close(fig)
 
 
-def resolve_config_for_masks(config_observing: dict, fp_mask: str, pp_mask: str) -> dict:
+def resolve_config_for_masks(
+    config_observing: dict, fp_mask: str, pp_mask: str
+) -> dict:
     """
     Return a shallow copy of the observing config with mask-dependent values resolved.
 
@@ -96,19 +95,22 @@ def resolve_config_for_masks(config_observing: dict, fp_mask: str, pp_mask: str)
     config_resolved = dict(config_observing)
 
     # reference aperture geometry for this cold stop
-    D_aperture_by_pupil_mask = config_observing.get("D_aperture_by_pupil_mask", {})
-    if pp_mask in D_aperture_by_pupil_mask:
-        config_resolved["D_aperture"] = D_aperture_by_pupil_mask[pp_mask]
+    d_aperture_by_pupil_mask = config_observing.get("D_aperture_by_pupil_mask", {})
+    if pp_mask in d_aperture_by_pupil_mask:
+        config_resolved["D_aperture"] = d_aperture_by_pupil_mask[pp_mask]
         logging.info(
-            f"Reference aperture for pp_mask={pp_mask}: "
-            f"D_aperture={config_resolved['D_aperture']['full']} m, "
-            f"D_obscuration={config_resolved['D_aperture']['D_obscuration']} m"
+            "Reference aperture for pp_mask=%s: D_aperture=%s m, D_obscuration=%s m",
+            pp_mask,
+            config_resolved["D_aperture"]["full"],
+            config_resolved["D_aperture"]["D_obscuration"],
         )
     else:
         logging.warning(
-            f"pp_mask={pp_mask} not in D_aperture_by_pupil_mask; using default "
-            f"D_aperture={config_resolved['D_aperture']['full']} m, "
-            f"D_obscuration={config_resolved['D_aperture']['D_obscuration']} m"
+            "pp_mask=%s not in D_aperture_by_pupil_mask; using default D_aperture=%s "
+            "m, D_obscuration=%s m",
+            pp_mask,
+            config_resolved["D_aperture"]["full"],
+            config_resolved["D_aperture"]["D_obscuration"],
         )
 
     # LM vs N band settings
@@ -127,9 +129,11 @@ def resolve_config_for_masks(config_observing: dict, fp_mask: str, pp_mask: str)
         config_observing.get("cutout_edge_native", {}).get(band, 31)
     )
     logging.info(
-        f"Band for fp_mask={fp_mask}: {band}, "
-        f"pixel scale={config_resolved['pixel_scale_mas']} mas, "
-        f"cutout edge={config_resolved['cutout_edge_native']} px"
+        "Band for fp_mask=%s: %s, pixel scale=%s mas, cutout edge=%s px",
+        fp_mask,
+        band,
+        config_resolved["pixel_scale_mas"],
+        config_resolved["cutout_edge_native"],
     )
 
     return config_resolved
@@ -137,7 +141,9 @@ def resolve_config_for_masks(config_observing: dict, fp_mask: str, pp_mask: str)
 
 @dataclass(frozen=True)
 class SinglePsfFitResult:
-    """Per-PSF outputs from Gaussian fit (native pixel coords) and optional Strehl dicts."""
+    """
+    Per-PSF outputs from Gaussian fit (native pixel coords) and optional Strehl dicts.
+    """
 
     coord_x_normsamp: float
     coord_y_normsamp: float
@@ -208,9 +214,11 @@ def process_one_psf(
     -------
     SinglePsfFitResult
         Dataclass containing the Gaussian-fit centroid/FWHM/amplitude values in native
-        pixel units, the Gaussian-based Strehl estimate, and any optional Strehl metrics.
+        pixel units, the Gaussian-based Strehl estimate, and any optional Strehl
+        metrics.
     """
-    logging.info(f"Processing PSF {num_coord} of {num_psfs_to_process}")
+    del fit_simmed_psf  # ScopeSim PSF fit is disabled for now (see below)
+    logging.info("Processing PSF %s of %s", num_coord, num_psfs_to_process)
 
     _, gaussian_fit_outputs = fit_psf_gaussian_from_native_array(
         original_array=cookie_cutout_original_this_psf,
@@ -242,42 +250,53 @@ def process_one_psf(
     )
 
     logging.info(
-        f"Gaussian-fit FWHM (x, y) (oversampled): ({fwhm_x_pix_gaussian_best_fit_cookie_oversamp:.2f}, {fwhm_y_pix_gaussian_best_fit_cookie_oversamp:.2f})"
+        "Gaussian-fit FWHM (x, y) (oversampled): (%.2f, %.2f)",
+        fwhm_x_pix_gaussian_best_fit_cookie_oversamp,
+        fwhm_y_pix_gaussian_best_fit_cookie_oversamp,
     )
 
     strehl_updates = {}
 
     # fit a ScopeSim PSF functionality currently disabled; can reinsert later if needed
-    """
-    if fit_simmed_psf:
-        logging.info(f"Fitting ScopeSim PSF {num_coord} of {num_psfs_to_process}")
-        strehl_simmed_psf = fit_simmed_psfs(
-            cookie_cut_out_sci_oversamp = cookie_cutout_this_psf_oversamp,
-            obs_filter=filter_name,
-            fp_mask=fp_mask,
-            pp_mask=pp_mask,
-            x_center_final_oversamp = x_center_pix_gaussian_best_fit_cookie_oversamp,
-            y_center_final_oversamp = y_center_pix_gaussian_best_fit_cookie_oversamp,
-            fac_oversamp=oversample_factor,
-            config_observing=config_observing,
-            results_write_dir=results_write_dir,
-        )
-        strehl_updates.update(strehl_simmed_psf)
-    """
+    # if fit_simmed_psf:
+    #     logging.info(f"Fitting ScopeSim PSF {num_coord} of {num_psfs_to_process}")
+    #     strehl_simmed_psf = fit_simmed_psfs(
+    #         cookie_cut_out_sci_oversamp = cookie_cutout_this_psf_oversamp,
+    #         obs_filter=filter_name,
+    #         fp_mask=fp_mask,
+    #         pp_mask=pp_mask,
+    #         x_center_final_oversamp = x_center_pix_gaussian_best_fit_cookie_oversamp,
+    #         y_center_final_oversamp = y_center_pix_gaussian_best_fit_cookie_oversamp,
+    #         fac_oversamp=oversample_factor,
+    #         config_observing=config_observing,
+    #         results_write_dir=results_write_dir,
+    #     )
+    #     strehl_updates.update(strehl_simmed_psf)
+    #
+
+    # shorthands for the Strehl fits below
+    plot_string = (
+        f"num_coord_{num_coord}_fpmask_{fp_mask}_"
+        f"ppmask_{pp_mask}_filter_{filter_name}"
+    )
+    x_center_gauss_cookie_oversamp = x_center_pix_gaussian_best_fit_cookie_oversamp
+    y_center_gauss_cookie_oversamp = y_center_pix_gaussian_best_fit_cookie_oversamp
 
     # fit an annular aperture model with fixed aperture
     if fit_annular_aperture_fixed:
         logging.info(
-            f"Calculating Strehl from annular aperture {num_coord} of {num_psfs_to_process}"
+            "Calculating Strehl from annular aperture %s of %s",
+            num_coord,
+            num_psfs_to_process,
         )
 
         strehl_annular_aperture_fixed = fit_annular_aperture_fixed_parameters(
             cookie_cut_out_sci_oversamp=cookie_cutout_this_psf_oversamp,
             data_cookie_empirical_original=cookie_cutout_original_this_psf,
             filter_name=filter_name,
-            plot_string=f"num_coord_{num_coord}_fpmask_{fp_mask}_ppmask_{pp_mask}_filter_{filter_name}",
-            x_center_2nd_pass_cookie_oversamp=x_center_pix_gaussian_best_fit_cookie_oversamp,
-            y_center_2nd_pass_cookie_oversamp=y_center_pix_gaussian_best_fit_cookie_oversamp,
+            plot_string=plot_string,
+            x_center_2nd_pass_cookie_oversamp=x_center_gauss_cookie_oversamp,
+            y_center_2nd_pass_cookie_oversamp=y_center_gauss_cookie_oversamp,
             config_observing=config_observing,
             fac_oversamp=oversample_factor,
             polychromatic=True,
@@ -287,14 +306,14 @@ def process_one_psf(
 
     # fit an annular aperture model with free aperture radii
     if fit_annular_aperture_free:
-        logging.info(f"Fitting analytical PSF {num_coord} of {num_psfs_to_process}")
+        logging.info("Fitting analytical PSF %s of %s", num_coord, num_psfs_to_process)
         strehl_annular_aperture_free = fit_annular_aperture_free_parameters(
             cookie_cut_out_sci_oversamp=cookie_cutout_this_psf_oversamp,
             cookie_cut_out_sci_original=cookie_cutout_original_this_psf,
             filter_name=filter_name,
-            plot_string=f"num_coord_{num_coord}_fpmask_{fp_mask}_ppmask_{pp_mask}_filter_{filter_name}",
-            x_center_final_cookie_oversamp=x_center_pix_gaussian_best_fit_cookie_oversamp,
-            y_center_final_cookie_oversamp=y_center_pix_gaussian_best_fit_cookie_oversamp,
+            plot_string=plot_string,
+            x_center_final_cookie_oversamp=x_center_gauss_cookie_oversamp,
+            y_center_final_cookie_oversamp=y_center_gauss_cookie_oversamp,
             config_observing=config_observing,
             fac_oversamp=oversample_factor,
             fit_method=fit_method,
@@ -395,7 +414,7 @@ def strehl_psfs(
         "cutout_edge_native"
     ]  # pixels along one side of the cutout, original pixel sampling
     oversample_factor = 3  # try to keep odd to facilitate centering
-    logging.info(f"PSF oversampling factor: {oversample_factor}")
+    logging.info("PSF oversampling factor: %s", oversample_factor)
 
     # retrieve coord guesses as a starting point
     config_coords_guesses_config = load_config_and_pipe(
@@ -404,7 +423,8 @@ def strehl_psfs(
     )
 
     # retrieve data, oversample, and do 1st-pass centroiding
-    # (note oversampled empirical frame is only used for centroiding; the cost function for fitting later on just uses the frame as-is)
+    # (note oversampled empirical frame is only used for centroiding; the cost function
+    # for fitting later on just uses the frame as-is)
     grid_data, grid_header = load_grid_data_from_fits(file_name_abs, hdu_index=1)
 
     prep = oversample_1st_pass_centroid(
@@ -418,22 +438,6 @@ def strehl_psfs(
     # unpack quantities
     grid_data = prep.grid_data  # original data (native pixel scale)
     grid_data_original = prep.grid_data_original  # original data (native pixel scale)
-    grid_data_oversamp = prep.grid_data_oversamp  # oversampled data
-    x_pos_pix_oversamp_1st_pass = (
-        prep.x_pos_pix_oversamp
-    )  # x-positions of the centroids (oversampled)
-    y_pos_pix_oversamp_1st_pass = (
-        prep.y_pos_pix_oversamp
-    )  # y-positions of the centroids (oversampled)
-    coords_centroided_1st_pass_all_oversamp = (
-        prep.coords_centroided_1st_pass_all_oversamp
-    )  # coordinates of the centroids (oversampled)
-    x_pos_pix_native_1st_pass = (
-        prep.x_pos_pix_native
-    )  # x-positions of the centroids (native pixel scale)
-    y_pos_pix_native_1st_pass = (
-        prep.y_pos_pix_native
-    )  # y-positions of the centroids (native pixel scale)
     coords_centroided_1st_pass_all_native = (
         prep.coords_centroided_1st_pass_all_native
     )  # coordinates of the centroids (native pixel scale)
@@ -444,26 +448,15 @@ def strehl_psfs(
     total_psfs = prep.total_psfs  # total number of PSFs in the grid
 
     logging.info("Finding PSF centroids, first pass (via oversample_1st_pass_centroid)")
-    logging.info(f"Raw PSF cutout size (oversampled): {raw_cutout_size_oversampled}")
-    logging.info(f"Total PSFs: {total_psfs}")
+    logging.info("Raw PSF cutout size (oversampled): %s", raw_cutout_size_oversampled)
+    logging.info("Total PSFs: %s", total_psfs)
     if psfs_subset == "all":
-        logging.info(f"Processing all {total_psfs} PSFs")
+        logging.info("Processing all %s PSFs", total_psfs)
     elif isinstance(psfs_subset, int):
-        logging.info(f"Processing {num_psfs_to_process} out of {total_psfs} PSFs")
-    logging.info(f"Processing {num_psfs_to_process} out of {total_psfs} PSFs")
+        logging.info("Processing %s out of %s PSFs", num_psfs_to_process, total_psfs)
+    logging.info("Processing %s out of %s PSFs", num_psfs_to_process, total_psfs)
 
-    # initialize arrays/dicts to store results
-    (
-        coord_x_array,
-        coord_y_array,
-        fwhm_x_pix_array,
-        fwhm_y_pix_array,
-        sigma_x_pix_array,
-        sigma_y_pix_array,
-        angle_theta_array,
-        amplitude_counts_array,
-        gaussian_based_strehl_array,
-    ) = (np.zeros(total_psfs) for _ in range(9))
+    # initialize dict to store results
     strehl_results_all = {}  # to contain info from all the PSFs
 
     # loop over all PSFs that we want to process from this one detector readout
@@ -471,7 +464,8 @@ def strehl_psfs(
         # ipdb.set_trace(context=10)
 
         strehl_results_this_psf = {}  # to contain info from this PSF alone
-        # make cutout of the PSF from the original array, using the closest int to the 1st pass centroids
+        # make cutout of the PSF from the original array, using the closest int to the
+        # 1st pass centroids
 
         # 1-st pass coords of the PSF in the original array
         x_cen_1st_pass_native = coords_centroided_1st_pass_all_native[num_coord][1]
@@ -504,7 +498,8 @@ def strehl_psfs(
             fit_annular_aperture_free=fit_annular_aperture_free,
         )
 
-        # for each strehl value in result, put it in strehl_results_this_psf as a key-value pair
+        # for each strehl value in result, put it in strehl_results_this_psf as a
+        # key-value pair
         for key, value in result.strehl_updates.items():
             strehl_results_this_psf[key] = value
         # also include the 1st-pass centroid coordinates
@@ -519,8 +514,7 @@ def strehl_psfs(
     pass_fail_list = []
     criterion_key = "strehl_free_ann_ap_mtf"
     for psf_results in strehl_results_all.values():
-        pass_fail = True if psf_results[criterion_key] >= 0.8 else False
-        pass_fail_list.append(pass_fail)
+        pass_fail_list.append(psf_results[criterion_key] >= 0.8)
     pass_fail_all = all(pass_fail_list)
 
     logging.info("--------------------------------")
@@ -529,42 +523,47 @@ def strehl_psfs(
         "Reminder: the requirements are:\n"
         "- Ref. Overleaf doc IMG_OPT_04_Test_Description_PSF_Image_Quality\n"
         "\n"
-        "1. METIS-1408: Quality and alignment of the optical components within Mid-infrared ELT Imager and\n"
-        "Spectrograph (METIS) shall provide diffraction limited performance (Strehl >= 80 %)\n"
+        "1. METIS-1408: Quality and alignment of the optical components within "
+        "Mid-infrared ELT Imager and\n"
+        "Spectrograph (METIS) shall provide diffraction limited performance (Strehl >= "
+        "80 %)\n"
         "at lambda > 3 um in all modes over the entire FOV.\n"
-        "2. METIS-1409: The Instrument Wavefront Error (WFE) shall satisfy the diffraction limit requirement\n"
-        "(Strehl > 0.8) at lambda = 3 um for IMG (both LM and NQ) and IMG. The minimum\n"
-        "RMS WFE below shall be satisfied over the full Field Of View (FOV) relevant to the\n"
+        "2. METIS-1409: The Instrument Wavefront Error (WFE) shall satisfy the "
+        "diffraction limit requirement\n"
+        "(Strehl > 0.8) at lambda = 3 um for IMG (both LM and NQ) and IMG. The "
+        "minimum\n"
+        "RMS WFE below shall be satisfied over the full Field Of View (FOV) relevant "
+        "to the\n"
         "given optical path.\n"
-        "3. METIS-2864: The minimum Strehl ratio of the WCU+CFO+IMG-LM optical path shall be >80% at\n"
+        "3. METIS-2864: The minimum Strehl ratio of the WCU+CFO+IMG-LM optical path "
+        "shall be >80% at\n"
         "3.3 um over the entire field of view.\n"
-        "4. METIS-3503: METIS shall be able to characterise the shape of the instrument PSF across the entire\n"
+        "4. METIS-3503: METIS shall be able to characterise the shape of the "
+        "instrument PSF across the entire\n"
         "FoV using the WCU."
     )
     logging.info("--------------------------------")
     logging.info("--------------------------------")
-    logging.info(f"Pass/fail for each PSF: {pass_fail_list}")
-    logging.info(f"PASS/FAIL FOR ALL PSFs: {all(pass_fail_list)}")
+    logging.info("Pass/fail for each PSF: %s", pass_fail_list)
+    logging.info("PASS/FAIL FOR ALL PSFs: %s", pass_fail_all)
     logging.info("--------------------------------")
     logging.info("--------------------------------")
 
-    # pickle the results
-    basename_file_name_pickle = (
-        f"strehl_results_all_{fp_mask}_{pp_mask}_{filter_name}.pkl"
-    )
-    abs_file_name_pickle = os.path.join(results_write_dir, basename_file_name_pickle)
-    '''
-    # skip pickle for now
-    with open(abs_file_name_pickle, "wb") as f:
-        pickle.dump(
-            {
-                "strehl_results_all": strehl_results_all,
-                "pass_fail_all": pass_fail_all,
-            },
-            f,
-        )
-    logging.info(f"Saved strehl results to {abs_file_name_pickle}")
-    '''
+    # pickle the results (skipped for now)
+    # basename_file_name_pickle = (
+    #     f"strehl_results_all_{fp_mask}_{pp_mask}_{filter_name}.pkl"
+    # )
+    # abs_file_name_pickle = os.path.join(results_write_dir, basename_file_name_pickle)
+    # with open(abs_file_name_pickle, "wb") as f:
+    #     pickle.dump(
+    #         {
+    #             "strehl_results_all": strehl_results_all,
+    #             "pass_fail_all": pass_fail_all,
+    #         },
+    #         f,
+    #     )
+    # logging.info(f"Saved strehl results to {abs_file_name_pickle}")
+    #
 
     # plot the grid_data and annotate it with the best-fit fwhm in x and y for each PSF
     plt.clf()
@@ -598,7 +597,9 @@ def strehl_psfs(
     )
     plt.savefig(plot_file_name_all_psfs, bbox_inches="tight")
     logging.info(
-        f"Saved plot of all PSFs, Strehl from {method_choice}: {plot_file_name_all_psfs}"
+        "Saved plot of all PSFs, Strehl from %s: %s",
+        method_choice,
+        plot_file_name_all_psfs,
     )
     plt.close()
 
@@ -647,8 +648,9 @@ def strehl_psfs(
     )
     plt.savefig(plot_file_name_random_psf_all_methods, bbox_inches="tight")
     logging.info(
-        f"Saved plot of all Strehl methods, random PSF: {plot_file_name_random_psf_all_methods}"
+        "Saved plot of all Strehl methods, random PSF: %s",
+        plot_file_name_random_psf_all_methods,
     )
     plt.close()
 
-    return  # strehl_results_all
+    # (could return strehl_results_all)
