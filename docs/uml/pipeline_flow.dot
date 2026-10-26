@@ -1,10 +1,15 @@
 digraph pipeline {
   rankdir=LR;
-  node [shape=box, style="rounded,filled", fillcolor="white"];
+  newrank=true;
+  splines=ortho;
+  nodesep=0.35;
+  ranksep=0.7;
+  node [shape=box, style="rounded,filled", fillcolor="white", width=2.2, fontsize=11];
   edge [color="#444444"];
 
   subgraph cluster_img_opt_01_fov {
     label="IMG-OPT-01 FOV";
+    labeljust=l;
     style="dashed";
     color="#1f77b4";
     generate_fov_sim;
@@ -13,6 +18,7 @@ digraph pipeline {
 
   subgraph cluster_img_opt_02_distortion {
     label="IMG-OPT-02 Distortion";
+    labeljust=l;
     style="dashed";
     color="#ff7f0e";
     generate_distortion_sim;
@@ -21,6 +27,7 @@ digraph pipeline {
 
   subgraph cluster_img_opt_03_psf_quality {
     label="IMG-OPT-03 PSF quality";
+    labeljust=l;
     style="dashed";
     color="#2ca02c";
     generate_psf_quality_sim;
@@ -33,6 +40,7 @@ digraph pipeline {
 
   subgraph cluster_img_opt_04_stray_light {
     label="IMG-OPT-04 Stray light";
+    labeljust=l;
     style="dashed";
     color="#d62728";
     generate_stray_light_sim;
@@ -40,8 +48,21 @@ digraph pipeline {
     img_04_test_outcome;
   }
 
+  subgraph cluster_stray_light_common_img_opt_04_and__06 {
+    label="Stray-light common (IMG-OPT-04 and -06)";
+    labeljust=l;
+    style="dashed";
+    color="#7f7f7f";
+    populate_result_obj_info;
+    centroid_2passes_oversample;
+    stray_light_mask_real;
+    stray_light_segmentation;
+    stray_light_segmentation_combined;
+  }
+
   subgraph cluster_img_opt_06_out_of_field_stray_light {
     label="IMG-OPT-06 Out-of-field stray light";
+    labeljust=l;
     style="dashed";
     color="#8c564b";
     generate_out_of_field_sim;
@@ -52,65 +73,79 @@ digraph pipeline {
 
   subgraph cluster_img_rad_07_photometric_performance {
     label="IMG-RAD-07 Photometric performance";
+    labeljust=l;
     style="dashed";
     color="#9467bd";
     make_flat_frames;
   }
 
-  subgraph cluster_stray_light_common_img_opt_04_and__06 {
-    label="Stray-light common (IMG-OPT-04 and -06)";
-    style="dashed";
-    color="#7f7f7f";
-    populate_result_obj_info;
-    centroid_2passes_oversample;
-    stray_light_mask_real;
-    stray_light_segmentation;
-    stray_light_segmentation_combined;
-  }
-
   generate_fov_sim [label="Generate FOV sims"];
   generate_distortion_sim [label="Generate distortion sims"];
-  generate_psf_quality_sim [label="Generate PSF-quality sims"];
-  generate_stray_light_sim [label="Generate stray-light sims"];
-  generate_out_of_field_sim [label="Generate out-of-field sims"];
+  generate_psf_quality_sim [label="Generate PSF-quality\nsims"];
+  generate_stray_light_sim [label="Generate stray-light\nsims"];
+  generate_out_of_field_sim [label="Generate out-of-field\nsims"];
   make_flat_frames [label="Generate flats"];
   fov_calc [label="Compute FOV"];
   image_distortion [label="Measure distortion"];
-  prepare_psf_grid [label="Load frame, 1st-pass centroids"];
+  prepare_psf_grid [label="Load frame, 1st-pass\ncentroids"];
   process_one_psf [label="Fit one PSF"];
   collect_strehls [label="Collect Strehl over FOV"];
   plot_strehl_fov [label="Plot Strehl over FOV"];
   img_03_test_outcome [label="IMG-OPT-03 pass/fail"];
-  stray_light_brightness_spectrum [label="Arrange segments into brightnesses as function of spatial scales"];
+  stray_light_brightness_spectrum [label="Arrange segments into\nbrightnesses as function\nof spatial scales"];
   img_04_test_outcome [label="IMG-OPT-04 pass/fail"];
-  metis_5838_attenuation [label="METIS-5838: out-of-field attenuation"];
-  metis_9522_check [label="METIS-9522: artefacts vs. 3-sigma background"];
+  metis_5838_attenuation [label="METIS-5838: out-of-field\nattenuation"];
+  metis_9522_check [label="METIS-9522: artefacts\nvs. 3-sigma background"];
   img_06_test_outcome [label="IMG-OPT-06 pass/fail"];
   populate_result_obj_info [label="Populate result object"];
   centroid_2passes_oversample [label="Centroid PSFs"];
   stray_light_mask_real [label="Mask the real PSF"];
   stray_light_segmentation [label="Segment stray light"];
-  stray_light_segmentation_combined [label="Segment stray light (weighted combination of methods)"];
+  stray_light_segmentation_combined [label="Segment stray light\n(weighted combination of\nmethods)"];
 
-  generate_fov_sim -> fov_calc;
-  generate_distortion_sim -> image_distortion;
-  generate_psf_quality_sim -> prepare_psf_grid;
-  prepare_psf_grid -> process_one_psf;
-  process_one_psf -> collect_strehls;
-  collect_strehls -> plot_strehl_fov;
-  collect_strehls -> img_03_test_outcome;
-  stray_light_segmentation -> stray_light_brightness_spectrum;
-  stray_light_segmentation_combined -> stray_light_brightness_spectrum;
-  stray_light_brightness_spectrum -> img_04_test_outcome;
-  stray_light_mask_real -> metis_5838_attenuation;
-  stray_light_segmentation -> metis_9522_check;
-  stray_light_segmentation_combined -> metis_9522_check;
-  metis_5838_attenuation -> img_06_test_outcome;
-  metis_9522_check -> img_06_test_outcome;
-  generate_stray_light_sim -> populate_result_obj_info;
-  generate_out_of_field_sim -> populate_result_obj_info;
-  populate_result_obj_info -> centroid_2passes_oversample;
-  centroid_2passes_oversample -> stray_light_mask_real;
-  stray_light_mask_real -> stray_light_segmentation;
-  stray_light_mask_real -> stray_light_segmentation_combined;
+  { rank=same; generate_fov_sim; generate_distortion_sim; generate_psf_quality_sim; generate_stray_light_sim; generate_out_of_field_sim; make_flat_frames; }
+  generate_fov_sim -> generate_distortion_sim [style=invis];
+  generate_distortion_sim -> generate_psf_quality_sim [style=invis];
+  generate_psf_quality_sim -> generate_stray_light_sim [style=invis];
+  generate_stray_light_sim -> generate_out_of_field_sim [style=invis];
+  generate_out_of_field_sim -> make_flat_frames [style=invis];
+  { rank=same; fov_calc; image_distortion; prepare_psf_grid; populate_result_obj_info; }
+  fov_calc -> image_distortion [style=invis];
+  image_distortion -> prepare_psf_grid [style=invis];
+  prepare_psf_grid -> populate_result_obj_info [style=invis];
+  { rank=same; process_one_psf; centroid_2passes_oversample; }
+  process_one_psf -> centroid_2passes_oversample [style=invis];
+  { rank=same; collect_strehls; stray_light_mask_real; }
+  collect_strehls -> stray_light_mask_real [style=invis];
+  { rank=same; img_03_test_outcome; plot_strehl_fov; stray_light_segmentation; stray_light_segmentation_combined; metis_5838_attenuation; }
+  img_03_test_outcome -> plot_strehl_fov [style=invis];
+  plot_strehl_fov -> stray_light_segmentation [style=invis];
+  stray_light_segmentation -> stray_light_segmentation_combined [style=invis];
+  stray_light_segmentation_combined -> metis_5838_attenuation [style=invis];
+  { rank=same; stray_light_brightness_spectrum; metis_9522_check; }
+  stray_light_brightness_spectrum -> metis_9522_check [style=invis];
+  { rank=same; img_04_test_outcome; img_06_test_outcome; }
+  img_04_test_outcome -> img_06_test_outcome [style=invis];
+
+  generate_fov_sim -> fov_calc [weight=10];
+  generate_distortion_sim -> image_distortion [weight=10];
+  generate_psf_quality_sim -> prepare_psf_grid [weight=10];
+  prepare_psf_grid -> process_one_psf [weight=10];
+  process_one_psf -> collect_strehls [weight=10];
+  collect_strehls -> plot_strehl_fov [weight=10];
+  collect_strehls -> img_03_test_outcome [weight=10];
+  stray_light_segmentation -> stray_light_brightness_spectrum [style=dashed, color="#999999", constraint=false];
+  stray_light_segmentation_combined -> stray_light_brightness_spectrum [style=dashed, color="#999999", constraint=false];
+  stray_light_brightness_spectrum -> img_04_test_outcome [weight=10];
+  stray_light_mask_real -> metis_5838_attenuation [style=dashed, color="#999999", constraint=false];
+  stray_light_segmentation -> metis_9522_check [style=dashed, color="#999999", constraint=false];
+  stray_light_segmentation_combined -> metis_9522_check [style=dashed, color="#999999", constraint=false];
+  metis_5838_attenuation -> img_06_test_outcome [weight=10];
+  metis_9522_check -> img_06_test_outcome [weight=10];
+  generate_stray_light_sim -> populate_result_obj_info [style=dashed, color="#999999", constraint=false];
+  generate_out_of_field_sim -> populate_result_obj_info [style=dashed, color="#999999", constraint=false];
+  populate_result_obj_info -> centroid_2passes_oversample [weight=10];
+  centroid_2passes_oversample -> stray_light_mask_real [weight=10];
+  stray_light_mask_real -> stray_light_segmentation [weight=10];
+  stray_light_mask_real -> stray_light_segmentation_combined [weight=10];
 }
