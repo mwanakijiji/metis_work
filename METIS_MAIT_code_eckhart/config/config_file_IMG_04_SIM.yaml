@@ -1,0 +1,81 @@
+# Scenario for IMG_OPT_04_METIS_AIT_img_cal_stray_light_SIM.py: one entry per
+# requirement. Format and options: see modules/sim_common.py and
+# config_file_IMG_RAD_07_SIM.yaml.
+# Files: data/IMG_04_simmed_stray_light_data/
+#   IMG_OPT_04_<requirement>_<instrument>_<case>.fits
+# with the true artefact regions in an extra TRUTH_LABELS extension (0: none, 1..N)
+
+instruments:
+  Br_alpha:
+    fp_mask: pinhole_lm
+    pp_mask: PPS-CFO2
+    obs_filter: Br_alpha
+    nd_filter: null
+    obs_mode: wcu_img_lm
+    dit: 0.065
+    ndit: 2
+    intrapixel_capacitance: true
+  N2:
+    fp_mask: pinhole_n
+    pp_mask: PPS-CFO2
+    obs_filter: N2
+    nd_filter: null
+    obs_mode: wcu_img_n
+    dit: 0.0025
+    ndit: 1
+    intrapixel_capacitance: true
+
+# synthetic artefacts: random contiguous shapes
+# (backbone_img_opt_04_stray_light.make_random_contiguous_stray_light), with a fixed
+# seed so the PASS and FAIL cases have the same shapes; shapes within
+# psf_exclusion_lambda_over_d * lambda/D of the PSF are dropped (the ANALYSIS masks the
+# PSF), and the edges are softened with a 3x3 box filter
+artefacts: &artefacts
+  seed: 4
+  n_shapes: 5
+  pixels_per_shape: [300, 800]
+  psf_exclusion_lambda_over_d: 20
+
+requirements:
+
+  METIS-1189-1429:
+    simulate: true
+    req_id: METIS-1189,METIS-1429
+    description: >-
+      METIS-1189: the maximum allowed stray light irradiance from an in-field source
+      shall be less than 0.1% of the peak irradiance in the focal planes of the IMG.
+      METIS-1429: ... less than 0.04% of the peak irradiance in the IMG-LM and IMG-N
+      detector planes from an in-field source positioned in the CFO-FP2 plane.
+    artefacts: *artefacts
+    # the stricter 0.04% of METIS-1429 (as METIS_1189_1429_PEAK_FRAC in
+    # backbone_img_opt_04_stray_light.py); every artefact gets the injected peak
+    limit:
+      peak_frac:
+        value: 4.0e-4
+        pass_if: "<="
+        unit: artefact peak irradiance / PSF peak
+    cases:
+      pass: {inject: {peak_frac: 1.0e-4}}
+      fail: {inject: {peak_frac: 2.0e-3}}
+
+  METIS-9522:
+    simulate: true
+    description: >-
+      After data reduction and calibration, the flux in optical artefacts and ghosts
+      shall be less than the 3-sigma thermal background noise for one hour of
+      observations and for the respective spatial scale of the ghost.
+    artefacts: *artefacts
+    # as tested by the ANALYSIS: an artefact's total flux vs. 3-sigma of the noise of a
+    # sum over its area. The SIM takes that noise as sigma_pix * sqrt(area), with
+    # sigma_pix the per-pixel noise of a background-subtracted frame (std of the
+    # difference of two darks); correlated noise (IPC) makes the real area noise
+    # somewhat larger, so the cases are well away from the limit. The FAIL case must
+    # also be bright enough for the segmentation to find the artefacts
+    limit:
+      flux_over_3sigma:
+        value: 1.0
+        pass_if: "<="
+        unit: artefact total flux / (3 sigma of the noise summed over its area)
+    cases:
+      pass: {inject: {flux_over_3sigma: 0.2}}
+      fail: {inject: {flux_over_3sigma: 50.0}}

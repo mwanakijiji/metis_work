@@ -1,37 +1,66 @@
-# FOV simulation run configurations
-# Paths are relative to the project stem
-# Each run inherits defaults; override only what differs
+# Scenario for IMG_OPT_01_METIS_AIT_img_cal_fov_SIM.py: one entry per requirement.
+# Format and options: see modules/sim_common.py and config_file_IMG_RAD_07_SIM.yaml.
+# Files: data/IMG_01_simmed_fov_data/
+#   IMG_OPT_01_<requirement>_<instrument>_<case>_dither<N>.fits (N = 0..3)
 
-defaults:
-  pp_mask: PPS-CFO2
-  config_coords_guesses_file_name: config/config_file_IMG_01_coords.yaml
-  results_write_dir: IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_data/
-
-simulation_configs:
-  - obs_filter_name: Br_alpha
-    obs_filter_file_name: '/METIS/filters/Br_alpha.dat'
-    fpmask: pinhole_lm
+instruments:
+  Br_alpha:
+    fp_mask: pinhole_lm
     pp_mask: PPS-CFO2
+    obs_filter: Br_alpha
     nd_filter: null
+    obs_mode: wcu_img_lm
     dit: 0.065
     ndit: 2
-    exptime: np.nan
-    obs_mode: wcu_img_lm
-    illuminated_pixels_x: 1920 # pixel length of active on-sky area of detector
-    illuminated_pixels_y: 1920
-    use_exp_time_only: False
-    file_name_abs_trunc: /podman-share/metis_work/playing_with_scopesim/IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_data/IMG_OPT_01_METIS_AIT_img_cal_fov_filter_Br_alpha_simmed_ # suffix will include the dither index
-
-  - obs_filter_name: N2
-    obs_filter_file_name: '/METIS/filters/TC_filter_N2.dat'
-    fpmask: pinhole_n
+    intrapixel_capacitance: true
+  N2:
+    fp_mask: pinhole_n
     pp_mask: PPS-CFO2
+    obs_filter: N2
     nd_filter: ND_OD2
+    obs_mode: wcu_img_n
     dit: 0.3
     ndit: 2
-    exptime: np.nan
-    obs_mode: wcu_img_n
-    illuminated_pixels_x: 1990 # pixel length of active on-sky area of detector
-    illuminated_pixels_y: 1990
-    use_exp_time_only: False
-    file_name_abs_trunc: /podman-share/metis_work/playing_with_scopesim/IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_data/IMG_OPT_01_METIS_AIT_img_cal_fov_filter_N2_simmed_
+    intrapixel_capacitance: true
+
+requirements:
+
+  METIS-1095:
+    simulate: true
+    description: >-
+      The FoV shall be 10.0 +1.0/-0.0 arcsec for the LM-arm and 13.47 +0.50/-0.99
+      arcsec for the N-arm of the IMG.
+    # The ANALYSIS takes the pinhole in the 4 dithers to be at the corners of a square
+    # of side 2 * dither_offset_arcsec (distances_corner_psfs_arcsec: 6 in
+    # config_file_IMG_01_METIS_AIT_img_cal_fov_ANALYSIS.yaml), and the FoV as the
+    # resulting pixel scale times illuminated_pixels. The SIM injects a FoV by dithering
+    # by dither_offset_arcsec * FoV_true / FoV_injected instead, where FoV_true =
+    # pixel_scales (common observing config) * illuminated_pixels, so the ANALYSIS
+    # measures FoV_injected. Dithers (x, y): (+,+), (-,+), (-,-), (+,-).
+    dither_offset_arcsec: 3.0
+    by_detector:
+      img_lm:
+        # as in the ANALYSIS config (FoV_true = 5.47 mas * 1920 = 10.50 arcsec)
+        illuminated_pixels: 1920
+        limit:
+          fov:
+            value: [10.0, 11.0]
+            pass_if: in
+            unit: arcsec (side of the square FoV)
+        cases:
+          pass: {inject: {fov: 10.5}}
+          fail: {inject: {fov: 11.5}}
+          fail_low: {inject: {fov: 9.5}}
+      img_n:
+        # as in the ANALYSIS config (FoV_true = 6.79 mas * 1920 = 13.04 arcsec); n.b.
+        # the earlier SIM config had 1990 for N
+        illuminated_pixels: 1920
+        limit:
+          fov:
+            value: [12.48, 13.97]
+            pass_if: in
+            unit: arcsec (side of the square FoV)
+        cases:
+          pass: {inject: {fov: 13.2}}
+          fail: {inject: {fov: 14.5}}
+          fail_low: {inject: {fov: 12.0}}

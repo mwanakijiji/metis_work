@@ -1,0 +1,124 @@
+# Scenario for IMG_RAD_07_photometric_performance_SIM.py: one entry per requirement.
+#
+# For each requirement with simulate: true, the SIM writes one FITS file (or one per
+# flux level/step) per case, named IMG_RAD_07_<requirement>_<filter>_<case>[_...].fits,
+# with the requirement and the injected truth in the primary header (REQ_ID, REQ_LIM,
+# INJ_VAL, EXPECTED, SIMVER, ...).
+#
+# limit: one or more quantities, each with
+#   value:   the requirement's limit
+#   pass_if: '<=' (the measured quantity must not exceed the limit) or '>='
+#   unit, note: for humans
+# cases: case name -> {inject: {quantity: injected value}}. EXPECTED (PASS/FAIL) is
+#   computed from inject vs. limit; cases named 'pass' / 'fail' must agree with it (the
+#   SIM stops otherwise). Every simulated requirement needs a 'pass' and a 'fail' case,
+#   clearly on either side of the limit; other cases (e.g. 'near') are optional.
+# (format and options: see modules/sim_common.py)
+
+# WCU / instrument set-up for the flat fields (WCU FP mask 'open' = flat illumination)
+instrument:
+  fp_mask: open
+  pp_mask: SPM-LM
+  psf_kernel: SPM-LM
+  obs_filter: HCI_L_short
+  nd_filter: null
+  obs_mode: wcu_img_lm
+  dit: 0.02 # s; one DIT per frame, unsaturated at full black-body aperture (check)
+  ndit: 1
+  intrapixel_capacitance: true
+
+requirements:
+
+  METIS-2594:
+    simulate: true
+    description: >-
+      METIS internal calibration shall provide a range of flux levels matching that
+      encountered in scientific operation as defined in METIS-3137 (E-TNT-MPIA-MET-1004).
+    # Flux levels as fractions of the detector saturation level, saturation_adu[detector]
+    # in config_file_common_observing_params.yaml (ADU per DIT; img_lm or img_n from the
+    # instrument's obs_mode). The level is the median of the signal (illuminated frame -
+    # dark) per DIT. The calibration must reach down to 0.1 and up to 0.8 of saturation.
+    limit:
+      flux_min:
+        value: 0.1
+        pass_if: "<=" # the calibration must reach down to the faintest level
+        unit: fraction of saturation
+        note: faintest calibration flux, as a fraction of saturation_adu
+      flux_max:
+        value: 0.8
+        pass_if: ">=" # ... and up to the brightest
+        unit: fraction of saturation
+        note: brightest calibration flux, as a fraction of saturation_adu
+    cases:
+      pass: {inject: {flux_min: 0.05, flux_max: 0.9}}
+      fail: {inject: {flux_min: 0.05, flux_max: 0.5}} # does not reach high enough
+      fail_low: {inject: {flux_min: 0.2, flux_max: 0.9}} # does not reach low enough
+
+  METIS-2883:
+    simulate: true
+    description: >-
+      The source used for detector linearity calibration METIS-3289 shall provide an
+      illumination that is spatially homogeneous within +/- 3% peak-to-valley over the
+      science field of view of METIS.
+    limit:
+      half_ptv:
+        value: 0.03
+        pass_if: "<="
+        unit: fraction
+        note: "+/-3% PtV, read as max |pixel / mean - 1| of the flat over the FOV"
+    cases:
+      pass: {inject: {half_ptv: 0.01}}
+      near: {inject: {half_ptv: 0.025}}
+      fail: {inject: {half_ptv: 0.06}}
+
+  METIS-3300:
+    simulate: true
+    description: >-
+      The level of flux of the flat field shall be tunable to 15 discrete values and
+      shall be known at each step to 0.3%. The resulting spatial illumination pattern
+      shall remain constant across the field within 0.5% (0.3% as goal) after tuning.
+    # flux steps: WCU black-body aperture, evenly spaced
+    n_steps: 15
+    bb_aperture_min: 0.0667
+    bb_aperture_max: 1.0
+    limit:
+      flux_error:
+        value: 0.003
+        pass_if: "<="
+        unit: fraction
+        note: max |flux / nominal flux - 1| over the steps
+      pattern_change:
+        value: 0.005
+        pass_if: "<="
+        unit: fraction
+        note: >-
+          max |normalised flat of a step / step-averaged normalised flat - 1|
+          (goal 0.003)
+    cases:
+      pass: {inject: {flux_error: 0.001, pattern_change: 0.001}}
+      fail: {inject: {flux_error: 0.01, pattern_change: 0.01}}
+
+  # not simulated (yet)
+  METIS-2595:
+    simulate: false
+    description: Relative photometric accuracy shall be better than 0.97% rms.
+    reason: verified by test at Observatory level
+  METIS-2595-colour:
+    simulate: false
+    description: Uncertainty in color correction should be less than 1% rms.
+    reason: >-
+      verified by test at Observatory level (the test description lists this as
+      METIS-2595 too; check the requirement ID)
+  METIS-3291:
+    simulate: false
+    description: >-
+      METIS shall allow the characterisation and correction of the relative spectral
+      response function (RSRF) with 3% precision over the wavelength range specified
+      in METIS-1090.
+    reason: needs a spectrally resolved WCU source model; TBD
+  METIS-3301:
+    simulate: false
+    description: >-
+      After calibration, the distortions introduced by METIS shall be removed to better
+      than 0.5 mas over the full field of view.
+    reason: distortion; simulated for IMG-OPT-02

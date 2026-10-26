@@ -7,8 +7,8 @@ METIS-9522.
 Shared stages, called in this order by both ANALYSIS scripts:
 populate_result_obj_info -> centroid_2passes_oversample -> stray_light_mask_real
 -> stray_light_segmentation(_combined)
-after which each test runs its own stages (backbone_img_04_stray_light,
-backbone_img_06_out_of_field).
+after which each test runs its own stages (backbone_img_opt_04_stray_light,
+backbone_img_opt_06_out_of_field).
 """
 
 import logging

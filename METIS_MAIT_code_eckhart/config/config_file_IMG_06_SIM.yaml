@@ -1,0 +1,71 @@
+# Scenario for IMG_OPT_06_METIS_AIT_out_of_field_SIM.py: one entry per requirement.
+# Format and options: see modules/sim_common.py and config_file_IMG_RAD_07_SIM.yaml.
+# Files: data/IMG_06_simmed_out_of_field_data/
+#   IMG_OPT_06_<requirement>_<instrument>_<case>.fits
+
+# Deep exposures: DIT as for IMG-OPT-04 (so no single DIT saturates on the PSF), but
+# many NDIT. Signal grows as NDIT and noise as sqrt(NDIT); with the shallow IMG-OPT-04
+# settings (LM NDIT 2, N NDIT 1) the noise of the 31-pix-smoothed map was ~8e-5 (LM)
+# and ~7e-4 (N) of the PSF peak, so 1e-4 was not measurable. These NDITs bring it to
+# ~1e-5 of the PSF peak, i.e. 5-sigma ~ 0.5e-4 < 1e-4.
+instruments:
+  Br_alpha:
+    fp_mask: pinhole_lm
+    pp_mask: PPS-CFO2
+    obs_filter: Br_alpha
+    nd_filter: null
+    obs_mode: wcu_img_lm
+    dit: 0.065
+    ndit: 128
+    intrapixel_capacitance: true
+  N2:
+    fp_mask: pinhole_n
+    pp_mask: PPS-CFO2
+    obs_filter: N2
+    nd_filter: null
+    obs_mode: wcu_img_n
+    dit: 0.0025
+    ndit: 5000
+    intrapixel_capacitance: true
+
+requirements:
+
+  METIS-5838:
+    simulate: true
+    description: >-
+      Irradiance from sources outside the input beam envelope (defined by the 'FOV' and
+      the max ELT pupil area), propagating between the specified 'input plane' and
+      'output plane' through scattering shall be attenuated by 1e4 (CFO FP2 to the
+      IMG-LM detector, 11"x11" FOV, L/M; CFO FP2 to the IMG-N detector, 14"x14" FOV, N).
+    # The WCU pinhole is centred in ScopeSim, so a truly out-of-field source can't be
+    # simulated: the PSF in the middle of the frame stands in for the unattenuated
+    # irradiance, and scattered light from a virtual source beyond the oof_direction
+    # edge is added (modules/backbone_img_opt_06_out_of_field.make_out_of_field_scatter),
+    # scaled so that PSF peak / max of the scattered light = the injected attenuation,
+    # which is what the ANALYSIS measures (on a box-car smoothed map). Keep the limit in
+    # step with metis_5838.attenuation_req in config_file_IMG_06_out_of_field_observing.yaml
+    oof_direction: "+x"
+    limit:
+      attenuation:
+        value: 1.0e4
+        pass_if: ">="
+        unit: PSF peak / peak scattered irradiance
+    cases:
+      pass: {inject: {attenuation: 1.0e5}}
+      fail: {inject: {attenuation: 1.0e3}}
+
+  METIS-9522:
+    simulate: false
+    description: >-
+      After data reduction and calibration, the flux in optical artefacts and ghosts
+      shall be less than the 3-sigma thermal background noise for one hour of
+      observations and for the respective spatial scale of the ghost.
+    reason: simulated for IMG-OPT-04 (config_file_IMG_04_SIM.yaml)
+
+  METIS-3114:
+    simulate: false
+    description: >-
+      METIS shall be designed and built to be insensitive to outside illumination so
+      that all calibration procedures needed by the instrument can be performed without
+      being affected by routine observatory operations.
+    reason: verified at observatory level

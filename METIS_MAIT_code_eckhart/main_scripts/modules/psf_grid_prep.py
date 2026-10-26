@@ -336,18 +336,18 @@ def _open_fits_hdul(file_name: str):
 
 
 def load_grid_data_from_fits(
-    file_name: str, hdu_index: int = 1
+    file_name: str, hdu_index: Union[int, str] = 1
 ) -> tuple[np.ndarray, Any]:
     """
-    Load image data and header metadata from a selected FITS HDU (alias of
-    load_fits_data).
+    Load the background-subtracted frame of a SIM file: the BCKGD_SUBTED extension if
+    the file has one (wherever it is), else HDU ``hdu_index`` (as load_fits_data).
 
     INPUTS
     ----------
     file_name : str
         Path to the FITS file containing the PSF-grid data.
-    hdu_index : int, optional
-        Index of the HDU to read from the FITS file.
+    hdu_index : int or str, optional
+        HDU to read if the file has no BCKGD_SUBTED extension (older SIM files).
 
     OUTPUTS
     -------
@@ -355,10 +355,16 @@ def load_grid_data_from_fits(
         Tuple containing a copy of the HDU data as a NumPy array and a copy of the HDU
         header.
     """
-    return load_fits_data(file_name, hdu_index=hdu_index)
+    with _open_fits_hdul(file_name) as hdul:
+        has_bckgd_subted = "BCKGD_SUBTED" in [hdu.name for hdu in hdul]
+    return load_fits_data(
+        file_name, hdu_index="BCKGD_SUBTED" if has_bckgd_subted else hdu_index
+    )
 
 
-def load_fits_data(file_name: str, hdu_index: int = 1) -> tuple[np.ndarray, Any]:
+def load_fits_data(
+    file_name: str, hdu_index: Union[int, str] = 1
+) -> tuple[np.ndarray, Any]:
     """
     Load image data and header metadata from a selected FITS HDU.
 
@@ -366,18 +372,19 @@ def load_fits_data(file_name: str, hdu_index: int = 1) -> tuple[np.ndarray, Any]
     raises errno 35 (Resource deadlock avoided), copies the file to ``/tmp`` (with
     ``cp``, ``dd`` or ``cat``) and opens that instead.
 
-    If ``hdu_index`` is past the end of the file, or that HDU has no array data,
-    falls back to the first HDU that contains a usable image array (usually the
-    primary HDU at index 0 for single-extension FITS files).
+    If ``hdu_index`` is past the end of the file, not an EXTNAME in the file, or that
+    HDU has no array data, falls back to the first HDU that contains a usable image
+    array (usually the primary HDU at index 0 for single-extension FITS files).
 
     INPUTS
     ----------
     file_name : str
         Abs path to the FITS file containing the PSF-grid data.
-    hdu_index : int, optional
-        Preferred HDU index. Which extension holds the science array depends on the
-        IMG-OPT SIM writer (e.g. ``BCKGD_SUBTED`` is extension 1 for IMG-OPT-04 and
-        extension 2 for IMG-OPT-06); simpler FITS may only have HDU 0.
+    hdu_index : int or str, optional
+        Preferred HDU: an index, or an EXTNAME. The SIM writers (modules/sim_common.py)
+        write RAW_READOUT, BCKGD_SUBTED, BACKGROUND (+ extras) after a header-only
+        primary, so BCKGD_SUBTED is extension 2 there; older SIM files had it at 1.
+        Prefer the EXTNAME. Simpler FITS may only have HDU 0.
 
     OUTPUTS
     -------
@@ -387,7 +394,7 @@ def load_fits_data(file_name: str, hdu_index: int = 1) -> tuple[np.ndarray, Any]
     """
     with _open_fits_hdul(file_name) as hdul:
         hdu, used_index = _select_image_hdu(hdul, preferred_index=hdu_index)
-        if used_index != hdu_index:
+        if used_index != hdu_index and hdu.name != hdu_index:
             logging.warning(
                 "FITS %s: requested HDU %s unavailable or empty; using HDU %s instead "
                 "(file has %s HDU(s)).",
@@ -410,13 +417,21 @@ def _hdu_has_image_data(hdu) -> bool:
     return arr.ndim >= 1 and arr.size > 0
 
 
-def _select_image_hdu(hdul, preferred_index: int = 1):
+def _select_image_hdu(hdul, preferred_index: Union[int, str] = 1):
     """
-    Return ``(hdu, index)`` for ``preferred_index`` if usable, else the first
-    image-bearing HDU in the file.
+    Return ``(hdu, index)`` for ``preferred_index`` (an index or an EXTNAME) if usable,
+    else the first image-bearing HDU in the file.
     """
     n_hdus = len(hdul)
-    if 0 <= preferred_index < n_hdus and _hdu_has_image_data(hdul[preferred_index]):
+    if isinstance(preferred_index, str):
+        names = [hdu.name for hdu in hdul]
+        if preferred_index in names:
+            idx = names.index(preferred_index)
+            if _hdu_has_image_data(hdul[idx]):
+                return hdul[idx], idx
+    elif 0 <= preferred_index < n_hdus and _hdu_has_image_data(
+        hdul[preferred_index]
+    ):
         return hdul[preferred_index], preferred_index
 
     for idx, hdu in enumerate(hdul):

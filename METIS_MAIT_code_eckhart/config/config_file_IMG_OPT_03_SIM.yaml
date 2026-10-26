@@ -1,0 +1,133 @@
+# Scenario for IMG_OPT_03_METIS_AIT_img_cal_psf_quality_SIM.py: one entry per
+# requirement. Format and options: see modules/sim_common.py and
+# config_file_IMG_RAD_07_SIM.yaml.
+# Files: data/IMG_OPT_03_psf_quality_simmed_data/
+#   IMG_OPT_03_<requirement>_<instrument>_<case>.fits
+
+# Instruments: the (filter, cold stop) rows of E-REP-MPIA-1203 0-1, Table 4-1 (p. 40);
+# see also config_file_IMG_OPT_03_table_4-1_inputs.yaml. PSF kernels on the ScopeSim
+# server (METIS_psfs/PSF_<psf_kernel>.fits): only the PPS masks have a _WCU (no ELT
+# spiders) variant; SPM, CLS and RLS kernels include the ELT spiders. The table's
+# "METISsim" row (IB 4.05) is left out: PSF_METISsim exists, but METISsim is not a mask
+# in the WCU pupil-mask wheel.
+# TODO: dit values are placeholders -- tune by hand to avoid saturation / reach SNR
+instruments:
+  # LM
+  HCI_L_short_SPM-LM:
+    {fp_mask: grid_lm, pp_mask: SPM-LM, psf_kernel: SPM-LM, obs_filter: HCI_L_short,
+     nd_filter: null, obs_mode: wcu_img_lm, dit: 0.004, ndit: 1}
+  HCI_L_short_PPS-LM:
+    {fp_mask: grid_lm, pp_mask: PPS-LM, psf_kernel: PPS-LM_WCU, obs_filter: HCI_L_short,
+     nd_filter: null, obs_mode: wcu_img_lm, dit: 0.005, ndit: 1}
+  HCI_L_short_RLS-LM:
+    {fp_mask: grid_lm, pp_mask: RLS-LM, psf_kernel: RLS-LM, obs_filter: HCI_L_short,
+     nd_filter: null, obs_mode: wcu_img_lm, dit: 0.01, ndit: 1}
+  Lp_PPS-CFO2:
+    {fp_mask: grid_lm, pp_mask: PPS-CFO2, psf_kernel: PPS-CFO2_WCU, obs_filter: Lp,
+     nd_filter: null, obs_mode: wcu_img_lm, dit: 0.002, ndit: 1}
+  IB_4.05_CLS-LM:
+    {fp_mask: grid_lm, pp_mask: CLS-LM, psf_kernel: CLS-LM, obs_filter: IB_4.05,
+     nd_filter: null, obs_mode: wcu_img_lm, dit: 0.01, ndit: 1}
+  Mp_CLS-LM:
+    {fp_mask: grid_lm, pp_mask: CLS-LM, psf_kernel: CLS-LM, obs_filter: Mp,
+     nd_filter: null, obs_mode: wcu_img_lm, dit: 0.004, ndit: 1}
+  CO_ref_CLS-LM:
+    {fp_mask: grid_lm, pp_mask: CLS-LM, psf_kernel: CLS-LM, obs_filter: CO_ref,
+     nd_filter: null, obs_mode: wcu_img_lm, dit: 0.008, ndit: 1}
+  # 3.3 um, for METIS-2864 (not a Table 4-1 row); dit is a placeholder
+  PAH_3.3_PPS-CFO2:
+    {fp_mask: grid_lm, pp_mask: PPS-CFO2, psf_kernel: PPS-CFO2_WCU, obs_filter: PAH_3.3,
+     nd_filter: null, obs_mode: wcu_img_lm, dit: 0.02, ndit: 1}
+  # N (placeholder dit from the IMG-OPT-04 N2 config)
+  N1_SPM-N:
+    {fp_mask: pinhole_n, pp_mask: SPM-N, psf_kernel: SPM-N, obs_filter: N1,
+     nd_filter: null, obs_mode: wcu_img_n, dit: 0.0025, ndit: 50}
+  N2_CLS-N:
+    {fp_mask: pinhole_n, pp_mask: CLS-N, psf_kernel: CLS-N, obs_filter: N2,
+     nd_filter: null, obs_mode: wcu_img_n, dit: 0.0030, ndit: 50}
+  N3_CLS-N:
+    {fp_mask: pinhole_n, pp_mask: CLS-N, psf_kernel: CLS-N, obs_filter: N3,
+     nd_filter: null, obs_mode: wcu_img_n, dit: 0.0060, ndit: 50}
+  PAH_8.6_SPM-N:
+    {fp_mask: pinhole_n, pp_mask: SPM-N, psf_kernel: SPM-N, obs_filter: PAH_8.6,
+     nd_filter: null, obs_mode: wcu_img_n, dit: 0.0200, ndit: 50}
+  S_IV_SPM-N:
+    {fp_mask: pinhole_n, pp_mask: SPM-N, psf_kernel: SPM-N, obs_filter: S_IV,
+     nd_filter: null, obs_mode: wcu_img_n, dit: 0.0150, ndit: 50}
+  Ne_II_SPM-N:
+    {fp_mask: pinhole_n, pp_mask: SPM-N, psf_kernel: SPM-N, obs_filter: Ne_II,
+     nd_filter: null, obs_mode: wcu_img_n, dit: 0.0200, ndit: 50}
+
+# Strehl injection: signal' = s * signal + (1 - s) * (signal convolved with a
+# normalised Gaussian halo), which conserves the flux and lowers the PSF peaks. s is
+# solved so that the brightest PSF's peak drops by the factor
+# injected Strehl / reference_strehl, where reference_strehl is the Strehl the
+# ANALYSIS measures on the unmodified ScopeSim frames (1.0 assumes the ScopeSim PSFs are
+# perfect; measure it on the TABLE-4-1 reference frames and set it here). The halo
+# sigma is halo_sigma_frac_cutout * cutout_edge_native (common observing config), so the
+# halo stays in the cutout the ANALYSIS measures the Strehl (peak / flux) in.
+strehl_injection: &strehl_injection
+  reference_strehl: {img_lm: 1.0, img_n: 1.0}
+  halo_sigma_frac_cutout: 0.125
+
+requirements:
+
+  METIS-1408-1409:
+    simulate: true
+    req_id: METIS-1408,METIS-1409
+    description: >-
+      METIS-1408: diffraction limited performance (Strehl >= 80%) at lambda > 3 um in
+      all modes over the entire FOV. METIS-1409: the instrument WFE shall satisfy the
+      diffraction limit requirement (Strehl > 0.8) at 3 um for IMG (LM and NQ) over the
+      full FOV.
+    # add instrument names here to simulate more of Table 4-1 (each writes one file per
+    # case)
+    instruments: [HCI_L_short_SPM-LM, N2_CLS-N]
+    strehl_injection: *strehl_injection
+    limit:
+      strehl:
+        value: 0.8
+        pass_if: ">="
+        unit: Strehl ratio (STREHL_MIN in backbone_img_03_psf_quality.py)
+    cases:
+      pass: {inject: {strehl: 0.92}}
+      near: {inject: {strehl: 0.83}}
+      fail: {inject: {strehl: 0.6}}
+
+  METIS-2864:
+    simulate: true
+    description: >-
+      The minimum Strehl ratio of the WCU+CFO+IMG-LM optical path shall be >80% at
+      3.3 um over the entire field of view.
+    instruments: [PAH_3.3_PPS-CFO2]
+    detectors: [img_lm]
+    strehl_injection: *strehl_injection
+    limit:
+      strehl:
+        value: 0.8
+        pass_if: ">="
+        unit: Strehl ratio
+    cases:
+      pass: {inject: {strehl: 0.92}}
+      fail: {inject: {strehl: 0.6}}
+
+  METIS-3503:
+    simulate: false
+    description: >-
+      METIS shall be able to characterise the shape of the instrument PSF across the
+      entire FoV using the WCU.
+    reason: >-
+      no numeric limit; the ANALYSIS checks that every PSF of the grid was fitted, which
+      any of the files above tests
+
+  # not a requirement: the unmodified ScopeSim frames of the Table 4-1 rows, written as
+  # IMG_OPT_03_TABLE-4-1_<instrument>_reference.fits (for
+  # tests/run_IMG_OPT_03_table_4-1.py, via
+  # config_file_IMG_OPT_03_table_4-1_data_states.yaml, and for measuring the
+  # reference_strehl above)
+  TABLE-4-1:
+    simulate: true
+    description: unmodified frames of the E-REP-MPIA-1203 Table 4-1 rows (no injection)
+    instruments: [HCI_L_short_SPM-LM, HCI_L_short_PPS-LM, HCI_L_short_RLS-LM,
+                  Lp_PPS-CFO2, IB_4.05_CLS-LM, Mp_CLS-LM, CO_ref_CLS-LM, N1_SPM-N,
+                  N2_CLS-N, N3_CLS-N, PAH_8.6_SPM-N, S_IV_SPM-N, Ne_II_SPM-N]

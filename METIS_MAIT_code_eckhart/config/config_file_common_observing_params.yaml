@@ -1,3 +1,9 @@
+# Observing parameters common to all IMG AIT tests (filters, pixel scales, saturation
+# levels, pinholes, aperture sizes). Read by every SIM and ANALYSIS script via
+# modules.config_common.load_observing_config, which merges each test's own observing
+# config (if any) on top of this one; keys set there override the ones here.
+# (Formerly config_file_IMG_OPT_03_psf_quality_observing_params.yaml.)
+
 # central weighted wavelength only; can lead to inaccuracies
 monochromatic_observing_filters_lm:
   short-L: 3.29e-6
@@ -18,7 +24,7 @@ monochromatic_observing_filters_lm:
   HCI_M: 4.95e-6
 
 # file names of actual filter curves
-# paths are pre-pended in the code with 
+# paths are pre-pended in the code with
 # PKGS_DIR = (Path(__file__).resolve().parent / "inst_pkgs").resolve()
 polychromatic_observing_filters_lm_leaf_name:
   short-L: '/METIS/filters/TC_filter_short-L.dat'

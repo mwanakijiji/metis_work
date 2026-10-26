@@ -1,0 +1,27 @@
+# IMG-OPT-06 specifics; merged on top of config_file_IMG_04_stray_light_observing.yaml
+# (filters, pixel scales, sensitivities, D_aperture, ...) by the ANALYSIS script;
+# keys set here override the IMG-OPT-04 ones
+
+# radius of the mask over the real PSF, in units of lambda/D; everything inside is
+# excluded from the stray light segmentation (METIS-9522) and the background
+# statistics, and the PSF peak is taken from inside it
+psf_mask_n_lambda_over_d: 5.0
+
+# METIS-5838: out-of-field irradiance shall be attenuated by >= attenuation_req
+metis_5838:
+  attenuation_req: 1.0e4
+  # exclude r < N * lambda/D around the PSF, so the PSF wings are not mistaken for
+  # scattered light (Airy wings at 30 lambda/D are ~3e-6 of the peak)
+  n_lambda_over_d_exclusion: 30
+  # box-car smoothing of the image before taking the peak scattered irradiance (pixels)
+  smoothing_box_pix: 31
+  # scattered light only counts as detected if the peak of the smoothed map exceeds
+  # this many sigma of the smoothed-map noise (measured from the null frame). With
+  # ~(2048/31)**2 ~ 4000 independent cells, P(>5 sigma) ~ 3e-7 per cell, i.e. ~1e-3
+  # false alarms per frame. If nothing is detected, the attenuation is a lower limit.
+  detection_nsigma: 5
+
+# FOV over which METIS-5838 applies (side of square, arcsec); FYI for now
+fov_req_arcsec:
+  img_lm: 11.0
+  img_n: 14.0
