@@ -7,13 +7,13 @@ import numpy as np
 import pytest
 from scipy import ndimage
 
-# backbone_img_04_stray_light imports pipeline_registry from misc/ and lives in main_scripts/modules
+# stray_light_common imports pipeline_registry from misc/ and lives in main_scripts/modules
 _ROOT = Path(__file__).resolve().parents[1]
 for _p in (_ROOT / "main_scripts", _ROOT / "misc"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from modules.backbone_img_04_stray_light import (  # noqa: E402
+from modules.stray_light_common import (  # noqa: E402
     area_noise_sigma,
     nan_box_mean,
 )

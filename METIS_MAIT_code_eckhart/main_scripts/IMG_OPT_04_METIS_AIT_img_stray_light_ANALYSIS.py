@@ -8,6 +8,7 @@ import logging
 import os
 
 import modules.backbone_img_04_stray_light as sl
+import modules.stray_light_common as slc
 from modules.helpers import load_config_and_pipe, setup_logging
 from modules.psf_grid_prep import load_fits_data
 
@@ -100,47 +101,52 @@ def main():
         data_readout, _ = load_fits_data(file_name, hdu_index=1)
 
         # init the result object
-        result = sl.StrayLightResult(
+        result = slc.StrayLightResult(
             file_absname=file_name,
             filter_name=data_state["filter_name"],
             detector=data_state["detector"],
             image=data_readout,
+            results_dir=sl.RESULTS_DIR_IMG_04,
         )
 
+        # shared stray-light stages (stray_light_common)
+
         # populate object with data state info
-        result = sl.populate_result_obj_info(
+        result = slc.populate_result_obj_info(
             result, data_state, observing_config=observing_config
         )
 
         # center on the real PSF
-        result = sl.centroid_2passes_oversample(
+        result = slc.centroid_2passes_oversample(
             result_obj=result,
             config_coords_guesses_file_name=coords_guesses_config_file,
         )
 
         # make the mask for the real PSF
-        result = sl.stray_light_mask_real(
+        result = slc.stray_light_mask_real(
             result_obj=result, observing_config=observing_config
         )
 
         # segment the remaining light; method/params can be set per data state
-        # (see sl.SEGMENTATION_METHODS and sl.SEGMENTATION_DEFAULT_PARAMS)
+        # (see slc.SEGMENTATION_METHODS and slc.SEGMENTATION_DEFAULT_PARAMS)
         segmentation_method = data_state.get("segmentation_method", "combined")
         if segmentation_method == "combined":
             # weighted combination of all methods (weights and vote fraction N from the
             # data state)
-            result = sl.stray_light_segmentation_combined(
+            result = slc.stray_light_segmentation_combined(
                 result,
                 weights=data_state.get("segmentation_weights"),
                 vote_fraction=data_state.get("segmentation_vote_fraction"),
                 params=data_state.get("segmentation_params"),
             )
         else:
-            result = sl.stray_light_segmentation(
+            result = slc.stray_light_segmentation(
                 result,
                 method=segmentation_method,
                 params=data_state.get("segmentation_params"),
             )
+
+        # IMG-OPT-04 stages
 
         # sort out the segments into different spatial scales, keeping track of
         # illumination, and measure what the requirements are tested against

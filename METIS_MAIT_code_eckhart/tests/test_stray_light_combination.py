@@ -6,19 +6,20 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-# backbone_img_04_stray_light imports pipeline_registry from misc/ and lives in main_scripts/modules
+# stray_light_common imports pipeline_registry from misc/ and lives in main_scripts/modules
 _ROOT = Path(__file__).resolve().parents[1]
 for _p in (_ROOT / "main_scripts", _ROOT / "misc"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from modules.backbone_img_04_stray_light import (  # noqa: E402
+from modules.stray_light_common import (  # noqa: E402
     SEGMENTATION_METHODS,
     _combine_method_regions,
     _relabel_min_area,
     _resolve_segmentation_weights,
     _resolve_vote_fraction,
     iter_regions,
+    region_stats,
 )
 
 SHAPE = (60, 60)
@@ -107,6 +108,19 @@ def test_iter_regions():
     slices, inside = regions[3]
     assert slices == (slice(20, 30), slice(40, 45))
     assert inside.all() and inside.shape == (10, 5)
+
+
+def test_region_stats():
+    labels = _box(2, 4, 2, 6, label=1) + _box(20, 30, 40, 45, label=3)
+    image = np.full(SHAPE, 2.0)
+    image[25, 42] = 10.0
+    regions, cutouts = region_stats(image, labels)
+    assert [r.label for r in regions] == [1, 3] and len(cutouts) == 2
+    region_3 = regions[1]
+    assert region_3.area_pix == 50
+    assert region_3.peak_irradiance == pytest.approx(10.0)
+    assert region_3.total_flux == pytest.approx(49 * 2.0 + 10.0)
+    assert region_3.surface_brightness == pytest.approx((49 * 2.0 + 10.0) / 50)
 
 
 def test_resolve_weights_defaults_and_overrides():

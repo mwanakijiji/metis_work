@@ -36,13 +36,8 @@ digraph pipeline {
     style="dashed";
     color="#d62728";
     generate_stray_light_sim;
-    populate_result_obj_info;
     stray_light_brightness_spectrum;
     img_04_test_outcome;
-    centroid_2passes_oversample;
-    stray_light_segmentation;
-    stray_light_segmentation_combined;
-    stray_light_mask_real;
   }
 
   subgraph cluster_img_opt_06_out_of_field_stray_light {
@@ -62,6 +57,17 @@ digraph pipeline {
     make_flat_frames;
   }
 
+  subgraph cluster_stray_light_common_img_opt_04_and__06 {
+    label="Stray-light common (IMG-OPT-04 and -06)";
+    style="dashed";
+    color="#7f7f7f";
+    populate_result_obj_info;
+    centroid_2passes_oversample;
+    stray_light_mask_real;
+    stray_light_segmentation;
+    stray_light_segmentation_combined;
+  }
+
   generate_fov_sim [label="Generate FOV sims"];
   generate_distortion_sim [label="Generate distortion sims"];
   generate_psf_quality_sim [label="Generate PSF-quality sims"];
@@ -75,16 +81,16 @@ digraph pipeline {
   collect_strehls [label="Collect Strehl over FOV"];
   plot_strehl_fov [label="Plot Strehl over FOV"];
   img_03_test_outcome [label="IMG-OPT-03 pass/fail"];
-  populate_result_obj_info [label="Populate result object"];
   stray_light_brightness_spectrum [label="Arrange segments into brightnesses as function of spatial scales"];
   img_04_test_outcome [label="IMG-OPT-04 pass/fail"];
-  centroid_2passes_oversample [label="Centroid PSFs"];
-  stray_light_segmentation [label="Segment stray light"];
-  stray_light_segmentation_combined [label="Segment stray light (weighted combination of methods)"];
-  stray_light_mask_real [label="Mask the real PSF"];
   metis_5838_attenuation [label="METIS-5838: out-of-field attenuation"];
   metis_9522_check [label="METIS-9522: artefacts vs. 3-sigma background"];
   img_06_test_outcome [label="IMG-OPT-06 pass/fail"];
+  populate_result_obj_info [label="Populate result object"];
+  centroid_2passes_oversample [label="Centroid PSFs"];
+  stray_light_mask_real [label="Mask the real PSF"];
+  stray_light_segmentation [label="Segment stray light"];
+  stray_light_segmentation_combined [label="Segment stray light (weighted combination of methods)"];
 
   generate_fov_sim -> fov_calc;
   generate_distortion_sim -> image_distortion;
@@ -93,18 +99,18 @@ digraph pipeline {
   process_one_psf -> collect_strehls;
   collect_strehls -> plot_strehl_fov;
   collect_strehls -> img_03_test_outcome;
-  generate_stray_light_sim -> populate_result_obj_info;
   stray_light_segmentation -> stray_light_brightness_spectrum;
   stray_light_segmentation_combined -> stray_light_brightness_spectrum;
   stray_light_brightness_spectrum -> img_04_test_outcome;
-  populate_result_obj_info -> centroid_2passes_oversample;
-  stray_light_mask_real -> stray_light_segmentation;
-  stray_light_mask_real -> stray_light_segmentation_combined;
-  centroid_2passes_oversample -> stray_light_mask_real;
-  generate_out_of_field_sim -> metis_5838_attenuation;
   stray_light_mask_real -> metis_5838_attenuation;
   stray_light_segmentation -> metis_9522_check;
   stray_light_segmentation_combined -> metis_9522_check;
   metis_5838_attenuation -> img_06_test_outcome;
   metis_9522_check -> img_06_test_outcome;
+  generate_stray_light_sim -> populate_result_obj_info;
+  generate_out_of_field_sim -> populate_result_obj_info;
+  populate_result_obj_info -> centroid_2passes_oversample;
+  centroid_2passes_oversample -> stray_light_mask_real;
+  stray_light_mask_real -> stray_light_segmentation;
+  stray_light_mask_real -> stray_light_segmentation_combined;
 }

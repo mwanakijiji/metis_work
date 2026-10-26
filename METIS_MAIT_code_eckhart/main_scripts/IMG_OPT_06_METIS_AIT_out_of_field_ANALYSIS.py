@@ -9,8 +9,8 @@ import os
 
 from astropy.io import fits
 
-import modules.backbone_img_04_stray_light as sl
 import modules.backbone_img_06_out_of_field as oof
+import modules.stray_light_common as slc
 from modules.helpers import load_config_and_pipe, setup_logging
 from modules.psf_grid_prep import load_fits_data
 
@@ -46,6 +46,9 @@ from modules.psf_grid_prep import load_fits_data
 # corresponds to the saturation limit in the fastest full-frame
 # operation.
 # -> tested the same way as in IMG-OPT-04
+#
+# Pass/fail of each requirement is decided in one place:
+# backbone_img_06_out_of_field.log_test_outcome
 
 
 def main():
@@ -139,44 +142,49 @@ def main():
             filter_name=data_state["filter_name"],
             detector=data_state["detector"],
             image=data_readout,
+            results_dir=oof.RESULTS_DIR_IMG_06,
             expected=header_primary.get("EXPECTED"),
             attenuation_injected=header_primary.get("ATT_INJ"),
             ref_peak_header=header_primary.get("REF_PEAK"),
             null_image=null_image,
         )
 
+        # shared stray-light stages (stray_light_common)
+
         # populate object with data state info
-        result = sl.populate_result_obj_info(
+        result = slc.populate_result_obj_info(
             result, data_state, observing_config=observing_config
         )
 
         # center on the real PSF
-        result = sl.centroid_2passes_oversample(
+        result = slc.centroid_2passes_oversample(
             result_obj=result,
             config_coords_guesses_file_name=coords_guesses_config_file,
         )
 
         # make the mask for the real PSF
-        result = sl.stray_light_mask_real(
+        result = slc.stray_light_mask_real(
             result_obj=result, observing_config=observing_config
         )
+
+        # IMG-OPT-06 stages
 
         # METIS-5838: attenuation of the out-of-field irradiance
         result = oof.metis_5838_attenuation(
             result_obj=result, observing_config=observing_config
         )
 
-        # segment the remaining light (for METIS-9522), as in IMG-OPT-04
+        # segment the remaining light (for METIS-9522), as in IMG-OPT-04 (shared stage)
         segmentation_method = data_state.get("segmentation_method", "combined")
         if segmentation_method == "combined":
-            result = sl.stray_light_segmentation_combined(
+            result = slc.stray_light_segmentation_combined(
                 result,
                 weights=data_state.get("segmentation_weights"),
                 vote_fraction=data_state.get("segmentation_vote_fraction"),
                 params=data_state.get("segmentation_params"),
             )
         else:
-            result = sl.stray_light_segmentation(
+            result = slc.stray_light_segmentation(
                 result,
                 method=segmentation_method,
                 params=data_state.get("segmentation_params"),
@@ -188,7 +196,7 @@ def main():
             result_obj=result, observing_config=observing_config
         )
 
-        # pass/fail summary
+        # pass/fail of each requirement
         oof.log_test_outcome(result)
 
 

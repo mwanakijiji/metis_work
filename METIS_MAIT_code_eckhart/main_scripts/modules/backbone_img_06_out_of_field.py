@@ -1,10 +1,10 @@
 """
 Backbone functions for the IMG-OPT-06 out-of-field stray light test
 
-Re-uses the IMG-OPT-04 machinery (result object, centroiding, PSF mask,
-segmentation, noise per spatial scale) from backbone_img_04_stray_light, and adds
-the checks of METIS-5838 (out-of-field attenuation) and METIS-9522 (artefacts and
-ghosts).
+The result object, centroiding, PSF masking, segmentation and noise machinery are
+shared with IMG-OPT-04 and live in stray_light_common; this module adds the checks of
+METIS-5838 (out-of-field attenuation) and METIS-9522 (artefacts and ghosts), plus the
+synthetic scattered light used by the IMG-OPT-06 SIM script.
 """
 
 import logging
@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pipeline_registry import pipeline_stage  # pylint: disable=import-error
 
-from . import backbone_img_04_stray_light as sl
+from . import stray_light_common as slc
 
 # no IMG-OPT-06 cluster in pipeline_registry yet; move these there when there is one
 CLUSTER_OOF = "IMG-OPT-06 Out-of-field stray light"
@@ -32,9 +32,9 @@ RESULTS_DIR_IMG_06 = str(
 
 
 @dataclass
-class OutOfFieldResult(sl.StrayLightResult):
+class OutOfFieldResult(slc.StrayLightResult):
     """
-    IMG-OPT-04 stray light result, plus the IMG-OPT-06 out-of-field quantities.
+    Shared stray light result, plus the IMG-OPT-06 out-of-field quantities.
     """
 
     # from the SIM primary header (for checking the analysis against the injected truth)
@@ -56,9 +56,6 @@ class OutOfFieldResult(sl.StrayLightResult):
     attenuation_is_lower_limit: bool | None = None
     attenuation_req: float | None = None
     verdict_metis_5838: str | None = None  # 'PASS', 'FAIL' or 'INCONCLUSIVE'
-
-    # METIS-9522
-    pass_metis_9522: bool | None = None
 
 
 def make_out_of_field_scatter(
@@ -111,16 +108,6 @@ def make_out_of_field_scatter(
     return (peak / attenuation) * shape_norm
 
 
-def _lambda_over_d_pix(result_obj, observing_config):
-    """lambda/D in pixels, for the central wavelength of the filter."""
-    lambda_over_d_asec = (
-        206265.0
-        * float(result_obj.wavel_central)
-        / float(observing_config["D_aperture"]["full"])
-    )
-    return lambda_over_d_asec / (result_obj.pixel_scale / 1000.0)
-
-
 def _radius_from_psf_pix(result_obj):
     """2D array of distances (pixels) from the PSF centroid."""
     ny, nx = result_obj.image.shape
@@ -129,12 +116,6 @@ def _radius_from_psf_pix(result_obj):
         np.arange(ny) - result_obj.centroids["y_center_pix_fullarray_normsamp"],
     )
     return np.sqrt(xx**2 + yy**2)
-
-
-def _robust_std(values):
-    """Standard deviation from the median absolute deviation (Gaussian-equivalent)."""
-    values = values[np.isfinite(values)]
-    return 1.4826 * float(np.median(np.abs(values - np.median(values))))
 
 
 def _attenuation_verdict(psf_peak, stray_peak, threshold, attenuation_req):
@@ -165,7 +146,7 @@ def _attenuation_verdict(psf_peak, stray_peak, threshold, attenuation_req):
 
 @pipeline_stage(
     name="metis_5838_attenuation",
-    depends_on=("generate_out_of_field_sim", "stray_light_mask_real"),
+    depends_on=("stray_light_mask_real",),
     cluster=CLUSTER_OOF,
     cluster_color=COLOR_OOF,
     label="METIS-5838: out-of-field attenuation",
@@ -218,8 +199,7 @@ def metis_5838_attenuation(result_obj, observing_config):
         )
 
     # exclude the PSF and its wings
-    lambda_over_d_pix = _lambda_over_d_pix(result_obj, observing_config)
-    excl_radius_pix = n_excl * lambda_over_d_pix
+    excl_radius_pix = n_excl * slc.lambda_over_d_pix(result_obj, observing_config)
     valid = _radius_from_psf_pix(result_obj) > excl_radius_pix
     logging.info(
         "METIS-5838: excluding r < %.0f lambda/D = %.1f pix around the PSF; "
@@ -229,16 +209,16 @@ def metis_5838_attenuation(result_obj, observing_config):
         box_pix,
     )
 
-    smoothed = sl.nan_box_mean(image, valid, box_pix)
+    smoothed = slc.nan_box_mean(image, valid, box_pix)
     stray_peak = float(np.nanmax(smoothed))
     stray_mean = float(np.nanmean(smoothed))
 
     # noise of the smoothed map, from the null frame smoothed the same way
     if result_obj.null_image is not None:
-        smoothed_null = sl.nan_box_mean(
+        smoothed_null = slc.nan_box_mean(
             result_obj.null_image.astype(float), valid, box_pix
         )
-        smoothed_noise = _robust_std(smoothed_null)
+        smoothed_noise = slc.robust_std(smoothed_null)
         logging.info(
             "METIS-5838: noise of the smoothed map from the null frame: %.4g counts "
             "(max |smoothed null| = %.4g)",
@@ -248,7 +228,7 @@ def metis_5838_attenuation(result_obj, observing_config):
     else:
         # no null frame: the spread of the smoothed image itself; any real scattered
         # light inflates it, so the threshold is conservatively high
-        smoothed_noise = _robust_std(smoothed)
+        smoothed_noise = slc.robust_std(smoothed)
         logging.warning(
             "METIS-5838: no null frame (two independent backgrounds); noise of the "
             "smoothed map estimated from the image itself (%.4g counts), which "
@@ -298,8 +278,7 @@ def metis_5838_attenuation(result_obj, observing_config):
 
     # plot the scattered irradiance relative to the source, with the requirement and
     # the detection threshold
-    os.makedirs(RESULTS_DIR_IMG_06, exist_ok=True)
-    fits_stem = os.path.splitext(os.path.basename(result_obj.file_absname))[0]
+    fits_stem = slc.fits_stem_of(result_obj)
     fig, ax = plt.subplots(1, 1, figsize=(10, 10))
     rel = smoothed / psf_peak
     rel_filled = np.nan_to_num(rel, nan=0.0)
@@ -339,7 +318,9 @@ def metis_5838_attenuation(result_obj, observing_config):
         fontsize=10,
     )
     ax.legend(loc="upper right", fontsize=8)
-    plot_file_name = os.path.join(RESULTS_DIR_IMG_06, f"metis_5838_{fits_stem}.png")
+    plot_file_name = os.path.join(
+        slc.results_dir_of(result_obj), f"metis_5838_{fits_stem}.png"
+    )
     fig.savefig(plot_file_name)
     logging.info("Saved plot of METIS-5838 scattered irradiance to %s", plot_file_name)
     plt.close(fig)
@@ -357,10 +338,11 @@ def metis_5838_attenuation(result_obj, observing_config):
 )
 def metis_9522_check(result_obj, observing_config):
     """
-    Check the segmented stray light regions against METIS-9522, as for IMG-OPT-04:
-    pass/fail is the total flux of each region vs. 3-sigma of the background noise of
-    the summed flux over the same area (i.e. for the spatial scale of the region); the
-    point/extended-source sensitivities are compared FYI only.
+    Measure the segmented stray light regions for METIS-9522, as for IMG-OPT-04: each
+    region's total flux and its limit, 3-sigma of the background noise of the summed
+    flux over the same area (i.e. for the spatial scale of the region). Pass/fail is
+    decided in log_test_outcome; the point/extended-source sensitivities are plotted
+    FYI only.
 
     INPUTS:
     - result_obj (OutOfFieldResult): result object, with real_psf_mask and
@@ -369,7 +351,7 @@ def metis_9522_check(result_obj, observing_config):
 
     OUTPUTS:
     - result_obj (OutOfFieldResult), updated attributes:
-        - regions, background_rms, pass_metis_9522
+        - regions (with metis_9522_limit set), background_rms
     """
     if result_obj.segment_map is None:
         msg = "metis_9522_check missing required attributes"
@@ -379,24 +361,9 @@ def metis_9522_check(result_obj, observing_config):
     image = result_obj.image.astype(float)
 
     # flux statistics of each region (within its bounding box)
-    result_obj.regions = []
-    for lab, slices, inside in sl.iter_regions(result_obj.segment_map):
-        vals = image[slices][inside]
-        area = int(inside.sum())
-        result_obj.regions.append(
-            sl.StrayLightRegion(
-                label=int(lab),
-                spatial_scale=np.sqrt(area / np.pi),  # radius of area-equiv. circle
-                peak_irradiance=float(np.nanmax(vals)),
-                total_flux=float(np.nansum(vals)),
-                area_pix=area,
-                surface_brightness=float(np.nansum(vals)) / area,
-            )
-        )
-
+    result_obj.regions, _ = slc.region_stats(image, result_obj.segment_map)
     if not result_obj.regions:
-        logging.info("METIS-9522: Pass (no stray light regions detected)")
-        result_obj.pass_metis_9522 = True
+        logging.info("METIS-9522: no stray light regions detected")
         return result_obj
 
     # background: everything outside the PSF and the stray light regions
@@ -409,30 +376,12 @@ def metis_9522_check(result_obj, observing_config):
         result_obj.background_rms,
     )
 
-    # pass/fail: total flux of each region vs. 3-sigma of the noise for its area
+    # METIS-9522 limit for each region: 3-sigma of the noise for its area
     noise_cache = {}
-    checks = []
     for region_this in result_obj.regions:
-        limit = sl.METIS_9522_NSIGMA * sl.area_noise_sigma(
+        region_this.metis_9522_limit = slc.METIS_9522_NSIGMA * slc.area_noise_sigma(
             image, background_valid, region_this.area_pix, noise_cache
         )
-        ok = region_this.total_flux < limit
-        checks.append(ok)
-        logging.info(
-            "Stray light region %s: flux %.4g %s 3-sigma of background for its area "
-            "(%.4g over %s pix)",
-            region_this.label,
-            region_this.total_flux,
-            "<" if ok else ">=",
-            limit,
-            region_this.area_pix,
-        )
-    result_obj.pass_metis_9522 = all(checks)
-    logging.info(
-        "METIS-9522: %s of %s regions above 3-sigma for their area",
-        checks.count(False),
-        len(checks),
-    )
 
     # FYI only: point/extended-source sensitivities
     (
@@ -440,10 +389,8 @@ def metis_9522_check(result_obj, observing_config):
         extended_limit_counts_per_pix,
         sensitivity_band,
         is_placeholder,
-    ) = sl._metis_9522_limits(  # pylint: disable=protected-access
-        result_obj, observing_config
-    )
-    lambda_over_d_pix = _lambda_over_d_pix(result_obj, observing_config)
+    ) = slc.metis_9522_sensitivity_limits(result_obj, observing_config)
+    lambda_over_d_pix = slc.lambda_over_d_pix(result_obj, observing_config)
     placeholder_note = " [placeholder Jy-to-counts]" if is_placeholder else ""
     max_radius = max(
         [lambda_over_d_pix * 2] + [r.spatial_scale * 1.1 for r in result_obj.regions]
@@ -466,7 +413,7 @@ def metis_9522_check(result_obj, observing_config):
     radii_limit = np.geomspace(1.0, max_radius, 30)
     ax.plot(
         radii_limit,
-        sl.metis_9522_surface_brightness_limit(
+        slc.metis_9522_surface_brightness_limit(
             image, background_valid, radii_limit, noise_cache
         ),
         color="green",
@@ -492,11 +439,10 @@ def metis_9522_check(result_obj, observing_config):
     ax.set_xlabel("Radius of equiv. circle (pixels)")
     ax.set_ylabel("Avg. surf. brightness (counts)")
     ax.legend(fontsize=8)
-    os.makedirs(RESULTS_DIR_IMG_06, exist_ok=True)
-    fits_stem = os.path.splitext(os.path.basename(result_obj.file_absname))[0]
+    fits_stem = slc.fits_stem_of(result_obj)
     ax.set_title(f"METIS-9522: stray light fluxes vs. radius\n{fits_stem}", fontsize=10)
     plot_file_name = os.path.join(
-        RESULTS_DIR_IMG_06, f"metis_9522_brightness_spectrum_{fits_stem}.png"
+        slc.results_dir_of(result_obj), f"metis_9522_brightness_spectrum_{fits_stem}.png"
     )
     fig.savefig(plot_file_name)
     logging.info("Saved plot of brightness spectrum to %s", plot_file_name)
@@ -514,11 +460,34 @@ def metis_9522_check(result_obj, observing_config):
 )
 def log_test_outcome(result_obj):
     """
-    Log the outcome of each requirement and of the whole test (PASS only if both
-    METIS-5838 and METIS-9522 pass; INCONCLUSIVE if METIS-5838 is inconclusive and
-    METIS-9522 passes; else FAIL); if the data are simulated, also check the METIS-5838
+    Decide and log the pass/fail of each IMG-OPT-06 requirement, and of the whole test.
+
+    - METIS-5838: the verdict from metis_5838_attenuation (PASS, FAIL or INCONCLUSIVE).
+    - METIS-9522: the total flux of every stray light region is below 3-sigma of the
+      background noise of the summed flux over its area (StrayLightRegion
+      .metis_9522_limit, from metis_9522_check); no regions: PASS.
+    Overall: PASS only if both pass; INCONCLUSIVE if METIS-5838 is inconclusive and
+    METIS-9522 passes; else FAIL. If the data are simulated, also checks the METIS-5838
     outcome against the injected truth.
+
+    OUTPUTS:
+    - result_obj (OutOfFieldResult), with pass_metis_9522 and verdict_overall set
     """
+    checks_9522 = []
+    for region_this in result_obj.regions:
+        ok = region_this.total_flux < region_this.metis_9522_limit
+        checks_9522.append(ok)
+        logging.info(
+            "Stray light region %s: flux %.4g %s 3-sigma of background for its area "
+            "(%.4g over %s pix)",
+            region_this.label,
+            region_this.total_flux,
+            "<" if ok else ">=",
+            region_this.metis_9522_limit,
+            region_this.area_pix,
+        )
+    result_obj.pass_metis_9522 = all(checks_9522)
+
     att_str = (
         f"{'> ' if result_obj.attenuation_is_lower_limit else ''}"
         f"{result_obj.attenuation_measured:.3g}"
@@ -532,16 +501,23 @@ def log_test_outcome(result_obj):
         att_str,
         result_obj.attenuation_req,
     )
-    logging.info("METIS-9522: %s", "PASS" if result_obj.pass_metis_9522 else "FAIL")
+    logging.info(
+        "METIS-9522: %s (%s of %s regions above 3-sigma for their area)",
+        "PASS" if result_obj.pass_metis_9522 else "FAIL",
+        checks_9522.count(False),
+        len(checks_9522),
+    )
     logging.info("(METIS-3114 is verified at observatory level, not here)")
     logging.info("--------------------------------------------------")
     if result_obj.verdict_metis_5838 == "PASS" and result_obj.pass_metis_9522:
-        overall = "PASS"
+        result_obj.verdict_overall = "PASS"
     elif result_obj.verdict_metis_5838 == "INCONCLUSIVE" and result_obj.pass_metis_9522:
-        overall = "INCONCLUSIVE"
+        result_obj.verdict_overall = "INCONCLUSIVE"
     else:
-        overall = "FAIL"
-    logging.info("IMG 06 OUT-OF-FIELD STRAY LIGHT TEST: %s", overall)
+        result_obj.verdict_overall = "FAIL"
+    logging.info(
+        "IMG 06 OUT-OF-FIELD STRAY LIGHT TEST: %s", result_obj.verdict_overall
+    )
     logging.info("--------------------------------------------------")
 
     if result_obj.expected is not None:

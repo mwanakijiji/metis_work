@@ -61,12 +61,14 @@ requirement texts are quoted in the script docstrings) has a pair of scripts in
   primary, then `RAW_READOUT`, `BCKGD_SUBTED`, `BACKGROUND` (+ extras such as
   `BACKGROUND_2`), with test metadata in the primary header.
 - `*_ANALYSIS.py`: thin `main()` that loads YAML configs, loops over "data states" (one
-  per FITS file) and calls backbone functions in order, logging pass/fail per
-  requirement to a timestamped log file.
+  per FITS file) and calls the pipeline stages in order, ending with the test's
+  `log_test_outcome()`, the one place where pass/fail of each requirement is decided
+  and logged to a timestamped log file.
 - `modules/backbone_img_*.py`: the actual analysis, one module per test. Shared helpers:
-  `modules/helpers.py` (`setup_logging`, `load_config_and_pipe`, `pipe_2_log`) and
+  `modules/helpers.py` (`setup_logging`, `load_config_and_pipe`, `pipe_2_log`),
   `modules/psf_grid_prep.py` (`load_fits_data`, which works around the Errno 35 issue;
-  2-pass oversampled centroiding).
+  2-pass oversampled centroiding) and `modules/stray_light_common.py` (everything
+  IMG-04 and IMG-06 share).
 
 Data flow and conventions:
 - `config/config_file_IMG_<NN>_*_{observing,data_states,coords_guesses}.yaml`:
@@ -75,12 +77,14 @@ Data flow and conventions:
   guesses. Data-state `file_name`s are relative to `METIS_MAIT_code_eckhart/`; simulated
   data for analysis go in `data/IMG_<NN>_simmed_*_data/`. IMG-06 merges its observing
   config on top of IMG-04's.
-- Analysis results (plots, FITS) go to `results/IMG_<NN>_*_results/`.
+- Analysis results (plots, FITS) go to `results/IMG_<NN>_*_results/`; for the shared
+  stray-light stages the directory comes from the result object's `results_dir`.
 - Results are carried through the pipeline as dataclasses mutated by each stage, e.g.
-  `StrayLightResult` in `backbone_img_04_stray_light.py`, subclassed by
-  `OutOfFieldResult` in `backbone_img_06_out_of_field.py`. IMG-06 reuses the IMG-04
-  centroiding, PSF masking, segmentation and noise machinery.
-- Stray-light segmentation (IMG-04/06) runs several methods (threshold, hough_circle,
+  `StrayLightResult` in `stray_light_common.py`, subclassed by `OutOfFieldResult` in
+  `backbone_img_06_out_of_field.py`; IMG-03 uses `PsfGrid` -> `StrehlRunResult`.
+- Stray-light pipeline (IMG-04/06): shared stages in `stray_light_common.py`
+  (populate result -> centroid -> mask the real PSF -> segmentation), then each test's
+  own stages. Segmentation runs several methods (threshold, hough_circle,
   active_contour, watershed, kmeans, meanshift) and combines them by a weighted vote set
   per data state. Regions are kept as one int32 label map (`segment_map`), iterated with
   `iter_regions()` per bounding box.
@@ -97,8 +101,12 @@ The docs tooling does not import the scripts; it parses decorators with `ast`, s
 decorator arguments must be literals or names bound to module-level literals in the
 same file (e.g. `CLUSTER_OOF = "..."` defined in the script itself), or the `CLUSTER_*` /
 `COLOR_*` constants in the registry. Every `depends_on` id must be an existing stage
-name, or rendering the flow diagram fails.
+name, or rendering the flow diagram fails. A stage belongs to one cluster, so stages
+used by several tests go in a shared cluster (e.g. `CLUSTER_STRAY_SHARED` in
+`stray_light_common.py`) with `depends_on` on each test's SIM stage. Cluster labels
+become Graphviz subgraph names, so avoid `/` in them.
 
 ### Constitution (non-negotiable)
+
 
 ### Lessons learned

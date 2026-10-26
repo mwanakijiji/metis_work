@@ -2,7 +2,7 @@
 Prepare oversampled PSF grid data and first-pass centroids, and load FITS data.
 
 Used by the IMG-OPT-03 (backbone_img_03_psf_quality.prepare_psf_grid) and IMG-OPT-04/06
-(backbone_img_04_stray_light.centroid_2passes_oversample) analyses.
+(stray_light_common.centroid_2passes_oversample) analyses.
 
 The core entry point is oversample_1st_pass_centroid(): pass in-memory arrays and a
 coords

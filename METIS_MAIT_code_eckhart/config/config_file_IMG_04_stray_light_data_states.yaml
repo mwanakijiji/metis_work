@@ -2,7 +2,7 @@
 #   segmentation_method: combined (default), or a single method: threshold, hough_circle,
 #     active_contour, watershed, kmeans, meanshift
 #   segmentation_params: dict overriding the defaults in
-#     backbone_img_04_stray_light.SEGMENTATION_DEFAULT_PARAMS[<method>], e.g.
+#     stray_light_common.SEGMENTATION_DEFAULT_PARAMS[<method>], e.g.
 #       segmentation_method: watershed
 #       segmentation_params: {threshold_kind: otsu, min_distance: 15}
 #     for 'combined', nest them per method, e.g.
