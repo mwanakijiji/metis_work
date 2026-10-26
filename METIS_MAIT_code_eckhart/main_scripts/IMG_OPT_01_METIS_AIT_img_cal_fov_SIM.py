@@ -152,7 +152,7 @@ def fyi_plot_case(  # pylint: disable=too-many-arguments,too-many-locals
     for i, (peak, pos) in enumerate(zip(peaks, positions)):
         ax_main.plot(peak[1], peak[0], "+", color="lime", markersize=14, mew=2)
         ax_main.annotate(
-            f"{i}: ({pos[0]:+.2f}, {pos[1]:+.2f})\"\n"
+            f'{i}: ({pos[0]:+.2f}, {pos[1]:+.2f})"\n'
             f"pix ({peak[1]:.0f}, {peak[0]:.0f})",
             (peak[1], peak[0]),
             textcoords="offset points",
@@ -219,7 +219,7 @@ def fyi_plot_dither_geometry(
         nominal[:, 0],
         nominal[:, 1],
         "k--",
-        label=f"Nominal (+/-{dither_offset_arcsec:g}\", as the ANALYSIS assumes)",
+        label=f'Nominal (+/-{dither_offset_arcsec:g}", as the ANALYSIS assumes)',
     )
     for i, (case, info) in enumerate(cases_info.items()):
         pos = np.asarray(info["positions"], dtype=float)

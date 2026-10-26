@@ -217,20 +217,20 @@ def fyi_plot_fov(  # pylint: disable=too-many-arguments
         np.mean(fov_per_side_x),
         color="C0",
         linestyle="--",
-        label=f"Mean x: {np.mean(fov_per_side_x):.3f}\"",
+        label=f'Mean x: {np.mean(fov_per_side_x):.3f}"',
     )
     ax.axhline(
         np.mean(fov_per_side_y),
         color="C1",
         linestyle=":",
-        label=f"Mean y: {np.mean(fov_per_side_y):.3f}\"",
+        label=f'Mean y: {np.mean(fov_per_side_y):.3f}"',
     )
     if fov_injected is not None:
         ax.axhline(
             fov_injected,
             color="red",
             linestyle="-.",
-            label=f"Injected (SIM): {fov_injected:.3f}\"",
+            label=f'Injected (SIM): {fov_injected:.3f}"',
         )
     ax.set_xticks(sides)
     ax.set_xticklabels([f"{i}-{(i + 1) % len(sides)}" for i in sides])

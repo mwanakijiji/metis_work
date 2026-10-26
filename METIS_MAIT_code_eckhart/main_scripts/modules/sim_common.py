@@ -318,6 +318,93 @@ def take_darks(metis, instrument):
     return dark_1, dark_2
 
 
+def limit_dit_to_saturation(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    metis,
+    instrument,
+    saturation_adu,
+    max_frac=0.8,
+    target_frac=0.7,
+    max_iter=6,
+    readout_fn=readout_frame,
+):
+    """
+    Shorten the DIT, if needed, so that the peak of the raw readout (aperture fully
+    open) is <= max_frac * saturation_adu. Never lengthens it.
+
+    Each trial takes a dark and an illuminated readout at the current DIT. If the raw
+    peak is too high, the DIT is rescaled to aim at target_frac * saturation, assuming
+    the signal is linear in DIT on top of the dark level:
+        dit_new = dit * (target_frac * sat - median(dark)) / (peak - median(dark)),
+    at most halving the DIT per trial if the peak is at saturation (the readout may be
+    clipped there, which makes the linear estimate too optimistic). The readouts are
+    per DIT (ScopeSim averages over NDIT), so NDIT is left as it is.
+
+    INPUTS:
+    - metis: OpticalTrain
+    - instrument (dict): instrument config, with 'dit' and 'ndit' (not modified)
+    - saturation_adu (float): saturation level (ADU per DIT)
+    - max_frac, target_frac (float): limit and aim for the raw peak, as fractions of
+      saturation
+    - max_iter (int): maximum number of trials
+    - readout_fn: readout function, readout_fn(metis, bb_aperture, instrument) ->
+      (frame, header); injectable for tests
+
+    OUTPUTS:
+    - dict: a copy of instrument with 'dit' set to the tuned DIT
+    - dict: dit_cfg, dit, peak_frac (raw peak / saturation of the last trial), n_trials
+
+    Raises ValueError if the dark level alone is >= target_frac * saturation, and
+    RuntimeError if no DIT within max_iter trials is short enough.
+    """
+    tuned = dict(instrument)
+    dit_cfg = float(instrument["dit"])
+    sat = float(saturation_adu)
+    for trial in range(1, max_iter + 1):
+        dark, _ = readout_fn(metis, 0.0, tuned)
+        raw, _ = readout_fn(metis, 1.0, tuned)
+        dark_level = float(np.median(dark))
+        peak = float(np.max(raw))
+        dit = float(tuned["dit"])
+        logging.info(
+            "DIT trial %s: DIT %.5g s -> raw peak %.4g ADU = %.3f of saturation "
+            "(limit %.2f); dark median %.4g ADU",
+            trial,
+            dit,
+            peak,
+            peak / sat,
+            max_frac,
+            dark_level,
+        )
+        if peak <= max_frac * sat:
+            if dit != dit_cfg:
+                logging.info(
+                    "DIT shortened from %.5g s to %.5g s (raw peak %.3f of saturation)",
+                    dit_cfg,
+                    dit,
+                    peak / sat,
+                )
+            return tuned, {
+                "dit_cfg": dit_cfg,
+                "dit": dit,
+                "peak_frac": peak / sat,
+                "n_trials": trial,
+            }
+        if dark_level >= target_frac * sat:
+            raise ValueError(
+                f"Dark level {dark_level:.4g} ADU is >= {target_frac} of saturation "
+                f"({sat:.4g} ADU) at DIT {dit:.5g} s: no DIT keeps the raw peak below "
+                f"{max_frac} of saturation"
+            )
+        dit_new = dit * (target_frac * sat - dark_level) / (peak - dark_level)
+        if peak >= 0.999 * sat:
+            dit_new = min(dit_new, 0.5 * dit)
+        tuned["dit"] = dit_new
+    raise RuntimeError(
+        f"Raw peak still > {max_frac} of saturation after {max_iter} DIT trials "
+        f"(last DIT {tuned['dit']:.5g} s, configured {dit_cfg:.5g} s)"
+    )
+
+
 def smooth_pattern(shape, kind="tilt_and_radial"):
     """
     Smooth illumination pattern over the frame with mean 0 and max |P| = 1, so that
