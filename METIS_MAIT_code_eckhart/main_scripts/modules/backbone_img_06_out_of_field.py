@@ -442,7 +442,8 @@ def metis_9522_check(result_obj, observing_config):
     fits_stem = slc.fits_stem_of(result_obj)
     ax.set_title(f"METIS-9522: stray light fluxes vs. radius\n{fits_stem}", fontsize=10)
     plot_file_name = os.path.join(
-        slc.results_dir_of(result_obj), f"metis_9522_brightness_spectrum_{fits_stem}.png"
+        slc.results_dir_of(result_obj),
+        f"metis_9522_brightness_spectrum_{fits_stem}.png",
     )
     fig.savefig(plot_file_name)
     logging.info("Saved plot of brightness spectrum to %s", plot_file_name)
@@ -515,9 +516,7 @@ def log_test_outcome(result_obj):
         result_obj.verdict_overall = "INCONCLUSIVE"
     else:
         result_obj.verdict_overall = "FAIL"
-    logging.info(
-        "IMG 06 OUT-OF-FIELD STRAY LIGHT TEST: %s", result_obj.verdict_overall
-    )
+    logging.info("IMG 06 OUT-OF-FIELD STRAY LIGHT TEST: %s", result_obj.verdict_overall)
     logging.info("--------------------------------------------------")
 
     if result_obj.expected is not None:

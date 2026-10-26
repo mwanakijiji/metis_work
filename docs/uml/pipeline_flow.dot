@@ -35,6 +35,9 @@ digraph pipeline {
     process_one_psf;
     collect_strehls;
     plot_strehl_fov;
+    img_03_metis_1408_1409_check;
+    img_03_metis_2864_check;
+    img_03_metis_3503_check;
     img_03_test_outcome;
   }
 
@@ -45,6 +48,8 @@ digraph pipeline {
     color="#d62728";
     generate_stray_light_sim;
     stray_light_brightness_spectrum;
+    img_04_metis_1189_1429_check;
+    img_04_metis_9522_check;
     img_04_test_outcome;
   }
 
@@ -91,8 +96,13 @@ digraph pipeline {
   process_one_psf [label="Fit one PSF"];
   collect_strehls [label="Collect Strehl over FOV"];
   plot_strehl_fov [label="Plot Strehl over FOV"];
+  img_03_metis_1408_1409_check [label="METIS-1408/-1409: Strehl\n>= 0.8 over FOV"];
+  img_03_metis_2864_check [label="METIS-2864: Strehl >\n0.8, WCU+CFO+IMG-LM path"];
+  img_03_metis_3503_check [label="METIS-3503: PSF\ncharacterised across FoV"];
   img_03_test_outcome [label="IMG-OPT-03 pass/fail"];
   stray_light_brightness_spectrum [label="Arrange segments into\nbrightnesses as function\nof spatial scales"];
+  img_04_metis_1189_1429_check [label="METIS-1189/-1429: stray\nlight vs. 0.04% of PSF\npeak"];
+  img_04_metis_9522_check [label="METIS-9522: artefacts\nvs. 3-sigma background"];
   img_04_test_outcome [label="IMG-OPT-04 pass/fail"];
   metis_5838_attenuation [label="METIS-5838: out-of-field\nattenuation"];
   metis_9522_check [label="METIS-9522: artefacts\nvs. 3-sigma background"];
@@ -117,15 +127,20 @@ digraph pipeline {
   process_one_psf -> centroid_2passes_oversample [style=invis];
   { rank=same; collect_strehls; stray_light_mask_real; }
   collect_strehls -> stray_light_mask_real [style=invis];
-  { rank=same; img_03_test_outcome; plot_strehl_fov; stray_light_segmentation; stray_light_segmentation_combined; metis_5838_attenuation; }
-  img_03_test_outcome -> plot_strehl_fov [style=invis];
+  { rank=same; img_03_metis_1408_1409_check; img_03_metis_2864_check; img_03_metis_3503_check; plot_strehl_fov; stray_light_segmentation; stray_light_segmentation_combined; metis_5838_attenuation; }
+  img_03_metis_1408_1409_check -> img_03_metis_2864_check [style=invis];
+  img_03_metis_2864_check -> img_03_metis_3503_check [style=invis];
+  img_03_metis_3503_check -> plot_strehl_fov [style=invis];
   plot_strehl_fov -> stray_light_segmentation [style=invis];
   stray_light_segmentation -> stray_light_segmentation_combined [style=invis];
   stray_light_segmentation_combined -> metis_5838_attenuation [style=invis];
-  { rank=same; stray_light_brightness_spectrum; metis_9522_check; }
+  { rank=same; img_03_test_outcome; stray_light_brightness_spectrum; metis_9522_check; }
+  img_03_test_outcome -> stray_light_brightness_spectrum [style=invis];
   stray_light_brightness_spectrum -> metis_9522_check [style=invis];
-  { rank=same; img_04_test_outcome; img_06_test_outcome; }
-  img_04_test_outcome -> img_06_test_outcome [style=invis];
+  { rank=same; img_04_metis_1189_1429_check; img_04_metis_9522_check; img_06_test_outcome; }
+  img_04_metis_1189_1429_check -> img_04_metis_9522_check [style=invis];
+  img_04_metis_9522_check -> img_06_test_outcome [style=invis];
+  { rank=same; img_04_test_outcome; }
 
   generate_fov_sim -> fov_calc [weight=10];
   generate_distortion_sim -> image_distortion [weight=10];
@@ -133,10 +148,18 @@ digraph pipeline {
   prepare_psf_grid -> process_one_psf [weight=10];
   process_one_psf -> collect_strehls [weight=10];
   collect_strehls -> plot_strehl_fov [weight=10];
-  collect_strehls -> img_03_test_outcome [weight=10];
+  collect_strehls -> img_03_metis_1408_1409_check [weight=10];
+  collect_strehls -> img_03_metis_2864_check [weight=10];
+  collect_strehls -> img_03_metis_3503_check [weight=10];
+  img_03_metis_1408_1409_check -> img_03_test_outcome [weight=10];
+  img_03_metis_2864_check -> img_03_test_outcome [weight=10];
+  img_03_metis_3503_check -> img_03_test_outcome [weight=10];
   stray_light_segmentation -> stray_light_brightness_spectrum [style=dashed, color="#999999", constraint=false];
   stray_light_segmentation_combined -> stray_light_brightness_spectrum [style=dashed, color="#999999", constraint=false];
-  stray_light_brightness_spectrum -> img_04_test_outcome [weight=10];
+  stray_light_brightness_spectrum -> img_04_metis_1189_1429_check [weight=10];
+  stray_light_brightness_spectrum -> img_04_metis_9522_check [weight=10];
+  img_04_metis_1189_1429_check -> img_04_test_outcome [weight=10];
+  img_04_metis_9522_check -> img_04_test_outcome [weight=10];
   stray_light_mask_real -> metis_5838_attenuation [style=dashed, color="#999999", constraint=false];
   stray_light_segmentation -> metis_9522_check [style=dashed, color="#999999", constraint=false];
   stray_light_segmentation_combined -> metis_9522_check [style=dashed, color="#999999", constraint=false];

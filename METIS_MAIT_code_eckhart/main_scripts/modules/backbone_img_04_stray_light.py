@@ -3,8 +3,10 @@ Analysis backbone for the IMG-OPT-04 in-field stray light and ghosts test.
 
 The result object, centroiding, PSF masking, segmentation and noise machinery are
 shared with IMG-OPT-06 and live in stray_light_common; this module has the IMG-OPT-04
-stages run after them (stray_light_brightness_spectrum -> log_test_outcome), plus the
-synthetic artefacts used by the IMG-OPT-04 SIM script.
+stages run after them:
+stray_light_brightness_spectrum -> metis_1189_1429_check and metis_9522_check
+-> log_test_outcome,
+plus the synthetic artefacts used by the IMG-OPT-04 SIM script.
 """
 
 import logging
@@ -96,7 +98,7 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
     """
     Sort out the segments into brightnesses as function of spatial scales, and measure
     the quantities the requirements are tested against (pass/fail itself is decided in
-    log_test_outcome).
+    metis_1189_1429_check and metis_9522_check).
 
     INPUTS:
     - result_obj: result object, which should contain
@@ -151,9 +153,7 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
 
     # flux statistics of each stray light region (within the region's bounding box);
     # keep the cutouts for the regions plot below
-    result_obj.regions, region_cutouts = slc.region_stats(
-        image, result_obj.segment_map
-    )
+    result_obj.regions, region_cutouts = slc.region_stats(image, result_obj.segment_map)
 
     # mask the PSF and all stray light regions to get the background level
     masked = (result_obj.segment_map > 0) | result_obj.real_psf_mask.astype(bool)
@@ -381,81 +381,129 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
 
 
 @pipeline_stage(
-    name="img_04_test_outcome",
+    name="img_04_metis_1189_1429_check",
     depends_on=("stray_light_brightness_spectrum",),
+    cluster=CLUSTER_STRAY,
+    cluster_color=COLOR_STRAY,
+    label="METIS-1189/-1429: stray light vs. 0.04% of PSF peak",
+)
+def metis_1189_1429_check(result_obj):
+    """
+    Decide METIS-1189 (stray light < 0.1% of the peak irradiance in the IMG focal
+    planes) and METIS-1429 (< 0.04% in the IMG-LM and IMG-N detector planes): the peak
+    irradiance of every stray light region is below METIS_1189_1429_PEAK_FRAC (the
+    stricter 0.04%) of the PSF peak. No stray light regions: PASS.
+
+    INPUTS:
+    - result_obj (StrayLightResult): from stray_light_brightness_spectrum (regions,
+      psf_max)
+
+    OUTPUTS:
+    - result_obj (StrayLightResult), with pass_metis_1189_1429 set
+    """
+    checks = []
+    for region_this in result_obj.regions:
+        limit = METIS_1189_1429_PEAK_FRAC * result_obj.psf_max
+        ok = region_this.peak_irradiance < limit
+        checks.append(ok)
+        logging.info(
+            "Stray light region %s: peak irradiance %.4g %s %g%% of PSF peak (%.4g)",
+            region_this.label,
+            region_this.peak_irradiance,
+            "<" if ok else ">=",
+            100 * METIS_1189_1429_PEAK_FRAC,
+            limit,
+        )
+    result_obj.pass_metis_1189_1429 = all(checks)
+    logging.info(
+        "METIS-1189 and -1429 (stray light < %g%% of peak irradiance): %s "
+        "(%s of %s regions above)",
+        100 * METIS_1189_1429_PEAK_FRAC,
+        "PASS" if result_obj.pass_metis_1189_1429 else "FAIL",
+        checks.count(False),
+        len(checks),
+    )
+    return result_obj
+
+
+@pipeline_stage(
+    name="img_04_metis_9522_check",
+    depends_on=("stray_light_brightness_spectrum",),
+    cluster=CLUSTER_STRAY,
+    cluster_color=COLOR_STRAY,
+    label="METIS-9522: artefacts vs. 3-sigma background",
+)
+def metis_9522_check(result_obj):
+    """
+    Decide METIS-9522: the total flux of every stray light region is below 3-sigma of
+    the background noise of the summed flux over the region's area (i.e. for its
+    spatial scale; StrayLightRegion.metis_9522_limit). No stray light regions: PASS.
+
+    INPUTS:
+    - result_obj (StrayLightResult): from stray_light_brightness_spectrum (regions,
+      with metis_9522_limit)
+
+    OUTPUTS:
+    - result_obj (StrayLightResult), with pass_metis_9522 set
+    """
+    checks = []
+    for region_this in result_obj.regions:
+        ok = region_this.total_flux < region_this.metis_9522_limit
+        checks.append(ok)
+        logging.info(
+            "Stray light region %s: flux %.4g %s 3-sigma of background for its area "
+            "(%.4g over %s pix)",
+            region_this.label,
+            region_this.total_flux,
+            "<" if ok else ">=",
+            region_this.metis_9522_limit,
+            region_this.area_pix,
+        )
+    result_obj.pass_metis_9522 = all(checks)
+    logging.info(
+        "METIS-9522 (artefact flux < 3-sigma of background for its spatial scale): %s "
+        "(%s of %s regions above)",
+        "PASS" if result_obj.pass_metis_9522 else "FAIL",
+        checks.count(False),
+        len(checks),
+    )
+    return result_obj
+
+
+@pipeline_stage(
+    name="img_04_test_outcome",
+    depends_on=("img_04_metis_1189_1429_check", "img_04_metis_9522_check"),
     cluster=CLUSTER_STRAY,
     cluster_color=COLOR_STRAY,
     label="IMG-OPT-04 pass/fail",
 )
 def log_test_outcome(result_obj):
     """
-    Decide and log the pass/fail of each IMG-OPT-04 requirement, and of the whole test.
-
-    - METIS-1189 and -1429: the peak irradiance of every stray light region is below
-      METIS_1189_1429_PEAK_FRAC (0.04%) of the PSF peak.
-    - METIS-9522: the total flux of every stray light region is below 3-sigma of the
-      background noise of the summed flux over the region's area (i.e. for its spatial
-      scale; StrayLightRegion.metis_9522_limit).
-    No stray light regions: both pass. Overall: PASS if both pass, else FAIL.
+    Log the outcome of each IMG-OPT-04 requirement (as decided by metis_1189_1429_check
+    and metis_9522_check) and of the whole test: PASS if both pass, else FAIL.
 
     INPUTS:
-    - result_obj (StrayLightResult): from stray_light_brightness_spectrum
+    - result_obj (StrayLightResult): with pass_metis_1189_1429 and pass_metis_9522 set
 
     OUTPUTS:
-    - result_obj (StrayLightResult), with pass_metis_1189_1429, pass_metis_9522 and
-      verdict_overall set
+    - result_obj (StrayLightResult), with verdict_overall set
     """
-    checks_1189_1429 = []
-    checks_9522 = []
-    for region_this in result_obj.regions:
-        limit_1189_1429 = METIS_1189_1429_PEAK_FRAC * result_obj.psf_max
-        ok_1189_1429 = region_this.peak_irradiance < limit_1189_1429
-        ok_9522 = region_this.total_flux < region_this.metis_9522_limit
-        checks_1189_1429.append(ok_1189_1429)
-        checks_9522.append(ok_9522)
-        logging.info(
-            "Stray light region %s: peak irradiance %.4g %s %g%% of PSF peak (%.4g); "
-            "flux %.4g %s 3-sigma of background for its area (%.4g over %s pix)",
-            region_this.label,
-            region_this.peak_irradiance,
-            "<" if ok_1189_1429 else ">=",
-            100 * METIS_1189_1429_PEAK_FRAC,
-            limit_1189_1429,
-            region_this.total_flux,
-            "<" if ok_9522 else ">=",
-            region_this.metis_9522_limit,
-            region_this.area_pix,
-        )
-
-    result_obj.pass_metis_1189_1429 = all(checks_1189_1429)
-    result_obj.pass_metis_9522 = all(checks_9522)
     result_obj.verdict_overall = (
         "PASS"
         if result_obj.pass_metis_1189_1429 and result_obj.pass_metis_9522
         else "FAIL"
     )
 
-    n_regions = len(result_obj.regions)
     logging.info("--------------------------------------------------")
     logging.info("--------------------------------------------------")
     logging.info("File: %s", result_obj.file_absname)
-    if n_regions == 0:
+    if not result_obj.regions:
         logging.info("(no stray light regions detected)")
     logging.info(
-        "METIS-1189 and -1429 (stray light < %g%% of peak irradiance): %s "
-        "(%s of %s regions above)",
-        100 * METIS_1189_1429_PEAK_FRAC,
+        "METIS-1189 and -1429: %s",
         "PASS" if result_obj.pass_metis_1189_1429 else "FAIL",
-        checks_1189_1429.count(False),
-        n_regions,
     )
-    logging.info(
-        "METIS-9522 (artefact flux < 3-sigma of background for its spatial scale): %s "
-        "(%s of %s regions above)",
-        "PASS" if result_obj.pass_metis_9522 else "FAIL",
-        checks_9522.count(False),
-        n_regions,
-    )
+    logging.info("METIS-9522: %s", "PASS" if result_obj.pass_metis_9522 else "FAIL")
     logging.info("--------------------------------------------------")
     logging.info("IMG 04 STRAY LIGHT TEST: %s", result_obj.verdict_overall)
     logging.info("--------------------------------------------------")

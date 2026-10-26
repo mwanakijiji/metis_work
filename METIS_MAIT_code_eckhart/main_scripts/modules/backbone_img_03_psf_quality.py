@@ -3,7 +3,8 @@ Analysis backbone for the IMG-OPT-03 PSF image quality (Strehl) test.
 
 Stages, called in this order by the ANALYSIS script:
 prepare_psf_grid -> process_one_psf (once per PSF, on cutout_psf) -> collect_strehls
--> plot_strehl_fov and log_test_outcome
+-> plot_strehl_fov, and the requirement checks metis_1408_1409_check,
+metis_2864_check, metis_3503_check -> log_test_outcome
 """
 
 import logging
@@ -192,7 +193,8 @@ class PsfGrid:
 class StrehlRunResult:
     """
     Strehl results for all PSFs of one FITS file (from collect_strehls), plus the
-    requirement verdicts (from log_test_outcome).
+    requirement verdicts (from the requirement checks) and the overall verdict (from
+    log_test_outcome).
     """
 
     file_name_abs: str
@@ -558,7 +560,7 @@ def collect_strehls(psf_grid, fit_results):
     -------
     StrehlRunResult
         Per-PSF Strehl estimates (+ 1st-pass centroids) and PSF counts; verdicts still
-        empty (see log_test_outcome).
+        empty (see the requirement checks and log_test_outcome).
     """
     strehl_results_all = {}
     for num_coord, fit_result in enumerate(fit_results):
@@ -710,35 +712,91 @@ def plot_strehl_fov(run_result, grid_data, results_write_dir):
     plt.close()
 
 
+def _criterion_strehls(run_result, criterion_key):
+    """
+    Per PSF, the Strehl estimate used for pass/fail (None where it was not computed),
+    and the PSFs where it is missing.
+    """
+    strehls = {
+        psf_name: psf_results.get(criterion_key)
+        for psf_name, psf_results in run_result.strehl_results_all.items()
+    }
+    missing = [name for name, strehl in strehls.items() if strehl is None]
+    return strehls, missing
+
+
+def _full_grid(run_result):
+    """Whether every PSF of the grid was analysed (i.e. the entire FOV)."""
+    return run_result.num_psfs_processed >= run_result.total_psfs
+
+
+def _strehl_verdict(run_result, criterion_key, strehl_min, log_per_psf=True):
+    """
+    Verdict of the Strehl criterion (every PSF has Strehl >= strehl_min) over the FOV:
+    FAIL if any PSF is below; PASS if none is and the whole grid was analysed;
+    INCONCLUSIVE if none is but only a subset of the grid was analysed; NOT EVALUATED
+    if criterion_key is missing for some PSF (e.g. that fit was switched off).
+    """
+    strehls, missing = _criterion_strehls(run_result, criterion_key)
+    if missing:
+        logging.error(
+            "No %s for %s PSFs (%s); Strehl criterion not evaluated",
+            criterion_key,
+            len(missing),
+            ", ".join(missing),
+        )
+        return "NOT EVALUATED"
+
+    below = []
+    for psf_name, strehl in strehls.items():
+        ok = np.isfinite(strehl) and strehl >= strehl_min
+        if not ok:
+            below.append(psf_name)
+        if log_per_psf:
+            logging.info(
+                "  %s: %s = %.3f %s %.2f",
+                psf_name,
+                criterion_key,
+                strehl,
+                ">=" if ok else "<",
+                strehl_min,
+            )
+    if below:
+        logging.info(
+            "%s of %s PSFs below Strehl %.2f: %s",
+            len(below),
+            len(strehls),
+            strehl_min,
+            ", ".join(below),
+        )
+        return "FAIL"
+    if _full_grid(run_result):
+        return "PASS"
+    logging.info(
+        "All analysed PSFs have Strehl >= %.2f, but only %s of %s PSFs were analysed "
+        "(not the entire FOV)",
+        strehl_min,
+        run_result.num_psfs_processed,
+        run_result.total_psfs,
+    )
+    return "INCONCLUSIVE"
+
+
 @pipeline_stage(
-    name="img_03_test_outcome",
+    name="img_03_metis_1408_1409_check",
     depends_on=("collect_strehls",),
     cluster=CLUSTER_PSF,
     cluster_color=COLOR_PSF,
-    label="IMG-OPT-03 pass/fail",
+    label="METIS-1408/-1409: Strehl >= 0.8 over FOV",
 )
-def log_test_outcome(
+def metis_1408_1409_check(
     run_result, criterion_key=STREHL_CRITERION_KEY, strehl_min=STREHL_MIN
 ):
     """
-    Decide and log the pass/fail of each IMG-OPT-03 requirement, and of the whole test.
-
-    - METIS-1408 (Strehl >= 80% at lambda > 3 um over the entire FOV) and METIS-1409
-      (Strehl > 0.8 at 3 um, IMG-LM and -NQ, over the full FOV): every PSF has
-      Strehl (criterion_key) >= strehl_min. FAIL if any PSF is below; INCONCLUSIVE if
-      all analysed PSFs pass but only a subset of the grid was analysed (so not the
-      entire FOV).
-    - METIS-2864 (Strehl > 80% at 3.3 um over the entire FOV, WCU+CFO+IMG-LM path):
-      as above, for LM data only; N/A for N-band data.
-    - METIS-3503 (PSF shape characterised across the entire FoV using the WCU): PASS if
-      every PSF in the grid was analysed and has a finite Strehl estimate; FAIL if any
-      analysed PSF has a non-finite one; INCONCLUSIVE if only a subset of the grid was
-      analysed.
-    - If criterion_key is missing for some PSF (e.g. that fit was switched off), all
-      four requirements are NOT EVALUATED.
-
-    Overall: PASS if all applicable requirements pass; FAIL if any fails; else
-    INCONCLUSIVE.
+    Decide METIS-1408 (Strehl >= 80% at lambda > 3 um in all modes over the entire FOV)
+    and METIS-1409 (Strehl > 0.8 at 3 um for IMG-LM and -NQ over the full FOV): every
+    PSF has Strehl (criterion_key) >= strehl_min (see _strehl_verdict for FAIL /
+    INCONCLUSIVE / NOT EVALUATED).
 
     INPUTS:
     - run_result (StrehlRunResult): from collect_strehls
@@ -746,20 +804,134 @@ def log_test_outcome(
     - strehl_min (float): minimum Strehl ratio
 
     OUTPUTS:
-    - run_result (StrehlRunResult), with verdicts and verdict_overall set
+    - run_result (StrehlRunResult), with verdicts['METIS-1408'] and
+      verdicts['METIS-1409'] set
     """
-    strehls = {
-        psf_name: psf_results.get(criterion_key)
-        for psf_name, psf_results in run_result.strehl_results_all.items()
-    }
-    full_grid = run_result.num_psfs_processed >= run_result.total_psfs
-    missing = [name for name, strehl in strehls.items() if strehl is None]
-    finite = {
-        name: float(strehl)
-        for name, strehl in strehls.items()
-        if strehl is not None and np.isfinite(strehl)
-    }
+    verdict = _strehl_verdict(run_result, criterion_key, strehl_min)
+    run_result.verdicts["METIS-1408"] = verdict
+    run_result.verdicts["METIS-1409"] = verdict
+    logging.info(
+        "METIS-1408 (Strehl >= %.0f%% at lambda > 3 um, entire FOV): %s",
+        100 * strehl_min,
+        verdict,
+    )
+    logging.info(
+        "METIS-1409 (Strehl > %.1f at 3 um, IMG-LM and -NQ, full FOV): %s",
+        strehl_min,
+        verdict,
+    )
+    return run_result
 
+
+@pipeline_stage(
+    name="img_03_metis_2864_check",
+    depends_on=("collect_strehls",),
+    cluster=CLUSTER_PSF,
+    cluster_color=COLOR_PSF,
+    label="METIS-2864: Strehl > 0.8, WCU+CFO+IMG-LM path",
+)
+def metis_2864_check(
+    run_result, criterion_key=STREHL_CRITERION_KEY, strehl_min=STREHL_MIN
+):
+    """
+    Decide METIS-2864 (minimum Strehl of the WCU+CFO+IMG-LM optical path > 80% at
+    3.3 um over the entire FOV): the same Strehl criterion as metis_1408_1409_check,
+    for LM data only; N/A for N-band data.
+
+    INPUTS:
+    - run_result (StrehlRunResult): from collect_strehls
+    - criterion_key (str): Strehl estimator used for pass/fail
+    - strehl_min (float): minimum Strehl ratio
+
+    OUTPUTS:
+    - run_result (StrehlRunResult), with verdicts['METIS-2864'] set
+    """
+    if run_result.band == "lm":
+        # per-PSF values are already logged by metis_1408_1409_check
+        verdict = _strehl_verdict(
+            run_result, criterion_key, strehl_min, log_per_psf=False
+        )
+    else:
+        verdict = "N/A"
+    run_result.verdicts["METIS-2864"] = verdict
+    logging.info(
+        "METIS-2864 (Strehl > %.0f%% at 3.3 um, WCU+CFO+IMG-LM path, entire FOV): %s",
+        100 * strehl_min,
+        verdict,
+    )
+    return run_result
+
+
+@pipeline_stage(
+    name="img_03_metis_3503_check",
+    depends_on=("collect_strehls",),
+    cluster=CLUSTER_PSF,
+    cluster_color=COLOR_PSF,
+    label="METIS-3503: PSF characterised across FoV",
+)
+def metis_3503_check(run_result, criterion_key=STREHL_CRITERION_KEY):
+    """
+    Decide METIS-3503 (the shape of the instrument PSF can be characterised across the
+    entire FoV using the WCU): PASS if every PSF in the grid was analysed and has a
+    finite Strehl estimate (criterion_key); FAIL if any analysed PSF has a non-finite
+    one; INCONCLUSIVE if only a subset of the grid was analysed; NOT EVALUATED if
+    criterion_key is missing for some PSF.
+
+    INPUTS:
+    - run_result (StrehlRunResult): from collect_strehls
+    - criterion_key (str): Strehl estimator whose fit must have succeeded
+
+    OUTPUTS:
+    - run_result (StrehlRunResult), with verdicts['METIS-3503'] set
+    """
+    strehls, missing = _criterion_strehls(run_result, criterion_key)
+    n_finite = sum(
+        1 for strehl in strehls.values() if strehl is not None and np.isfinite(strehl)
+    )
+    if missing:
+        verdict = "NOT EVALUATED"
+    elif n_finite < len(strehls):
+        verdict = "FAIL"
+    elif _full_grid(run_result):
+        verdict = "PASS"
+    else:
+        verdict = "INCONCLUSIVE"
+    run_result.verdicts["METIS-3503"] = verdict
+    logging.info(
+        "METIS-3503 (PSF shape characterised across the entire FoV with the WCU): %s "
+        "(%s of %s PSFs with a finite %s)",
+        verdict,
+        n_finite,
+        run_result.total_psfs,
+        criterion_key,
+    )
+    return run_result
+
+
+@pipeline_stage(
+    name="img_03_test_outcome",
+    depends_on=(
+        "img_03_metis_1408_1409_check",
+        "img_03_metis_2864_check",
+        "img_03_metis_3503_check",
+    ),
+    cluster=CLUSTER_PSF,
+    cluster_color=COLOR_PSF,
+    label="IMG-OPT-03 pass/fail",
+)
+def log_test_outcome(run_result):
+    """
+    Log the outcome of each IMG-OPT-03 requirement (as decided by
+    metis_1408_1409_check, metis_2864_check and metis_3503_check) and of the whole
+    test: PASS if all applicable requirements pass; FAIL if any fails; else
+    INCONCLUSIVE.
+
+    INPUTS:
+    - run_result (StrehlRunResult): with verdicts set by the requirement checks
+
+    OUTPUTS:
+    - run_result (StrehlRunResult), with verdict_overall set
+    """
     logging.info("--------------------------------------------------")
     logging.info("--------------------------------------------------")
     logging.info("File: %s", run_result.file_name_abs)
@@ -772,96 +944,14 @@ def log_test_outcome(
         run_result.num_psfs_processed,
         run_result.total_psfs,
     )
-
-    if missing:
-        # the pass/fail estimator was not computed (e.g. that fit was switched off)
-        logging.error(
-            "No %s for %s PSFs (%s); requirements not evaluated",
-            criterion_key,
-            len(missing),
-            ", ".join(missing),
+    for requirement in ("METIS-1408", "METIS-1409", "METIS-2864", "METIS-3503"):
+        logging.info(
+            "%s: %s", requirement, run_result.verdicts.get(requirement, "NOT EVALUATED")
         )
-        verdict_strehl = "NOT EVALUATED"
-        verdict_3503 = "NOT EVALUATED"
-    else:
-        # Strehl criterion (METIS-1408, -1409, -2864)
-        below = []
-        for psf_name, strehl in strehls.items():
-            ok = np.isfinite(strehl) and strehl >= strehl_min
-            if not ok:
-                below.append(psf_name)
-            logging.info(
-                "  %s: %s = %.3f %s %.2f",
-                psf_name,
-                criterion_key,
-                strehl,
-                ">=" if ok else "<",
-                strehl_min,
-            )
-        if below:
-            verdict_strehl = "FAIL"
-            logging.info(
-                "%s of %s PSFs below Strehl %.2f: %s",
-                len(below),
-                len(strehls),
-                strehl_min,
-                ", ".join(below),
-            )
-        elif full_grid:
-            verdict_strehl = "PASS"
-        else:
-            verdict_strehl = "INCONCLUSIVE"
-            logging.info(
-                "All analysed PSFs have Strehl >= %.2f, but only %s of %s PSFs were "
-                "analysed (not the entire FOV)",
-                strehl_min,
-                run_result.num_psfs_processed,
-                run_result.total_psfs,
-            )
-
-        # PSF characterisation across the FoV (METIS-3503)
-        if len(finite) < len(strehls):
-            verdict_3503 = "FAIL"
-        elif full_grid:
-            verdict_3503 = "PASS"
-        else:
-            verdict_3503 = "INCONCLUSIVE"
-
-    run_result.verdicts = {
-        "METIS-1408": verdict_strehl,
-        "METIS-1409": verdict_strehl,
-        "METIS-2864": verdict_strehl if run_result.band == "lm" else "N/A",
-        "METIS-3503": verdict_3503,
-    }
-
-    logging.info("--------------------------------------------------")
-    logging.info(
-        "METIS-1408 (Strehl >= %.0f%% at lambda > 3 um, entire FOV): %s",
-        100 * strehl_min,
-        run_result.verdicts["METIS-1408"],
-    )
-    logging.info(
-        "METIS-1409 (Strehl > %.1f at 3 um, IMG-LM and -NQ, full FOV): %s",
-        strehl_min,
-        run_result.verdicts["METIS-1409"],
-    )
-    logging.info(
-        "METIS-2864 (Strehl > %.0f%% at 3.3 um, WCU+CFO+IMG-LM path, entire FOV): %s",
-        100 * strehl_min,
-        run_result.verdicts["METIS-2864"],
-    )
-    logging.info(
-        "METIS-3503 (PSF shape characterised across the entire FoV with the WCU): %s "
-        "(%s of %s PSFs with a finite %s)",
-        run_result.verdicts["METIS-3503"],
-        len(finite),
-        run_result.total_psfs,
-        criterion_key,
-    )
     logging.info("--------------------------------------------------")
 
     applicable = [v for v in run_result.verdicts.values() if v != "N/A"]
-    if all(v == "PASS" for v in applicable):
+    if applicable and all(v == "PASS" for v in applicable):
         run_result.verdict_overall = "PASS"
     elif "FAIL" in applicable:
         run_result.verdict_overall = "FAIL"

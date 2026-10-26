@@ -41,8 +41,9 @@ from modules.psf_grid_prep import load_fits_data
 # source causing the artefact(s) corresponds to the saturation limit in
 # the fastest full-frame operation.
 
-# Pass/fail of each requirement is decided in one place:
-# backbone_img_04_stray_light.log_test_outcome
+# Pass/fail of each requirement is decided in one function per requirement
+# (backbone_img_04_stray_light.metis_1189_1429_check, .metis_9522_check), and the
+# outcome of the whole test in backbone_img_04_stray_light.log_test_outcome
 
 
 def main():
@@ -155,6 +156,10 @@ def main():
         )
 
         # pass/fail of each requirement
+        result = sl.metis_1189_1429_check(result)
+        result = sl.metis_9522_check(result)
+
+        # outcome of the whole test
         result = sl.log_test_outcome(result)
 
 

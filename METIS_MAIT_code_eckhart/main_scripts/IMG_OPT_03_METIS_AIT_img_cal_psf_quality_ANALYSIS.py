@@ -69,7 +69,9 @@ def check_saturation(file_name_abs, fp_mask, config_observing, hdu_index=2, frac
 # across the entire
 # FoV using the WCU.
 #
-# Pass/fail of each requirement is decided in one place:
+# Pass/fail of each requirement is decided in one function per requirement
+# (backbone_img_03_psf_quality.metis_1408_1409_check, .metis_2864_check,
+# .metis_3503_check), and the outcome of the whole test in
 # backbone_img_03_psf_quality.log_test_outcome
 
 
@@ -168,9 +170,16 @@ def main():
                 )
             )
 
-        # collect the Strehls over the FOV, plot them, and decide pass/fail
+        # collect the Strehls over the FOV and plot them
         run_result = pq.collect_strehls(grid_prep, fit_results)
         pq.plot_strehl_fov(run_result, grid_prep.grid_data, state["results_write_dir"])
+
+        # pass/fail of each requirement
+        run_result = pq.metis_1408_1409_check(run_result)
+        run_result = pq.metis_2864_check(run_result)
+        run_result = pq.metis_3503_check(run_result)
+
+        # outcome of the whole test
         pq.log_test_outcome(run_result)
 
 

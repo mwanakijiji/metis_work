@@ -766,7 +766,10 @@ def _plot_segmentation(tv, foreground, label_map, method, plot_file_name):
     axs[2].imshow(tv, origin="lower", cmap="gray")
     if np.any(label_map):
         axs[2].contour(
-            (label_map > 0).astype(np.uint8), levels=[0.5], colors="lime", linewidths=1.5
+            (label_map > 0).astype(np.uint8),
+            levels=[0.5],
+            colors="lime",
+            linewidths=1.5,
         )
     axs[2].set_title(f"Regions ({int(label_map.max())})")
     for ax in axs:
@@ -1416,7 +1419,9 @@ def stray_light_segmentation_combined(
         )
         method_region_maps[method] = label_map
 
-    combo = _combine_method_regions(method_region_maps, weights, vote_fraction, psf_mask)
+    combo = _combine_method_regions(
+        method_region_maps, weights, vote_fraction, psf_mask
+    )
     del method_region_maps
 
     # which methods found which group, and whether it survived the vote
