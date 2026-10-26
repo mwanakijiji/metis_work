@@ -41,6 +41,13 @@ digraph pipeline {
     stray_light_mask_real;
   }
 
+  subgraph cluster_img_opt_06_out_of_field_stray_light {
+    label="IMG-OPT-06 Out-of-field stray light";
+    style="dashed";
+    color="#8c564b";
+    generate_out_of_field_sim;
+  }
+
   subgraph cluster_img_rad_07_photometric_performance {
     label="IMG-RAD-07 Photometric performance";
     style="dashed";
@@ -52,6 +59,7 @@ digraph pipeline {
   generate_distortion_sim [label="Generate distortion sims"];
   generate_psf_quality_sim [label="Generate PSF-quality sims"];
   generate_stray_light_sim [label="Generate stray-light sims"];
+  generate_out_of_field_sim [label="Generate out-of-field sims"];
   make_flat_frames [label="Generate flats"];
   fov_calc [label="Compute FOV"];
   image_distortion [label="Measure distortion"];
