@@ -10,7 +10,7 @@ Reqs.:
 !!! TBD MORE DISTORTION INFO FROM DD NEEDED FIRST (warned in the log and on the plots)
 
 Structure: one function per requirement, driven by the scenario in
-config/config_file_IMG_01_METIS_AIT_img_cal_fov_SIM.yaml and run by
+config/config_file_IMG_OPT_01_METIS_AIT_img_cal_fov_SIM.yaml and run by
 modules.sim_common.run_scenario. Each case is four dithers of the WCU pinhole, named
 IMG_OPT_01_<requirement>_<instrument>_<case>_dither<N>.fits, with the requirement and
 the injected truth in the primary header (REQ_ID, CASE, EXPECTED, REQ_QTY, REQ_LIM,
@@ -25,7 +25,7 @@ FYI plots (results/IMG_OPT_01_fov_analysis_results/fyi_sim_*.png): per case, the
 dithers co-added with the measured pinhole positions, cutouts around each pinhole, and
 the FoV the ANALYSIS would measure from those positions vs. the injected one; per
 instrument, the dither geometry of all cases. The measured pinhole positions are also
-logged as guesses for config_file_IMG_01_METIS_AIT_img_cal_fov_ANALYSIS.yaml.
+logged as guesses for config_file_IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS.yaml.
 """
 
 import datetime
@@ -320,6 +320,7 @@ def simulate_metis_1095(ctx, req_key, req_cfg):  # pylint: disable=too-many-loca
                         ("DITHNOM", offset, "Nominal dither offset (arcsec)"),
                         ("FOV_TRUE", fov_true, "Pixel scale * illum. pixels (arcsec)"),
                     ],
+                    saturation_adu=ctx.saturation_adu,
                 )
             )
             # for the FYI plots: pinhole position, cutout, binned co-added frame
@@ -414,7 +415,7 @@ def main():
     observing = load_observing_config(stem)
     scenario = load_config_and_pipe(
         config_file_choice=stem
-        + "config/config_file_IMG_01_METIS_AIT_img_cal_fov_SIM.yaml",
+        + "config/config_file_IMG_OPT_01_METIS_AIT_img_cal_fov_SIM.yaml",
         print_one_line=False,
     )
     sim_common.run_scenario(

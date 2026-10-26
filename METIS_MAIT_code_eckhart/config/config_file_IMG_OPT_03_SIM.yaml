@@ -1,6 +1,6 @@
 # Scenario for IMG_OPT_03_METIS_AIT_img_cal_psf_quality_SIM.py: one entry per
 # requirement. Format and options: see modules/sim_common.py and
-# config_file_IMG_RAD_07_SIM.yaml.
+# config_file_IMG_RAD_07_phot_performance_SIM.yaml.
 # Files: data/IMG_OPT_03_psf_quality_simmed_data/
 #   IMG_OPT_03_<requirement>_<instrument>_<case>.fits
 

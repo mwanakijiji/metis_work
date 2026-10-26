@@ -28,12 +28,12 @@ a virtual out-of-field source is added, scaled so that PSF peak / max of the sca
 light is the injected attenuation.
 
 Structure: one function per requirement, driven by the scenario in
-config/config_file_IMG_06_SIM.yaml and run by modules.sim_common.run_scenario. Each
-writes a case that clearly passes and one that clearly fails, named
-IMG_OPT_06_<requirement>_<instrument>_<case>.fits, with the requirement and the
-injected truth in the primary header (REQ_ID, CASE, EXPECTED, REQ_QTY, REQ_LIM,
-PASS_IF, INJ_VAL, REQ_PLH, SIMVER; see modules/sim_common.py), plus the cards the
-ANALYSIS reads (ATT_REQ, ATT_INJ, REF_PEAK, ...).
+config/config_file_IMG_OPT_06_outoffield_stray_light_SIM.yaml and run by
+modules.sim_common.run_scenario. Each writes a case that clearly passes and one that
+clearly fails, named IMG_OPT_06_<requirement>_<instrument>_<case>.fits, with the
+requirement and the injected truth in the primary header (REQ_ID, CASE, EXPECTED,
+REQ_QTY, REQ_LIM, PASS_IF, INJ_VAL, REQ_PLH, SIMVER; see modules/sim_common.py), plus
+the cards the ANALYSIS reads (ATT_REQ, ATT_INJ, REF_PEAK, ...).
 
 The exposures are deep (many NDIT at an unsaturated DIT), as in the test description,
 so that an attenuation of 1e4 is measurable above the noise. The scattered light is
@@ -181,7 +181,8 @@ def main():
         "config/config_file_IMG_06_out_of_field_observing.yaml",
     )
     scenario = load_config_and_pipe(
-        config_file_choice=stem + "config/config_file_IMG_06_SIM.yaml",
+        config_file_choice=stem
+        + "config/config_file_IMG_OPT_06_outoffield_stray_light_SIM.yaml",
         print_one_line=False,
     )
     sim_common.run_scenario(scenario, SIMULATORS, observing, out_dir, TEST_PREFIX)

@@ -270,7 +270,7 @@ def fov_calc(  # pylint: disable=too-many-locals,too-many-statements
     INPUTS
     ----------
     run_state : dict
-        Merged entry from config_file_IMG_01_METIS_AIT_img_cal_fov_ANALYSIS.yaml
+        Merged entry from config_file_IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS.yaml
         (defaults + one ``runs`` item). Must include ``filter_name`` and a
         ``dithers`` list with ``guess_x``, ``guess_y``, and ``file_name`` per dither;
         an optional ``run_label`` distinguishes runs with the same filter and masks.

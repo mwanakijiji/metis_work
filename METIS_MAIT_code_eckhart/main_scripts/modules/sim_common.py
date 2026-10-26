@@ -18,10 +18,16 @@ A scenario config (config/config_file_<test>_SIM.yaml) has
   - detectors (optional): detector keys to simulate this requirement for (default: all)
 Each SIM script maps requirement keys to simulator functions and calls run_scenario.
 
+Integration: run_scenario shortens the configured DIT of each instrument, if needed, so
+that the raw readout with the WCU black-body aperture fully open peaks at <=
+MAX_RAW_FRAC of the detector saturation level (limit_dit_to_saturation), and every case
+file gets the peak of its raw readout / saturation in the header (PEAKFRAC), with a
+warning in the log if it is above MAX_RAW_FRAC.
+
 Each case file is named <test prefix>_<requirement>_<instrument>_<case>[_...].fits,
 where <instrument> is the instrument name (or the filter, for a single 'instrument:'),
 and has a header-only primary HDU with the requirement cards (see requirement_cards),
-then RAW_READOUT, BCKGD_SUBTED (= RAW_READOUT - BACKGROUND) and BACKGROUND, as float32,
+then BCKGD_SUBTED (= RAW_READOUT - BACKGROUND), RAW_READOUT and BACKGROUND, as float32,
 plus any extra extensions of the test.
 """
 
@@ -47,6 +53,11 @@ IRDB_REL_PATH = "../../../"
 
 # obs_mode -> detector key used in the observing config (pixel_scales, saturation_adu)
 DETECTOR_KEYS = {"wcu_img_lm": "img_lm", "wcu_img_n": "img_n"}
+
+# simulated raw readouts must peak at <= this fraction of saturation; DITs are tuned to
+# aim at TARGET_RAW_FRAC, which leaves room for noise and for injected signal
+MAX_RAW_FRAC = 0.8
+TARGET_RAW_FRAC = 0.7
 
 
 def start_sim_logging(stem, log_subdir, log_stub, now):
@@ -322,10 +333,11 @@ def limit_dit_to_saturation(  # pylint: disable=too-many-arguments,too-many-posi
     metis,
     instrument,
     saturation_adu,
-    max_frac=0.8,
-    target_frac=0.7,
+    max_frac=MAX_RAW_FRAC,
+    target_frac=TARGET_RAW_FRAC,
     max_iter=6,
     readout_fn=readout_frame,
+    trial_ndit=1,
 ):
     """
     Shorten the DIT, if needed, so that the peak of the raw readout (aperture fully
@@ -337,7 +349,9 @@ def limit_dit_to_saturation(  # pylint: disable=too-many-arguments,too-many-posi
         dit_new = dit * (target_frac * sat - median(dark)) / (peak - median(dark)),
     at most halving the DIT per trial if the peak is at saturation (the readout may be
     clipped there, which makes the linear estimate too optimistic). The readouts are
-    per DIT (ScopeSim averages over NDIT), so NDIT is left as it is.
+    per DIT (ScopeSim averages over NDIT), so NDIT is left as it is; the trials use
+    trial_ndit (default 1: quick, and the noisier peak errs on the safe side; None for
+    the configured NDIT).
 
     INPUTS:
     - metis: OpticalTrain
@@ -348,6 +362,7 @@ def limit_dit_to_saturation(  # pylint: disable=too-many-arguments,too-many-posi
     - max_iter (int): maximum number of trials
     - readout_fn: readout function, readout_fn(metis, bb_aperture, instrument) ->
       (frame, header); injectable for tests
+    - trial_ndit (int or None): NDIT of the trial readouts
 
     OUTPUTS:
     - dict: a copy of instrument with 'dit' set to the tuned DIT
@@ -360,8 +375,11 @@ def limit_dit_to_saturation(  # pylint: disable=too-many-arguments,too-many-posi
     dit_cfg = float(instrument["dit"])
     sat = float(saturation_adu)
     for trial in range(1, max_iter + 1):
-        dark, _ = readout_fn(metis, 0.0, tuned)
-        raw, _ = readout_fn(metis, 1.0, tuned)
+        trial_inst = dict(tuned)
+        if trial_ndit is not None:
+            trial_inst["ndit"] = trial_ndit
+        dark, _ = readout_fn(metis, 0.0, trial_inst)
+        raw, _ = readout_fn(metis, 1.0, trial_inst)
         dark_level = float(np.median(dark))
         peak = float(np.max(raw))
         dit = float(tuned["dit"])
@@ -429,7 +447,7 @@ def instrument_tag(instrument):
     return instrument.get("name") or instrument["obs_filter"]
 
 
-def write_case_file(
+def write_case_file(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     out_dir,
     test_prefix,
     req_key,
@@ -441,11 +459,14 @@ def write_case_file(
     primary_header,
     cards,
     extra_hdus=(),
+    saturation_adu=None,
 ):
     """
     Write one case: primary header (ScopeSim's + set-up + requirement cards), then
-    RAW_READOUT, BCKGD_SUBTED (raw - background) and BACKGROUND, as float32, then
-    extra_hdus (astropy HDUs, written as given).
+    BCKGD_SUBTED (raw - background), RAW_READOUT and BACKGROUND, as float32, then
+    extra_hdus (astropy HDUs, written as given). If saturation_adu is given, the header
+    also gets SAT_ADU and PEAKFRAC (max of the raw readout / saturation), and a warning
+    is logged if PEAKFRAC > MAX_RAW_FRAC.
 
     OUTPUTS:
     - str: path of the written file
@@ -453,10 +474,10 @@ def write_case_file(
     hdul = fits.HDUList(
         [
             fits.PrimaryHDU(header=primary_header),
-            fits.ImageHDU(data=raw.astype(np.float32), name="RAW_READOUT"),
             fits.ImageHDU(
                 data=(raw - background).astype(np.float32), name="BCKGD_SUBTED"
             ),
+            fits.ImageHDU(data=raw.astype(np.float32), name="RAW_READOUT"),
             fits.ImageHDU(data=background.astype(np.float32), name="BACKGROUND"),
         ]
         + list(extra_hdus)
@@ -470,14 +491,28 @@ def write_case_file(
     hdr["BB_TEMP"] = (BB_TEMP.value, "BB temperature")
     hdr["NDIT"] = (instrument["ndit"], "Number of DITs")
     hdr["DIT"] = (instrument["dit"], "Det integration time")
+    if "dit_cfg" in instrument:
+        hdr["DIT_CFG"] = (instrument["dit_cfg"], "Configured DIT before tuning")
     for key, value, comment in cards:
         hdr[key] = (value, comment)
 
-    os.makedirs(out_dir, exist_ok=True)
     file_name = os.path.join(
         out_dir,
         f"{test_prefix}_{req_key}_{instrument_tag(instrument)}_{case}{suffix}.fits",
     )
+    if saturation_adu is not None:
+        peak_frac = float(np.max(raw)) / float(saturation_adu)
+        hdr["SAT_ADU"] = (float(saturation_adu), "Saturation level (ADU/DIT)")
+        hdr["PEAKFRAC"] = (peak_frac, "max(RAW_READOUT) / saturation")
+        if peak_frac > MAX_RAW_FRAC:
+            logging.warning(
+                "! ------- %s: raw readout peaks at %.3f of saturation (> %.2f)",
+                os.path.basename(file_name),
+                peak_frac,
+                MAX_RAW_FRAC,
+            )
+
+    os.makedirs(out_dir, exist_ok=True)
     hdul.writeto(file_name, overwrite=True)
     logging.info("Saved %s", file_name)
     return file_name
@@ -486,13 +521,13 @@ def write_case_file(
 class SimContext:  # pylint: disable=too-many-instance-attributes
     """
     What a requirement simulator needs for one instrument set-up: the OpticalTrain,
-    the instrument config, the merged observing config, where and how to write (incl.
-    an optional directory for FYI plots), and (cached, so requirements simulated for
-    the same instrument share them) two independent darks and a full-aperture
-    illuminated frame.
+    the instrument config (DIT already tuned), the merged observing config, the
+    detector saturation level, where and how to write (incl. an optional directory for
+    FYI plots), and (cached, so requirements simulated for the same instrument share
+    them) two independent darks and a full-aperture illuminated frame.
     """
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         metis,
         instrument,
@@ -510,6 +545,7 @@ class SimContext:  # pylint: disable=too-many-instance-attributes
         self.simver = simver
         self.results_dir = results_dir
         self.det_key = detector_key(instrument["obs_mode"])
+        self.saturation_adu = saturation_of(observing, self.det_key)
         self._darks = None
         self._lit = None
 
@@ -526,7 +562,10 @@ class SimContext:  # pylint: disable=too-many-instance-attributes
         return self._lit
 
     def write_case(self, req_key, case, suffix, raw, cards, extra_hdus=()):
-        """write_case_file with dark_2 as BACKGROUND and the lit frame's header."""
+        """
+        write_case_file with dark_2 as BACKGROUND, the lit frame's header and the
+        saturation check.
+        """
         _, dark_2 = self.darks()
         _, header = self.lit_frame()
         return write_case_file(
@@ -541,7 +580,16 @@ class SimContext:  # pylint: disable=too-many-instance-attributes
             header,
             cards,
             extra_hdus=extra_hdus,
+            saturation_adu=self.saturation_adu,
         )
+
+
+def saturation_of(observing, det_key):
+    """Saturation level (ADU per DIT) of a detector from the observing config, or None."""
+    try:
+        return float(observing["saturation_adu"][det_key])
+    except (KeyError, TypeError):
+        return None
 
 
 def scenario_instruments(scenario):
@@ -564,14 +612,16 @@ def requirement_applies(req_cfg, name, instrument):
     return True
 
 
-def run_scenario(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+def run_scenario(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     scenario, simulators, observing, out_dir, test_prefix, results_dir=None
 ):
     """
     Run the requirement simulators of a scenario config: for each instrument, one
-    OpticalTrain; for each requirement with simulate: true that applies to it, the
-    requirement's simulator, simulator(ctx, req_key, req_cfg) -> list of written files,
-    with req_cfg resolved for the instrument's detector (see resolve_for_detector).
+    OpticalTrain, with the DIT shortened if needed so the raw readout (aperture fully
+    open) peaks at <= MAX_RAW_FRAC of saturation (limit_dit_to_saturation); for each
+    requirement with simulate: true that applies to it, the requirement's simulator,
+    simulator(ctx, req_key, req_cfg) -> list of written files, with req_cfg resolved
+    for the instrument's detector (see resolve_for_detector).
 
     INPUTS:
     - scenario (dict): the scenario config
@@ -604,6 +654,7 @@ def run_scenario(  # pylint: disable=too-many-arguments,too-many-positional-argu
     )
 
     written = {}
+    dit_summary = []
     for name, instrument in scenario_instruments(scenario).items():
         applicable = {
             req_key: req_cfg
@@ -615,8 +666,24 @@ def run_scenario(  # pylint: disable=too-many-arguments,too-many-positional-argu
             continue
         logging.info("##################################################")
         logging.info("Instrument %s: %s", name, instrument)
+        metis = build_optical_train(instrument)
+
+        saturation = saturation_of(observing, detector_key(instrument["obs_mode"]))
+        if saturation is None:
+            logging.warning(
+                "Instrument %s: no saturation_adu in the observing config; DIT not "
+                "checked against saturation",
+                name,
+            )
+        else:
+            instrument, dit_info = limit_dit_to_saturation(
+                metis, instrument, saturation
+            )
+            instrument["dit_cfg"] = dit_info["dit_cfg"]
+            dit_summary.append((name, instrument, dit_info))
+
         ctx = SimContext(
-            build_optical_train(instrument),
+            metis,
             instrument,
             observing,
             out_dir,
@@ -632,6 +699,16 @@ def run_scenario(  # pylint: disable=too-many-arguments,too-many-positional-argu
             )
 
     logging.info("==================================================")
+    for name, instrument, info in dit_summary:
+        logging.info(
+            "DIT %s: %.5g -> %.5g s%s (NDIT %s); trial raw peak %.3f of saturation",
+            name if name is not None else instrument["obs_filter"],
+            info["dit_cfg"],
+            info["dit"],
+            " (shortened)" if info["dit"] != info["dit_cfg"] else "",
+            instrument["ndit"],
+            info["peak_frac"],
+        )
     for (req_key, name), files in written.items():
         logging.info("%s (%s): %s files written", req_key, name, len(files))
     return written

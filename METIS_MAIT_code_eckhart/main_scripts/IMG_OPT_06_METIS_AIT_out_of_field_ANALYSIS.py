@@ -58,7 +58,7 @@ def main():
     stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
     # config file with the data states, incl. file names
     data_states_config_file = (
-        stem + "config/config_file_IMG_06_out_of_field_data_states.yaml"
+        stem + "config/config_file_IMG_OPT_06_out_of_field_data_states.yaml"
     )
     # config file with the coordinates guesses for the PSF
     coords_guesses_config_file = (

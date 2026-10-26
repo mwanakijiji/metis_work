@@ -56,7 +56,7 @@ def main():
     # config file with the data states (i.e., how to analyze each PSF),
     # incl. file names
     data_states_config_file = (
-        stem + "config/config_file_IMG_04_stray_light_data_states.yaml"
+        stem + "config/config_file_IMG_OPT_04_stray_light_data_states.yaml"
     )
     # config file with the coordinates guesses for the PSFs
     coords_guesses_config_file = (

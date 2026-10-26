@@ -3,7 +3,7 @@
 # Each run inherits defaults; override only what differs
 #
 # Files as written by IMG_OPT_01_METIS_AIT_img_cal_fov_SIM.py
-# (config/config_file_IMG_01_METIS_AIT_img_cal_fov_SIM.yaml):
+# (config/config_file_IMG_OPT_01_METIS_AIT_img_cal_fov_SIM.yaml):
 # IMG_OPT_01_<requirement>_<instrument>_<case>_dither<N>.fits, with the injected truth
 # (REQ_ID, EXPECTED, INJ_VAL, ...) in the primary header. The SIM injects the FoV by
 # scaling the dithers, so the guesses differ per case: for a scaling f = FoV_true /

@@ -66,11 +66,17 @@ requirement texts are quoted in the script docstrings) has a pair of scripts in
   injected truth in the primary header (`REQ_ID`, `CASE`, `EXPECTED`, `REQ_LIM`,
   `INJ_VAL`, ...). The injection is applied to the signal (illuminated frame - dark_1),
   and an independent dark_2 is written as `BACKGROUND`. FITS layout convention:
-  header-only primary, then `RAW_READOUT`, `BCKGD_SUBTED`, `BACKGROUND` (+ extras such
+  header-only primary, then `BCKGD_SUBTED`, `RAW_READOUT`, `BACKGROUND` (+ extras such
   as `BACKGROUND_2`, `TRUTH_LABELS`); read extensions by EXTNAME (`load_fits_data(...,
   hdu_index="BCKGD_SUBTED")`). Shared SIM machinery: `modules/sim_common.py`. A SIM can
   write FYI plots of what it simulated to `ctx.results_dir` (pass `results_dir` to
   `run_scenario`; e.g. IMG-OPT-01's `fyi_sim_*.png`).
+- Raw readouts must stay <= 0.8 of the detector saturation level (`saturation_adu` in
+  the common observing config; `sim_common.MAX_RAW_FRAC`): `run_scenario` shortens each
+  instrument's configured DIT if needed (`sim_common.limit_dit_to_saturation`), and
+  every case file gets `PEAKFRAC` (max raw / saturation) in its header, with a log
+  warning above the limit. Injections that add signal must stay under it (e.g.
+  IMG-RAD-07 METIS-2594 levels are fractions of the headroom up to that cap).
 - `*_ANALYSIS.py`: thin `main()` that loads YAML configs, loops over "data states" (one
   per FITS file) and calls the pipeline stages in order, ending with the test's
   `log_test_outcome()`, the one place where pass/fail of each requirement is decided

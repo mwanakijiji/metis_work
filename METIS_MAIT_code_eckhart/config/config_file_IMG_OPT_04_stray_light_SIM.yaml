@@ -1,6 +1,6 @@
 # Scenario for IMG_OPT_04_METIS_AIT_img_cal_stray_light_SIM.py: one entry per
 # requirement. Format and options: see modules/sim_common.py and
-# config_file_IMG_RAD_07_SIM.yaml.
+# config_file_IMG_RAD_07_phot_performance_SIM.yaml.
 # Files: data/IMG_OPT_04_stray_light_simmed_data/
 #   IMG_OPT_04_<requirement>_<instrument>_<case>.fits
 # with the true artefact regions in an extra TRUTH_LABELS extension (0: none, 1..N)

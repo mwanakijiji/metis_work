@@ -23,7 +23,7 @@ instrument:
   obs_filter: HCI_L_short
   nd_filter: null
   obs_mode: wcu_img_lm
-  dit: 0.02 # s; one DIT per frame, unsaturated at full black-body aperture (check)
+  dit: 0.02 # s; starting value, shortened by the SIM if the raw flat peaks > 0.8 sat
   ndit: 1
   intrapixel_capacitance: true
 
@@ -34,23 +34,24 @@ requirements:
     description: >-
       METIS internal calibration shall provide a range of flux levels matching that
       encountered in scientific operation as defined in METIS-3137 (E-TNT-MPIA-MET-1004).
-    # Flux levels as fractions of the detector saturation level, saturation_adu[detector]
-    # in config_file_common_observing_params.yaml (ADU per DIT; img_lm or img_n from the
-    # instrument's obs_mode). The level is the total raw level: the median of the raw
-    # frame per DIT, background included (so a level below the median of the dark can't
-    # be simulated, and the SIM stops). The calibration must reach down to 0.1 and up to
-    # 0.8 of saturation.
+    # Flux levels as fractions (0..1) of the headroom between the closed-aperture
+    # background B (median of a dark) and the ceiling C: the median raw level at the
+    # largest scaling of the flat's signal for which no pixel of the raw readout
+    # exceeds 0.8 of saturation (sim_common.MAX_RAW_FRAC x saturation_adu[detector] in
+    # config_file_common_observing_params.yaml, ADU per DIT). The raw level (median of
+    # the raw frame per DIT, background included) is B + frac * (C - B). The
+    # calibration must reach down to 0.1 and up to 0.8 of that headroom.
     limit:
       flux_min:
         value: 0.1
         pass_if: "<=" # the calibration must reach down to the faintest level
-        unit: fraction of saturation (raw level)
-        note: faintest calibration flux, as a fraction of saturation_adu
+        unit: fraction of (ceiling - background)
+        note: faintest calibration flux, as a fraction of the headroom above background
       flux_max:
         value: 0.8
         pass_if: ">=" # ... and up to the brightest
-        unit: fraction of saturation (raw level)
-        note: brightest calibration flux, as a fraction of saturation_adu
+        unit: fraction of (ceiling - background)
+        note: brightest calibration flux, as a fraction of the headroom above background
     cases:
       pass: {inject: {flux_min: 0.05, flux_max: 0.9}}
       fail: {inject: {flux_min: 0.05, flux_max: 0.5}} # does not reach high enough

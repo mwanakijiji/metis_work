@@ -120,11 +120,11 @@ def test_scenario_configs_are_consistent():
     # every simulated requirement of every SIM scenario has valid cases (for each
     # detector it is resolved for) and a simulator
     scenarios = {
-        "config_file_IMG_01_METIS_AIT_img_cal_fov_SIM.yaml": sim01.SIMULATORS,
+        "config_file_IMG_OPT_01_METIS_AIT_img_cal_fov_SIM.yaml": sim01.SIMULATORS,
         "config_file_IMG_OPT_03_SIM.yaml": sim03.SIMULATORS,
-        "config_file_IMG_04_SIM.yaml": sim04.SIMULATORS,
-        "config_file_IMG_06_SIM.yaml": sim06.SIMULATORS,
-        "config_file_IMG_RAD_07_SIM.yaml": None,
+        "config_file_IMG_OPT_04_stray_light_SIM.yaml": sim04.SIMULATORS,
+        "config_file_IMG_OPT_06_outoffield_stray_light_SIM.yaml": sim06.SIMULATORS,
+        "config_file_IMG_RAD_07_phot_performance_SIM.yaml": None,
     }
     for file_name, simulators in scenarios.items():
         with open(_ROOT / "config" / file_name, encoding="utf-8") as file:

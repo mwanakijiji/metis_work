@@ -381,10 +381,11 @@ def load_fits_data(
     file_name : str
         Abs path to the FITS file containing the PSF-grid data.
     hdu_index : int or str, optional
-        Preferred HDU: an index, or an EXTNAME. The SIM writers (modules/sim_common.py)
-        write RAW_READOUT, BCKGD_SUBTED, BACKGROUND (+ extras) after a header-only
-        primary, so BCKGD_SUBTED is extension 2 there; older SIM files had it at 1.
-        Prefer the EXTNAME. Simpler FITS may only have HDU 0.
+        Preferred HDU: an index, or an EXTNAME. The SIM writers (modules/sim_common.py
+        and the IMG-OPT-02 SIM) write BCKGD_SUBTED, RAW_READOUT, BACKGROUND (+ extras)
+        after a header-only primary, so BCKGD_SUBTED is extension 1 and RAW_READOUT
+        extension 2; some earlier SIM files had RAW_READOUT first. Prefer the EXTNAME.
+        Simpler FITS may only have HDU 0.
 
     OUTPUTS
     -------

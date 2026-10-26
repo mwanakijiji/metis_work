@@ -1,5 +1,6 @@
 # Scenario for IMG_OPT_01_METIS_AIT_img_cal_fov_SIM.py: one entry per requirement.
-# Format and options: see modules/sim_common.py and config_file_IMG_RAD_07_SIM.yaml.
+# Format and options: see modules/sim_common.py and
+# config_file_IMG_RAD_07_phot_performance_SIM.yaml.
 # Files: data/IMG_OPT_01_fov_simmed_data/
 #   IMG_OPT_01_<requirement>_<instrument>_<case>_dither<N>.fits (N = 0..3)
 
@@ -32,7 +33,7 @@ requirements:
       arcsec for the N-arm of the IMG.
     # The ANALYSIS takes the pinhole in the 4 dithers to be at the corners of a square
     # of side 2 * dither_offset_arcsec (distances_corner_psfs_arcsec: 6 in
-    # config_file_IMG_01_METIS_AIT_img_cal_fov_ANALYSIS.yaml), and the FoV as the
+    # config_file_IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS.yaml), and the FoV as the
     # resulting pixel scale times illuminated_pixels. The SIM injects a FoV by dithering
     # by dither_offset_arcsec * FoV_true / FoV_injected instead, where FoV_true =
     # pixel_scales (common observing config) * illuminated_pixels, so the ANALYSIS

@@ -28,7 +28,7 @@ def main():
 
     stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
     analysis_states_config_file = (
-        stem + "config/config_file_IMG_01_METIS_AIT_img_cal_fov_ANALYSIS.yaml"
+        stem + "config/config_file_IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS.yaml"
     )
 
     now = datetime.datetime.now()

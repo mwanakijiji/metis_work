@@ -29,12 +29,12 @@ source causing the artefact(s) corresponds to the saturation limit in
 the fastest full-frame operation.
 
 Structure: one function per requirement, driven by the scenario in
-config/config_file_IMG_04_SIM.yaml and run by modules.sim_common.run_scenario. Each
-writes a case that clearly passes and one that clearly fails, named
-IMG_OPT_04_<requirement>_<instrument>_<case>.fits, with the requirement and the
-injected truth in the primary header (REQ_ID, CASE, EXPECTED, REQ_QTY, REQ_LIM,
-PASS_IF, INJ_VAL, REQ_PLH, SIMVER; see modules/sim_common.py) and the true artefact
-regions in a TRUTH_LABELS extension.
+config/config_file_IMG_OPT_04_stray_light_SIM.yaml and run by
+modules.sim_common.run_scenario. Each writes a case that clearly passes and one that
+clearly fails, named IMG_OPT_04_<requirement>_<instrument>_<case>.fits, with the
+requirement and the injected truth in the primary header (REQ_ID, CASE, EXPECTED,
+REQ_QTY, REQ_LIM, PASS_IF, INJ_VAL, REQ_PLH, SIMVER; see modules/sim_common.py) and the
+true artefact regions in a TRUTH_LABELS extension.
 
 A single PSF is simulated in the middle of the detector, and synthetic artefacts
 (random contiguous shapes, the same in every case) are added to the illuminated
@@ -267,7 +267,7 @@ def main():
         stem, "config/config_file_IMG_04_stray_light_observing.yaml"
     )
     scenario = load_config_and_pipe(
-        config_file_choice=stem + "config/config_file_IMG_04_SIM.yaml",
+        config_file_choice=stem + "config/config_file_IMG_OPT_04_stray_light_SIM.yaml",
         print_one_line=False,
     )
     sim_common.run_scenario(scenario, SIMULATORS, observing, out_dir, TEST_PREFIX)
