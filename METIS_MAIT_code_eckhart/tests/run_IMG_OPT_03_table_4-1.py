@@ -1,11 +1,12 @@
 # Reproduces E-REP-MPIA-1203 0-1, Table 4-1 ("Pinhole vs. true point source PSF analysis")
 # with our own IMG-OPT-03 fitting pipeline.
 #
-# The pinhole (PH) images are the ones IMG_OPT_03_METIS_AIT_img_cal_psf_quality_ANALYSIS.py reads
-# in, i.e. the 'runs' in the data-states config (--data-states). Each run is matched to a manifest
-# row by (filter, pp_mask); the manifest supplies the report label, d_ph_um and any PS image.
-# Runs with no matching manifest row are added as extra rows (d_ph_um from the observing config),
-# and manifest rows with no matching run are listed as having no PH data.
+# The pinhole (PH) images are the 'runs' in a data-states config (--data-states; by default
+# the unmodified Table 4-1 frames the IMG-OPT-03 SIM writes, in the same format as the
+# config IMG_OPT_03_METIS_AIT_img_cal_psf_quality_ANALYSIS.py reads). Each run is matched to a
+# manifest row by (filter, pp_mask); the manifest supplies the report label, d_ph_um and any PS
+# image. Runs with no matching manifest row are added as extra rows (d_ph_um from the observing
+# config), and manifest rows with no matching run are listed as having no PH data.
 #
 # For each (filter, cold stop) row, and for each of the PH and true point source (PS) images, this:
 #   1. cuts out the PSF around the brightest (smoothed) pixel,
@@ -42,8 +43,9 @@ from modules.backbone_img_03_psf_quality import (  # noqa: E402
     process_one_psf,
     resolve_config_for_masks,
 )
+from modules.config_common import COMMON_OBSERVING_CONFIG  # noqa: E402
 from modules.helpers import load_config_and_pipe, setup_logging  # noqa: E402
-from modules.psf_grid_prep import load_fits_data  # noqa: E402
+from modules.psf_grid_prep import load_grid_data_from_fits  # noqa: E402
 from modules.strehl_fcns import imaging_band_from_fp_mask  # noqa: E402
 
 OVERSAMPLE_FACTOR = 3  # same as the default of prepare_psf_grid (ANALYSIS script)
@@ -66,14 +68,14 @@ def _abs_path(path):
 
 def rows_from_data_states(manifest_rows, data_states_file, config_observing):
     """
-    Build the table rows from the images the IMG-OPT-03 ANALYSIS script reads in.
+    Build the table rows from the images listed in a data-states config.
 
     INPUTS
     ----------
     manifest_rows : list of dict
         Rows of the Table 4-1 inputs manifest.
     data_states_file : str
-        Data-states config (defaults + runs) read by the ANALYSIS script.
+        Data-states config (defaults + runs), in the format the ANALYSIS script reads.
     config_observing : dict
         Observing configuration (for pinhole diameters of runs not in the manifest).
 
@@ -175,7 +177,8 @@ def analyze_one_image(file_name, row, source_type, config_observing, out_dir):
     INPUTS
     ----------
     file_name : str
-        FITS file with the science image in extension 1.
+        FITS file with the background-subtracted science image in the BCKGD_SUBTED
+        extension (SIM files), or else in extension 1.
     row : dict
         Manifest entry (filter, pp_mask, fp_mask, d_ph_um, ...).
     source_type : str
@@ -202,7 +205,7 @@ def analyze_one_image(file_name, row, source_type, config_observing, out_dir):
         config_row["polychromatic_observing_filters_leaf_name"]
     )
 
-    image, _ = load_fits_data(file_name, hdu_index=1)
+    image, _ = load_grid_data_from_fits(file_name, hdu_index=1)
     cookie = cutout_around_peak(image, config_row["cutout_edge_native"])
 
     results_write_dir = os.path.join(out_dir, source_type)
@@ -331,12 +334,12 @@ def main():
     )
     parser.add_argument(
         "--data-states",
-        default=str(ROOT / "config/config_file_IMG_OPT_03_psf_quality_data_states.yaml"),
-        help="data-states config read by the ANALYSIS script; its runs are the PH images",
+        default=str(ROOT / "config/config_file_IMG_OPT_03_table_4-1_data_states.yaml"),
+        help="data-states config (ANALYSIS format); its runs are the PH images",
     )
     parser.add_argument(
         "--observing-config",
-        default=str(ROOT / "config/config_file_IMG_OPT_03_psf_quality_observing_params.yaml"),
+        default=str(ROOT / COMMON_OBSERVING_CONFIG),
     )
     parser.add_argument(
         "--out", default=str(ROOT / "results/IMG_OPT_03_table_4-1/")

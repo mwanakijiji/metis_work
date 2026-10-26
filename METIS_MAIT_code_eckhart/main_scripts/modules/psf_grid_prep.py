@@ -429,9 +429,7 @@ def _select_image_hdu(hdul, preferred_index: Union[int, str] = 1):
             idx = names.index(preferred_index)
             if _hdu_has_image_data(hdul[idx]):
                 return hdul[idx], idx
-    elif 0 <= preferred_index < n_hdus and _hdu_has_image_data(
-        hdul[preferred_index]
-    ):
+    elif 0 <= preferred_index < n_hdus and _hdu_has_image_data(hdul[preferred_index]):
         return hdul[preferred_index], preferred_index
 
     for idx, hdu in enumerate(hdul):

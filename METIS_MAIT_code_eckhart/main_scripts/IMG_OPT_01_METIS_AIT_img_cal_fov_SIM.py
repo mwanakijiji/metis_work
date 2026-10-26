@@ -1,359 +1,159 @@
-#!/usr/bin/env python
-# coding: utf-8
-
 """
-DRAFT IMG-OPT-01
-
-Maked simulated data for the IMG-OPT-1 FOV, distortion, and ghost measurements
+Make simulated data for the IMG-OPT-01 FOV measurement
 
 Reqs.:
 - Ref. Overleaf doc IMG_OPT_01_Test_Description_Field_of_View_and_Ghost_Measurement.pdf
 
 1. METIS-1095: The FoV shall be 10.0 +1.0/-0.0 arcsec for the LM-arm and 13.47
-   +0.50/-0.99 arcsec
-for the N-arm of the IMG.
++0.50/-0.99 arcsec for the N-arm of the IMG.
+
+Structure: one function per requirement, driven by the scenario in
+config/config_file_IMG_01_METIS_AIT_img_cal_fov_SIM.yaml and run by
+modules.sim_common.run_scenario. Each case is four dithers of the WCU pinhole, named
+IMG_OPT_01_<requirement>_<instrument>_<case>_dither<N>.fits, with the requirement and
+the injected truth in the primary header (REQ_ID, CASE, EXPECTED, REQ_QTY, REQ_LIM,
+PASS_IF, INJ_VAL, REQ_PLH, SIMVER; see modules/sim_common.py) and the dither position
+(DITHX, DITHY). There is a case that clearly passes, and one that clearly fails on
+either side of the FoV range.
+
+The FoV is injected through the dither offsets (see simulate_metis_1095). Each dither is
+a ScopeSim readout; BACKGROUND is an independent dark.
 """
 
 import datetime
 import logging
-import os
-import time
 
 import numpy as np
-import scopesim as sim
-import yaml
-from astropy import units as u
-from astropy.io import fits
 
-from modules.helpers import load_config_and_pipe, pipe_2_log, setup_logging
-from pipeline_registry import CLUSTER_FOV, COLOR_FOV, pipeline_stage
+from modules import sim_common
+from modules.config_common import load_observing_config
+from modules.helpers import load_config_and_pipe
+from pipeline_registry import (  # pylint: disable=import-error,wrong-import-order
+    CLUSTER_FOV,
+    COLOR_FOV,
+    pipeline_stage,
+)
+
+TEST_PREFIX = "IMG_OPT_01"
+
+# corners of the dither square, in units of dither_offset_arcsec; consecutive dithers
+# are adjacent corners, as the ANALYSIS assumes
+DITHER_CORNERS = np.array([[1.0, 1.0], [-1.0, 1.0], [-1.0, -1.0], [1.0, -1.0]])
 
 
-def read_simulation_configurations(simulation_config_file):
-    """Read the filters, etc. to set for each simulated data file from a YAML file."""
-    with open(simulation_config_file, "r", encoding="utf-8") as f:
-        simulation_configs = yaml.load(f, Loader=yaml.FullLoader)
-    return simulation_configs
+def dither_positions(dither_offset_arcsec, fov_true, fov_injected):
+    """
+    Dither positions (x, y) in arcsec, scaled by fov_true / fov_injected so that an
+    analysis assuming the nominal offsets measures fov_injected.
+    """
+    return DITHER_CORNERS * dither_offset_arcsec * (fov_true / fov_injected)
+
+
+@pipeline_stage(
+    name="sim_img_01_metis_1095",
+    cluster=CLUSTER_FOV,
+    cluster_color=COLOR_FOV,
+    label="SIM METIS-1095: FoV",
+)
+def simulate_metis_1095(ctx, req_key, req_cfg):
+    """
+    Simulated data for METIS-1095: the FoV shall be 10.0 +1.0/-0.0 arcsec (LM) and
+    13.47 +0.50/-0.99 arcsec (N).
+
+    The ANALYSIS derives the pixel scale from the pinhole positions in four dithers it
+    takes to be 2 * dither_offset_arcsec apart, and the FoV as that pixel scale times
+    the number of illuminated pixels. Per case, the dithers are scaled by FoV_true /
+    FoV_injected (FoV_true = pixel scale * illuminated pixels), so the FoV it measures
+    is the injected one.
+
+    OUTPUTS:
+    - list[str]: written files
+    """
+    expected = sim_common.check_cases(req_key, req_cfg)
+    _, dark_2 = ctx.darks()
+    fov_true = (
+        float(ctx.observing["pixel_scales"][ctx.det_key])
+        / 1000.0
+        * float(req_cfg["illuminated_pixels"])
+    )
+    offset = float(req_cfg["dither_offset_arcsec"])
+    logging.info(
+        "%s: FoV_true %.3f arcsec; nominal dither offset %.2f arcsec",
+        req_key,
+        fov_true,
+        offset,
+    )
+
+    written = []
+    for case, case_cfg in req_cfg["cases"].items():
+        inject = case_cfg["inject"]
+        cards = sim_common.requirement_cards(
+            req_key, req_cfg, case, inject, expected[case], ctx.simver
+        )
+        positions = dither_positions(offset, fov_true, float(inject["fov"]))
+        for i, pos in enumerate(positions):
+            sim_common.set_fpmask_shift(ctx.metis, pos)
+            raw, header = sim_common.readout_frame(ctx.metis, 1.0, ctx.instrument)
+            written.append(
+                sim_common.write_case_file(
+                    ctx.out_dir,
+                    ctx.test_prefix,
+                    req_key,
+                    ctx.instrument,
+                    case,
+                    f"_dither{i}",
+                    raw,
+                    dark_2,
+                    header,
+                    cards
+                    + [
+                        ("DITHER", i, "Dither index"),
+                        ("DITHX", float(pos[0]), "WCU FP mask shift x (arcsec)"),
+                        ("DITHY", float(pos[1]), "WCU FP mask shift y (arcsec)"),
+                        ("DITHNOM", offset, "Nominal dither offset (arcsec)"),
+                        ("FOV_TRUE", fov_true, "Pixel scale * illum. pixels (arcsec)"),
+                    ],
+                )
+            )
+    sim_common.set_fpmask_shift(ctx.metis, (0.0, 0.0))
+    return written
+
+
+# requirement key (in the scenario config) -> function writing its simulated data
+SIMULATORS = {
+    "METIS-1095": simulate_metis_1095,
+}
 
 
 @pipeline_stage(
     name="generate_fov_sim",
+    depends_on=("sim_img_01_metis_1095",),
     cluster=CLUSTER_FOV,
     cluster_color=COLOR_FOV,
     label="Generate FOV sims",
 )
 def main():
-    """Simulate the IMG-OPT-01 field-of-view data with ScopeSim."""
-
-    stem = "/podman-share/metis_work/playing_with_scopesim/"
+    """
+    Generate IMG-OPT-01 FoV simulations, one set per requirement, as set in the
+    scenario config.
+    """
+    stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
+    out_dir = stem + "data/IMG_OPT_01_fov_simmed_data/"
 
     now = datetime.datetime.now()
-    log_dir = stem + "IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_logs/"
-    log_file_name = (
-        log_dir
-        + "log_IMG_OPT_01_METIS_AIT_img_cal_fov_SIM_"
-        + now.strftime("%Y-%m-%d_%H-%M-%S")
-        + ".txt"
+    sim_common.start_sim_logging(
+        stem, "IMG_01_fov_sim_logs", "IMG_OPT_01_METIS_AIT_img_cal_fov_SIM", now
     )
+    logging.info("Simmed file output directory: %s", out_dir)
+    sim_common.setup_scopesim()
 
-    # initialize logging
-    setup_logging(log_dir=log_dir, log_file_name=log_file_name, now=now)
-
-    pipe_2_log(sim.bug_report, msg="ScopeSim bug report")
-
-    # Edit this path if you have a custom install directory, otherwise comment it out.
-    # [For ReadTheDocs only]
-    sim.link_irdb("../../../")
-
-    # simulate observations with METIS (comment this out if packages already exist)
-    # sim.download_packages(["METIS", "ELT", "Armazones"])
-
-    # # for creating permutations of all observing configurations
-    #
-    # # lists of imaging filters
-    # filter_list_img_lm = [
-    #     'Lp',
-    #     'H2Oice',
-    #     'shortL',
-    #     'IB4.05',
-    #     'PAH3.3',
-    #     'PAH3.3ref',
-    #     'Br-alpha',
-    #     'Br-alpharef',
-    #     'Mp',
-    #     'CO(1-0)/ice',
-    #     'COref',
-    #     'HCIL-short',
-    #     'HCIL-long',
-    #     'full_L',
-    #     'full_M'
-    # ]
-    #
-    # filter_list_img_n = [
-    #     'N1',
-    #     'N2',
-    #     'PAH8.6',
-    #     'PAH8.6_ref',
-    #     'PAH11.25',
-    #     'PAH11.25_ref',
-    #     '[NeII]',
-    #     '[NeII]_ref',
-    #     '[SIV]',
-    #     '[SIV]_ref',
-    #     'N3',
-    #     'full_N'
-    # ]
-    #
-    # # WCU FP2 focal planemask wheel
-    # wcu_fp2_masks_lm = ["pinhole_lm", "grid_lm", "grid_lms"]
-    # wcu_fp2_masks_n = ["pinhole_n"]
-    #
-    # dict_config = {}
-    #
-    # # Generate permutations for LM filters and masks
-    # obs_counter = 1
-    # for filt, mask in itertools.product(filter_list_img_lm, wcu_fp2_masks_lm):
-    #     obs_name = f"obs{obs_counter}"
-    #     dict_config[obs_name] = {
-    #         'mode': 'wcu_img_lm',
-    #         'filter': filt,
-    #         'fpmask': mask,
-    #         'ndit': 10,
-    #         'dit': 1.
-    #     }
-    #     obs_counter += 1
-    #
-    # # Generate permutations for N filters and masks
-    # for filt, mask in itertools.product(filter_list_img_n, wcu_fp2_masks_n):
-    #     obs_name = f"obs{obs_counter}"
-    #     dict_config[obs_name] = {
-    #         'mode': 'wcu_img_lm',
-    #         'filter': filt,
-    #         'fpmask': mask,
-    #         'ndit': 10,
-    #         'dit': 1.
-    #     }
-    #     obs_counter += 1
-    #
-
-    # read in the observing configurations
-    # dict_config = read_simulation_configurations(observing_config_file)
-
-    # read in the simulation configurations
-    # instrument_configs = read_simulation_configurations(simulation_config_file = stem
-    # + 'config/config_file_IMG_01_METIS_AIT_img_cal_fov_SIM.yaml')
-
-    sim_states_config_file = (
-        stem + "config/config_file_IMG_01_METIS_AIT_img_cal_fov_SIM.yaml"
+    observing = load_observing_config(stem)
+    scenario = load_config_and_pipe(
+        config_file_choice=stem
+        + "config/config_file_IMG_01_METIS_AIT_img_cal_fov_SIM.yaml",
+        print_one_line=False,
     )
-    sim_states_config = load_config_and_pipe(
-        config_file_choice=sim_states_config_file, print_one_line=False
-    )
-    defaults = sim_states_config.get("defaults", {})
-    runs = sim_states_config.get("simulation_configs", [])
-
-    # to set up the data states, merge config data state defaults with overrides that
-    # are specific for each run
-    sim_states = []
-    for entry in runs:
-        merged = {**defaults, **entry}
-        sim_states.append(merged)
-
-    # dictionary of all observing configurations
-    logging.info("Number of observing configurations: %s", len(sim_states))
-    for idx, config in enumerate(sim_states):
-        obs_name = f"obs{idx}"
-        logging.info("\n%s: %s", obs_name, config)
-
-    # fpmasks_list = ["open", "pinhole_lm", "pinhole_n", "grid_lm"]
-
-    # loop over each configuration
-    for config_params in sim_states:
-        # take exposures for
-        # each filter in filter_list = ["Mp", "Lp"]
-        # each fpmasks_list = ["open", "pinhole_lm", "pinhole_n", "grid_lm"]
-
-        dither_positions = np.array(
-            [[3.0, 3.0], [-3.0, 3.0], [-3.0, -3.0], [3.0, -3.0]]
-        )  # arcsec; absolute position (x,y)
-
-        for i, pos_dither in enumerate(dither_positions):
-            logging.info("Dither %s: pos=%s arcsec", i, pos_dither)
-
-            logging.info("--------------------------------")
-            logging.info("Running config: %s", config_params)
-            logging.info("--------------------------------")
-
-            obs_mode = config_params["obs_mode"]
-            ndit = config_params["ndit"]
-            dit = config_params["dit"]
-            obs_filter = config_params["obs_filter_file_name"]
-            obs_filter_name = config_params["obs_filter_name"]
-            fp_mask = config_params["fpmask"]
-            pp_mask = config_params["pp_mask"]
-            nd_filter = config_params.get("nd_filter")
-            exptime = config_params.get("exptime")
-            use_exp_time_only = config_params.get("use_exp_time_only", False)
-            # out_dir = config_params['results_write_dir']
-            file_name_abs = str(config_params["file_name_abs_trunc"]) + str(i) + ".fits"
-
-            # set up instrument for imaging (same property keys as IMG_OPT_03)
-            if nd_filter is not None:
-                cmd = sim.UserCommands(
-                    use_instrument="METIS",
-                    set_modes=[obs_mode],
-                    properties={
-                        "!OBS.filter_name": obs_filter_name,
-                        "!WCU.current_fpmask": fp_mask,
-                        "!OBS.pupil_mask": pp_mask,
-                        "!OBS.nd_filter_name": nd_filter,
-                    },
-                )
-            else:
-                cmd = sim.UserCommands(
-                    use_instrument="METIS",
-                    set_modes=[obs_mode],
-                    properties={
-                        "!OBS.filter_name": obs_filter_name,
-                        "!WCU.current_fpmask": fp_mask,
-                        "!OBS.pupil_mask": pp_mask,
-                    },
-                )
-
-            metis = sim.OpticalTrain(cmd)
-            # metis["chop_nod"].include = True
-            # metis["chop_nod"].meta["chop_offsets"] = dither_positions
-
-            metis["wcu_source"].set_fpmask(
-                shift=pos_dither,
-                angle=0.0,
-            )
-            metis["pupil_masks"].change_mask(pp_mask)
-            logging.info("OBS filter: %s", metis.cmds.get("!OBS.filter_name"))
-            logging.info("WCU FP mask: %s", metis.cmds.get("!WCU.current_fpmask"))
-            logging.info("OBS PP mask: %s", metis.cmds.get("!OBS.pupil_mask"))
-            logging.info("OBS ND filter: %s", metis.cmds.get("!OBS.nd_filter_name"))
-
-            pipe_2_log(
-                lambda m=metis: m.effects.pprint_all(),
-                msg="Optical train effects (initial state)",
-            )
-            wcu = metis["wcu_source"]
-
-            #########################################################
-            # Set the WCU Flux Controlling Mask to "CLOSED" (redundant?)
-            closed_value = 0.0
-            logging.info("Setting the WCU BB aperture to %s", closed_value)
-            wcu.set_bb_aperture(value=float(closed_value))
-            logging.info("wcu.bb_aperture: %s", wcu.bb_aperture)
-
-            #########################################################
-            # Set the WCU BB source to 1000 K.
-            bb_temp = 1000 * u.K
-            logging.info("Setting the WCU BB temperature to %s.", bb_temp)
-            wcu.set_temperature(bb_temp=bb_temp)
-            logging.info("wcu.bb_temp: %s", wcu.bb_temp)
-
-            #########################################################
-            # Wait for BB source to reach temperature.
-
-            # placeholder in lieu of a thermal model
-            logging.info("Waiting for the WCU BB source to reach temperature.")
-            time.sleep(0.5)
-
-            #########################################################
-            # While BB reaches temperature, take background exposure
-            logging.info("Taking background exposure.")
-            pipe_2_log(
-                lambda m=metis: m.effects.pprint_all(),
-                msg="Optical train effects (for background)",
-            )
-            # see current observing params
-            logging.info("All OBS parameters:")
-            for key, value in cmd["OBS"].items():
-                logging.info("  %s: %s", key, value)
-
-            # compile the observation
-            logging.info("Compiling the observation.")
-            metis.observe()
-
-            # do readout with observation params
-            logging.info("Getting readout.")
-            if use_exp_time_only:
-                outhdul_off = metis.readout(exptime=exptime, reset=False)[0]
-            else:
-                outhdul_off = metis.readout(ndit=ndit, dit=dit, reset=False)[0]
-            outhdul_off.info()
-
-            #########################################################
-            # Set the WCU Flux Controlling Mask to "OPEN".
-            logging.info("Setting the wcu bb aperture to OPEN")
-            wcu.set_bb_aperture(value=1.0)
-
-            #########################################################
-            # Take science exposure with same params as background
-            logging.info("Taking science exposure with same params as background.")
-            pipe_2_log(
-                lambda m=metis: m.effects.pprint_all(),
-                msg="Optical train effects (for science exposure)",
-            )
-            # recompile
-            metis.observe()
-            # get the readout
-            if use_exp_time_only:
-                outhdul_on = metis.readout(exptime=exptime, reset=False)[0]
-            else:
-                outhdul_on = metis.readout(ndit=ndit, dit=dit, reset=False)[0]
-            logging.info("Science exposure readout.")
-
-            #########################################################
-            # Background-subtract
-
-            background = outhdul_off[1].data
-            # background-subtract
-            raw_sci_readout = outhdul_on[1].data
-            bckgd_subted = raw_sci_readout - background
-
-            # write
-            abs_file_name_write = file_name_abs
-            os.makedirs(os.path.dirname(abs_file_name_write) or ".", exist_ok=True)
-
-            # Copy the primary header
-            primary_hdu = fits.PrimaryHDU(header=outhdul_on[0].header)
-            # Add background-subtracted readout as first extension
-            hdu_bckgd_subted = fits.ImageHDU(data=bckgd_subted, name="BCKGD_SUBTED")
-            # Add raw science readout as second extension
-            hdu_raw_readout = fits.ImageHDU(data=raw_sci_readout, name="RAW_READOUT")
-            # Add background as third extension
-            hdu_background = fits.ImageHDU(data=background, name="BACKGROUND")
-            hdul_new = fits.HDUList(
-                [
-                    primary_hdu,
-                    hdu_bckgd_subted,
-                    hdu_raw_readout,
-                    hdu_background,
-                ]
-            )
-
-            # add some stuff to the header, some of which may be redundant
-            hdul_new[0].header["FILTER"] = (obs_filter, "Observing filter")
-            hdul_new[0].header["WCU_FP"] = (fp_mask, "WCU focal plane mask")
-            hdul_new[0].header["WCU_PP"] = (pp_mask, "WCU pupil plane mask")
-            hdul_new[0].header["BB_TEMP"] = (bb_temp.value, "BB temperature")
-            if ndit is not None:
-                hdul_new[0].header["NDIT"] = (
-                    ndit,
-                    "Number of dithered exposures",
-                )
-                hdul_new[0].header["DIT"] = (dit, "Det integration time")
-            else:
-                hdul_new[0].header["EXPTIME"] = (exptime, "Exposure time")
-
-            hdul_new.writeto(abs_file_name_write, overwrite=True)
-            logging.info(
-                "Saved background-subtracted readout without aberrations to %s",
-                abs_file_name_write,
-            )
+    sim_common.run_scenario(scenario, SIMULATORS, observing, out_dir, TEST_PREFIX)
 
 
 if __name__ == "__main__":

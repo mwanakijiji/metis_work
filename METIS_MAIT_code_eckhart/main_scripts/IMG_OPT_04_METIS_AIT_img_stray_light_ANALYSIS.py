@@ -7,8 +7,11 @@ import datetime
 import logging
 import os
 
-import modules.backbone_img_04_stray_light as sl
+from astropy.io import fits
+
+import modules.backbone_img_opt_04_stray_light as sl
 import modules.stray_light_common as slc
+from modules.config_common import load_observing_config
 from modules.helpers import load_config_and_pipe, setup_logging
 from modules.psf_grid_prep import load_fits_data
 
@@ -42,23 +45,19 @@ from modules.psf_grid_prep import load_fits_data
 # the fastest full-frame operation.
 
 # Pass/fail of each requirement is decided in one function per requirement
-# (backbone_img_04_stray_light.metis_1189_1429_check, .metis_9522_check), and the
-# outcome of the whole test in backbone_img_04_stray_light.log_test_outcome
+# (backbone_img_opt_04_stray_light.metis_1189_1429_check, .metis_9522_check), and
+# the outcome of the whole test in backbone_img_opt_04_stray_light.log_test_outcome
 
 
 def main():
     """Run the IMG-OPT-04 stray light analysis for each data state."""
 
     stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
-    # config file with the observing parameters
-    observing_config_file = (
-        stem + "config/config_file_IMG_04_stray_light_observing.yaml"
-    )  # needed? TBD
     # config file with the data states (i.e., how to analyze each PSF),
     # incl. file names
     data_states_config_file = (
         stem + "config/config_file_IMG_04_stray_light_data_states.yaml"
-    )  # needed? TBD
+    )
     # config file with the coordinates guesses for the PSFs
     coords_guesses_config_file = (
         stem + "config/config_file_IMG_04_stray_light_coords_guesses.yaml"
@@ -67,7 +66,7 @@ def main():
     now = datetime.datetime.now()
 
     # initialize logging
-    log_dir = stem + "IMG_04_stray_light_analysis_logs/"
+    log_dir = stem + "logs/IMG_04_stray_light_analysis_logs/"
     log_file_name = (
         log_dir
         + "log_IMG_04_stray_light_analysis_"
@@ -76,9 +75,10 @@ def main():
     )
     setup_logging(log_dir=log_dir, log_file_name=log_file_name, now=now)
 
-    # config file with generic observing parameters
-    observing_config = load_config_and_pipe(
-        config_file_choice=observing_config_file, print_one_line=False
+    # common observing parameters (filters, pixel scales, ...), with the IMG-OPT-04
+    # ones (sensitivities, ...) on top
+    observing_config = load_observing_config(
+        stem, "config/config_file_IMG_04_stray_light_observing.yaml"
     )
 
     # config file with data states incl. data file names
@@ -96,10 +96,23 @@ def main():
         if not os.path.isabs(file_name):
             file_name = os.path.join(stem, file_name)
         data_state["file_absname"] = file_name
+        logging.info("==================================================")
         logging.info("Processing file: %s", file_name)
 
-        # HDU 1 = BCKGD_SUBTED from the SIM writer
-        data_readout, _ = load_fits_data(file_name, hdu_index=1)
+        data_readout, _ = load_fits_data(file_name, hdu_index="BCKGD_SUBTED")
+
+        # injected truth from the SIM primary header, if there (absent for real data)
+        with fits.open(file_name, memmap=False) as hdul:
+            header_primary = hdul[0].header.copy()
+        if "REQ_ID" in header_primary:
+            logging.info(
+                "Simulated data: %s case %s, injected %s = %s -> expected %s",
+                header_primary["REQ_ID"],
+                header_primary.get("CASE"),
+                header_primary.get("REQ_QTY"),
+                header_primary.get("INJ_VAL"),
+                header_primary.get("EXPECTED"),
+            )
 
         # init the result object
         result = slc.StrayLightResult(

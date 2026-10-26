@@ -10,16 +10,18 @@ import numpy as np
 from astropy.io import fits
 
 import modules.backbone_img_03_psf_quality as pq
+from modules.config_common import load_observing_config
 from modules.helpers import load_config_and_pipe, setup_logging
 from modules.strehl_fcns import imaging_band_from_fp_mask
 
 
-def check_saturation(file_name_abs, fp_mask, config_observing, hdu_index=2, frac=0.75):
+def check_saturation(
+    file_name_abs, fp_mask, config_observing, hdu_index="RAW_READOUT", frac=0.75
+):
     """
     Log an error if the max counts in image extension ``hdu_index`` (the raw readout,
-    before
-    background subtraction) exceed ``frac`` of the detector saturation level. Does not
-    stop the analysis.
+    before background subtraction) exceed ``frac`` of the detector saturation level.
+    Does not stop the analysis.
     """
     band = imaging_band_from_fp_mask(fp_mask)
     saturation_adu = float(config_observing["saturation_adu"][f"img_{band}"])
@@ -47,6 +49,20 @@ def check_saturation(file_name_abs, fp_mask, config_observing, hdu_index=2, frac
             frac,
             frac * saturation_adu,
             band,
+        )
+
+
+def log_injected_truth(file_name_abs):
+    """Log the requirement and injected truth from a SIM primary header, if there."""
+    header = fits.getheader(file_name_abs, 0)
+    if "REQ_ID" in header:
+        logging.info(
+            "Simulated data: %s case %s, injected %s = %s -> expected %s",
+            header["REQ_ID"],
+            header.get("CASE"),
+            header.get("REQ_QTY"),
+            header.get("INJ_VAL"),
+            header.get("EXPECTED"),
         )
 
 
@@ -79,10 +95,6 @@ def main():
     """Run the IMG-OPT-03 Strehl analysis for each data state."""
 
     stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
-    # config file with the observing parameters
-    observing_config_file = (
-        stem + "config/config_file_IMG_OPT_03_psf_quality_observing_params.yaml"
-    )
     # config file with the data states (i.e., how to analyze each PSF)
     data_states_config_file = (
         stem + "config/config_file_IMG_OPT_03_psf_quality_data_states.yaml"
@@ -100,10 +112,8 @@ def main():
     )
     setup_logging(log_dir=log_dir, log_file_name=log_file_name, now=now)
 
-    # read in main config file
-    observing_config = load_config_and_pipe(
-        config_file_choice=observing_config_file, print_one_line=False
-    )
+    # observing parameters (common to all tests)
+    observing_config = load_observing_config(stem)
 
     # load data states (defaults + per-run overrides)
     data_states_config = load_config_and_pipe(
@@ -130,6 +140,9 @@ def main():
     # loop over each data state (which likely means a single input FITS file; but that
     # file can include multiple PSFs)
     for state in data_states:  # data_states[0:1]: if just for a small test
+        logging.info("==================================================")
+        logging.info("Processing file: %s", state["file_name_abs"])
+        log_injected_truth(state["file_name_abs"])
         check_saturation(
             state["file_name_abs"],
             fp_mask=state["fp_mask"],

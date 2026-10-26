@@ -1,4 +1,4 @@
-"""Ensure ``playing_with_scopesim`` root is on sys.path for ``import modules``."""
+"""Ensure the ``METIS_MAIT_code_eckhart`` root is on sys.path."""
 
 import sys
 from pathlib import Path

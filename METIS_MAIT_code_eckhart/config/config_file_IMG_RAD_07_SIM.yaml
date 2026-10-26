@@ -36,18 +36,20 @@ requirements:
       encountered in scientific operation as defined in METIS-3137 (E-TNT-MPIA-MET-1004).
     # Flux levels as fractions of the detector saturation level, saturation_adu[detector]
     # in config_file_common_observing_params.yaml (ADU per DIT; img_lm or img_n from the
-    # instrument's obs_mode). The level is the median of the signal (illuminated frame -
-    # dark) per DIT. The calibration must reach down to 0.1 and up to 0.8 of saturation.
+    # instrument's obs_mode). The level is the total raw level: the median of the raw
+    # frame per DIT, background included (so a level below the median of the dark can't
+    # be simulated, and the SIM stops). The calibration must reach down to 0.1 and up to
+    # 0.8 of saturation.
     limit:
       flux_min:
         value: 0.1
         pass_if: "<=" # the calibration must reach down to the faintest level
-        unit: fraction of saturation
+        unit: fraction of saturation (raw level)
         note: faintest calibration flux, as a fraction of saturation_adu
       flux_max:
         value: 0.8
         pass_if: ">=" # ... and up to the brightest
-        unit: fraction of saturation
+        unit: fraction of saturation (raw level)
         note: brightest calibration flux, as a fraction of saturation_adu
     cases:
       pass: {inject: {flux_min: 0.05, flux_max: 0.9}}

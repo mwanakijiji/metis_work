@@ -3,8 +3,10 @@ Does some simple analysis of simulated images written out by the sim notebook.
 """
 
 import datetime
+import os
 
-from modules.backbone_img_02 import image_distortion
+from modules.backbone_img_opt_02_distortion import image_distortion
+from modules.config_common import load_observing_config
 from modules.helpers import load_config_and_pipe, setup_logging
 
 # Make simulated data for the IMG-OPT-02 image distorition test
@@ -33,20 +35,14 @@ from modules.helpers import load_config_and_pipe, setup_logging
 def main():
     """Run the IMG-OPT-02 distortion analysis for each data state."""
 
-    stem = "/podman-share/metis_work/playing_with_scopesim/"
-    # config file with the observing parameters
-    observing_config_file = (
-        stem + "config/config_file_IMG_02_observing.yaml"
-    )  # needed? TBD
+    stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
     # config file with the data states (i.e., how to analyze each PSF)
-    data_states_config_file = (
-        stem + "config/config_file_IMG_02_strehl_runs.yaml"
-    )  # needed? TBD
+    data_states_config_file = stem + "config/config_file_IMG_02_strehl_runs.yaml"
 
     now = datetime.datetime.now()
 
     # initialize logging
-    log_dir = stem + "IMG_02_logs/"
+    log_dir = stem + "logs/IMG_02_logs/"
     log_file_name = (
         log_dir
         + "log_IMG_02_analysis_psf_image_quality_"
@@ -55,10 +51,8 @@ def main():
     )
     setup_logging(log_dir=log_dir, log_file_name=log_file_name, now=now)
 
-    # read in main config file
-    observing_config = load_config_and_pipe(
-        config_file_choice=observing_config_file, print_one_line=False
-    )
+    # observing parameters (common to all tests)
+    observing_config = load_observing_config(stem)
 
     # load data states (defaults + per-run overrides)
     data_states_config = load_config_and_pipe(
@@ -72,13 +66,17 @@ def main():
     # 'data state' is defined as the set of parameters and the collection of images
     # corresponding to that set of parameters
     # (the only difference between the images is the dither position)
+    # paths in the config are relative to the stem (image_distortion uses them as given)
+    path_keys = ("file_name", "config_coords_guesses_file_name", "results_write_dir")
     data_states = []
     for entry in runs:
         merged = {**defaults, **entry}
+        for key in path_keys:
+            if merged.get(key) and not os.path.isabs(merged[key]):
+                merged[key] = stem + merged[key]
         data_states.append(merged)
 
     # loop over each data state
-    # ipdb.set_trace()
     for state in data_states:  # [0:1]: # if just for a small test
         image_distortion(
             state["file_name"],

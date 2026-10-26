@@ -1,6 +1,6 @@
 # Scenario for IMG_OPT_01_METIS_AIT_img_cal_fov_SIM.py: one entry per requirement.
 # Format and options: see modules/sim_common.py and config_file_IMG_RAD_07_SIM.yaml.
-# Files: data/IMG_01_simmed_fov_data/
+# Files: data/IMG_OPT_01_fov_simmed_data/
 #   IMG_OPT_01_<requirement>_<instrument>_<case>_dither<N>.fits (N = 0..3)
 
 instruments:

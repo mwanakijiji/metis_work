@@ -1,605 +1,219 @@
 """
-Maked simulated data for the IMG-OPT-03 PSF image quality test
+Make simulated data for the IMG-OPT-03 PSF image quality test
 
 Reqs.:
 - Ref. Overleaf doc IMG_OPT_03_Test_Description_PSF_Image_Quality
 
 1. METIS-1408: Quality and alignment of the optical components within Mid-infrared ELT
-   Imager and
-Spectrograph (METIS) shall provide diffraction limited performance (Strehl ≥ 80 %)
-at λ > 3μm in all modes over the entire FOV.
+Imager and Spectrograph (METIS) shall provide diffraction limited performance
+(Strehl >= 80 %) at lambda > 3um in all modes over the entire FOV.
 2. METIS-1409: The Instrument Wavefront Error (WFE) shall satisfy the diffraction limit
-   requirement
-(Strehl>0.8) at lambda = 3 μm for IMG (both LM and NQ) and IMG. The minimum
+requirement (Strehl>0.8) at lambda = 3 um for IMG (both LM and NQ) and IMG. The minimum
 RMS WFE below shall be satisfied over the full Field Of View (FOV) relevant to the
 given optical path.
 3. METIS-2864: The minimum Strehl ratio of the WCU+CFO+IMG-LM optical path shall be >80%
-   at
-3.3μm over the entire field of view.
+at 3.3um over the entire field of view.
 4. METIS-3503: METIS shall be able to characterise the shape of the instrument PSF
-   across the entire
-FoV using the WCU.
+across the entire FoV using the WCU. (Not simulated: no numeric limit.)
 
 The procedure for measuring the image quality follows that of IMG-OPT-01, but with
-additional exposures
-made at positions designed to obtain fully spatially sampled imaging. A basic offset of
-half a pixel is used
-for the PSF image quality measurements in this test in horizontal, vertical, and
-diagonal directions. We also
-need to achieve a significantly higher SNR for accurate measurement of the FWHM, and
-better control of
+additional exposures made at positions designed to obtain fully spatially sampled
+imaging. A basic offset of half a pixel is used for the PSF image quality measurements
+in this test in horizontal, vertical, and diagonal directions. We also need to achieve
+a significantly higher SNR for accurate measurement of the FWHM, and better control of
 calibration and flat fielding errors for measurement of the Encircled Energy. The flat
-field will be derived
-from IMG-RAD-(TBD).
+field will be derived from IMG-RAD-(TBD).
+
+Structure: one function per requirement, driven by the scenario in
+config/config_file_IMG_OPT_03_SIM.yaml and run by modules.sim_common.run_scenario. Each
+writes a case that clearly passes and one that clearly fails (and one near the limit,
+if configured), named IMG_OPT_03_<requirement>_<instrument>_<case>.fits, with the
+requirement and the injected truth in the primary header (REQ_ID, CASE, EXPECTED,
+REQ_QTY, REQ_LIM, PASS_IF, INJ_VAL, REQ_PLH, SIMVER; see modules/sim_common.py). The
+scenario entry TABLE-4-1 also writes the unmodified frames of the E-REP-MPIA-1203
+Table 4-1 rows (IMG_OPT_03_TABLE-4-1_<instrument>_reference.fits).
+
+The Strehl ratio is injected by moving part of the PSF flux into a halo (see
+inject_strehl), applied to the signal (illuminated frame - dark_1); BACKGROUND is an
+independent dark.
 """
 
 import datetime
 import logging
-import os
-import sys
 
 import numpy as np
-import scopesim as sim
-from astropy import units as u
-from astropy.io import fits
+from scipy.ndimage import gaussian_filter
 
-from modules.helpers import pipe_2_log
-from pipeline_registry import CLUSTER_PSF, COLOR_PSF, pipeline_stage
+from modules import sim_common
+from modules.config_common import load_observing_config
+from modules.helpers import load_config_and_pipe
+from pipeline_registry import (  # pylint: disable=import-error,wrong-import-order
+    CLUSTER_PSF,
+    COLOR_PSF,
+    pipeline_stage,
+)
 
-# Edit this path if you have a custom install directory, otherwise comment it out. [For
-# ReadTheDocs only]
-sim.link_irdb("../../../../")
-
-# simulate observations with METIS (comment this out if packages already exist)
-# sim.download_packages(["METIS"])   # or git pull your IRDB clone
-
-# print versions of things
-sim.bug_report()
+TEST_PREFIX = "IMG_OPT_03"
 
 
-def sanity_check_user_inputs(metis, obs_filter, fp_mask, pp_mask):
-    """Exit if the filter/masks the OpticalTrain uses do not match the user inputs."""
-    checks = (
-        ("OBS filter", "!OBS.filter_name", obs_filter),
-        ("WCU FP mask", "!WCU.current_fpmask", fp_mask),
-        ("OBS PP mask", "!OBS.pupil_mask", pp_mask),
+def inject_strehl(signal, strehl_factor, halo_sigma_pix):
+    """
+    Lower the Strehl ratio of the PSFs in signal by strehl_factor (<= 1), conserving
+    the flux: signal' = s * signal + (1 - s) * halo, with halo = signal convolved with
+    a normalised Gaussian of sigma halo_sigma_pix, and s chosen so that the brightest
+    PSF's peak is strehl_factor times what it was (the others' approximately so).
+
+    OUTPUTS:
+    - ndarray: signal'
+    - float: s
+    """
+    if not 0.0 < strehl_factor <= 1.0:
+        raise ValueError(f"strehl_factor must be in (0, 1], got {strehl_factor}")
+    halo = gaussian_filter(signal, sigma=halo_sigma_pix, mode="constant")
+    peak_yx = np.unravel_index(np.argmax(signal), signal.shape)
+    peak, halo_at_peak = float(signal[peak_yx]), float(halo[peak_yx])
+    s = (strehl_factor * peak - halo_at_peak) / (peak - halo_at_peak)
+    if s < 0.0:
+        raise ValueError(
+            f"Cannot lower the peak by {strehl_factor}: the halo alone is "
+            f"{halo_at_peak / peak:.3f} of the peak; use a wider halo"
+        )
+    return s * signal + (1.0 - s) * halo, s
+
+
+@pipeline_stage(
+    name="sim_img_03_strehl_cases",
+    cluster=CLUSTER_PSF,
+    cluster_color=COLOR_PSF,
+    label="SIM METIS-1408/-1409/-2864: Strehl cases",
+)
+def simulate_strehl(ctx, req_key, req_cfg):
+    """
+    Simulated data for a Strehl requirement (METIS-1408/-1409, METIS-2864: Strehl >=
+    0.8).
+
+    Per case, the illuminated ScopeSim frame with the Strehl ratio lowered by
+    injected strehl / reference_strehl (see inject_strehl and the scenario config).
+
+    OUTPUTS:
+    - list[str]: written files
+    """
+    expected = sim_common.check_cases(req_key, req_cfg)
+    dark_1, _ = ctx.darks()
+    flat, _ = ctx.lit_frame()
+    signal = flat - dark_1
+    cfg = req_cfg["strehl_injection"]
+    reference_strehl = float(cfg["reference_strehl"][ctx.det_key])
+    band = ctx.det_key.split("_")[-1]  # 'lm' or 'n'
+    halo_sigma_pix = float(cfg["halo_sigma_frac_cutout"]) * float(
+        ctx.observing["cutout_edge_native"][band]
     )
-    for label, key, user_value in checks:
-        if metis.cmds.get(key) != user_value:
-            logging.error(
-                "! ------- %s: %s does not match user input: %s",
-                label,
-                metis.cmds.get(key),
-                user_value,
+    logging.info(
+        "%s: reference Strehl %.3f; halo sigma %.2f pix",
+        req_key,
+        reference_strehl,
+        halo_sigma_pix,
+    )
+
+    written = []
+    for case, case_cfg in req_cfg["cases"].items():
+        inject = case_cfg["inject"]
+        factor = float(inject["strehl"]) / reference_strehl
+        signal_new, s = inject_strehl(signal, factor, halo_sigma_pix)
+        logging.info(
+            "%s case %s: Strehl %.3f -> peak factor %.3f, s = %.4f",
+            req_key,
+            case,
+            float(inject["strehl"]),
+            factor,
+            s,
+        )
+        written.append(
+            ctx.write_case(
+                req_key,
+                case,
+                "",
+                dark_1 + signal_new,
+                sim_common.requirement_cards(
+                    req_key, req_cfg, case, inject, expected[case], ctx.simver
+                )
+                + [
+                    ("STREHREF", reference_strehl, "Reference Strehl of ScopeSim PSFs"),
+                    ("HALO_SIG", halo_sigma_pix, "Sigma of injected halo (pix)"),
+                    ("HALO_S", s, "Fraction of signal left in the PSF core"),
+                ],
             )
-            sys.exit(1)
-    logging.info("User filter inputs match instrument inputs")
+        )
+    return written
+
+
+@pipeline_stage(
+    name="sim_img_03_reference_frames",
+    cluster=CLUSTER_PSF,
+    cluster_color=COLOR_PSF,
+    label="SIM Table 4-1 reference frames (no injection)",
+)
+def write_reference_frame(ctx, req_key, req_cfg):
+    """
+    The unmodified illuminated ScopeSim frame (no requirement, nothing injected), as
+    <prefix>_<req_key>_<instrument>_reference.fits.
+
+    OUTPUTS:
+    - list[str]: written files
+    """
+    del req_cfg  # no limit or cases
+    flat, _ = ctx.lit_frame()
+    return [
+        ctx.write_case(
+            req_key,
+            "reference",
+            "",
+            flat,
+            [
+                ("REQ_ID", "none", "No requirement simulated"),
+                ("CASE", "reference", "Unmodified ScopeSim frame"),
+                ("SIMVER", ctx.simver, "ScopeSim, IRDB, code versions"),
+            ],
+        )
+    ]
+
+
+# requirement key (in the scenario config) -> function writing its simulated data
+SIMULATORS = {
+    "METIS-1408-1409": simulate_strehl,
+    "METIS-2864": simulate_strehl,
+    "TABLE-4-1": write_reference_frame,
+}
 
 
 @pipeline_stage(
     name="generate_psf_quality_sim",
+    depends_on=("sim_img_03_strehl_cases", "sim_img_03_reference_frames"),
     cluster=CLUSTER_PSF,
     cluster_color=COLOR_PSF,
     label="Generate PSF-quality sims",
 )
-def generate_psf_image_quality_data(
-    fp_mask,
-    pp_mask,
-    nd_filter,
-    obs_filter,
-    obs_mode,
-    angle_array,
-    dit=1,
-    ndit=1,
-    exptime=0.01,
-    use_exp_time_only=False,
-    out_dir=None,
-    intrapixel_capacitance=True,
-    psf_kernel=None,
-):
-    """
-    Generate simulated data for the IMG-OPT-03 PSF image quality test
-
-    INPUTS:
-    - fp_mask: focal plane mask
-    - pp_mask: pupil plane mask
-    - psf_kernel: name of the ScopeSim PSF kernel (METIS_psfs/PSF_<psf_kernel>.fits); if
-      None,
-        use pp_mask + "_WCU" (no ELT spiders). Only the PPS masks have _WCU kernels; for
-        the others
-        (SPM, CLS, RLS) pass pp_mask itself, whose kernel includes the ELT spiders
-    - nd_filter: ND filter
-    - obs_filter: observing filter
-    - obs_mode: observing mode
-    - angle_array: array of clocking angles
-    - dit: dit time
-    - ndit: number of dithered exposures
-    - exptime: exposure time
-    - use_exp_time_only: if True, only use the exposure time to set the exposure time;
-      but this will be broken down into dit and ndit to avoid saturation, so integration
-      parameters may change accordingly
-
-    OUTPUTS:
-    - None; writes out files
-    """
-    del angle_array  # clocking angles not implemented yet
-
-    # set up instrument
-
-    cmd = None  # reset
-
-    if nd_filter is not None:
-        cmd = sim.UserCommands(
-            use_instrument="METIS",
-            set_modes=[obs_mode],
-            properties={
-                "!OBS.filter_name": obs_filter,
-                "!WCU.current_fpmask": fp_mask,
-                "!OBS.pupil_mask": pp_mask,
-                "!OBS.nd_filter_name": nd_filter,
-                "!SIM.psf.interp_order": 1,
-            },
-            # ignore_effects=["shot_noise", "readout_noise", "dark_current", "ipc"]
-        )
-    else:
-        cmd = sim.UserCommands(
-            use_instrument="METIS",
-            set_modes=[obs_mode],
-            properties={
-                "!OBS.filter_name": obs_filter,
-                "!WCU.current_fpmask": fp_mask,
-                "!OBS.pupil_mask": pp_mask,
-                "!SIM.psf.interp_order": 1,
-            },
-            # ignore_effects=["shot_noise", "readout_noise", "dark_current", "ipc"]
-        )
-
-    metis = sim.OpticalTrain(cmd)
-    # metis['ipc'].included = False # turn off inter-pixel capacitance for now
-
-    if not intrapixel_capacitance:
-        # metis['ipc'].update(alpha_edge=0.0, alpha_corner=0.0, alpha_aniso=0.0) # turn
-        # off inter-pixel capacitance for now
-        metis["ipc"].include = False
-        logging.info("Turning off inter-pixel capacitance for now")
-    else:
-        logging.info("Using default inter-pixel capacitance")
-
-    # Set the pupil mask (transmission) and the matching PSF kernel (ScopeSim doesn't
-    # link the two)
-    if psf_kernel is None:
-        psf_kernel = pp_mask + "_WCU"
-    metis["pupil_masks"].change_mask(pp_mask)
-    metis["psf"].update(pupil_mask=psf_kernel)
-    logging.info("Setting WCU PP mask to be: %s", pp_mask)
-    logging.info("Setting PSF kernel to be: %s", psf_kernel)
-
-    wcu = metis["wcu_source"]
-
-    bb_temp = 1000 * u.K
-
-    pipe_2_log(
-        lambda m=metis: m.effects.pprint_all(),
-        msg="Optical train effects (initial)",
-    )
-
-    #########################################################
-    # BACKGROUND
-
-    logging.info("Closing WCU BB aperture first to get a background ...")
-    wcu.set_bb_aperture(value=0.0)
-
-    metis.observe()
-
-    # save a perfect background (for debugging)
-    # hdul_perfect_background = metis.image_planes[0].hdu
-    # hdul_perfect_background.writeto(out_dir + 'junk_perfect_background.fits',
-    # overwrite=True)
-
-    pipe_2_log(
-        lambda m=metis: m.effects.pprint_all(),
-        msg="Optical train effects (background)",
-    )
-
-    if use_exp_time_only:
-        # Method 1 for setting exposure times: exptime alone
-        outhdul_off = metis.readout(exptime=exptime, reset=False)[0]
-    else:
-        # Method 2 for setting exposure times: use ndit and dit together
-        outhdul_off = metis.readout(ndit=ndit, dit=dit, reset=False)[0]
-
-    logging.info("--------------------------------")
-    logging.info("Background readout:")
-    logging.info("OBS filter: %s", metis.cmds.get("!OBS.filter_name"))
-    logging.info("WCU FP mask: %s", metis.cmds.get("!WCU.current_fpmask"))
-    logging.info("OBS PP mask: %s", metis.cmds.get("!OBS.pupil_mask"))
-    logging.info("OBS ND filter: %s", metis.cmds.get("!OBS.nd_filter_name"))
-    logging.info("NDIT: %s", metis.cmds["!OBS.ndit"])
-    logging.info("DIT: %s", metis.cmds["!OBS.dit"])
-    logging.info("WCU source state:")
-    pipe_2_log(
-        lambda m=metis: metis["wcu_source"].info(),
-        msg="Optical train effects (background)",
-    )
-
-    # check for background-taking
-    # sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask,
-    # pp_mask=pp_mask)
-    background = outhdul_off[1].data
-
-    #########################################################
-    # SCIENCE FRAME
-
-    logging.info("Re-opening WCU BB aperture to get a PSF ...")
-    wcu.set_bb_aperture(value=1.0)  # open BB source
-
-    metis.observe()
-    # print the ingredients of the PSF generation
-    # pipe_2_log(lambda m=metis: [print(f"{k}: {v}") for k, v in
-    # vars(m["psf"]).items()], msg="PSF ingredients") # this prints EVERYTHING
-    logging.info("PSF model wavel range: %s", vars(metis["psf"])["_waveset"])
-    logging.info("PSF model kernel shape: %s", vars(metis["psf"])["kernel"].shape)
-    logging.info(
-        "PSF model kernel file name: %s", vars(metis["psf"])["meta"]["filename"]
-    )
-    pipe_2_log(
-        lambda m=metis: str(vars(m["psf"])["_waveset"]),
-        msg="PSF model wavel range",
-    )
-
-    # ipdb.set_trace()
-    # Get perfect PSF - no detector noise (for debugging)
-    # hdul_perfect_sky = metis.image_planes[0].hdu
-    # hdul_perfect_sky.writeto(out_dir + 'junk_perfect_sky.fits', overwrite=True)
-    # # ... with background-subtraction:
-    # #hdul_perfect_background = metis.image_planes[2].hdu
-    # test_array = hdul_perfect_sky.data - np.median(hdul_perfect_sky.data)
-    # fits.writeto('junk.fits', test_array, overwrite=True)
-    #
-
-    pipe_2_log(
-        lambda m=metis: m.effects.pprint_all(),
-        msg="Optical train effects (science)",
-    )
-
-    if use_exp_time_only:
-        # Method 1 for setting exposure times: exptime alone
-        outhdul_on = metis.readout(exptime=exptime, reset=False)[0]
-    else:
-        # Method 2 for setting exposure times: use ndit and dit together
-        outhdul_on = metis.readout(ndit=ndit, dit=dit, reset=False)[0]
-    logging.info("--------------------------------")
-    logging.info("Science readout:")
-    logging.info("OBS filter: %s", metis.cmds.get("!OBS.filter_name"))
-    logging.info("WCU FP mask: %s", metis.cmds.get("!WCU.current_fpmask"))
-    logging.info("OBS PP mask: %s", metis.cmds.get("!OBS.pupil_mask"))
-    logging.info("OBS ND filter: %s", metis.cmds.get("!OBS.nd_filter_name"))
-    logging.info("NDIT:%s", metis.cmds["!OBS.ndit"])
-    logging.info("DIT:%s", metis.cmds["!OBS.dit"])
-    logging.info("WCU source state:")
-    pipe_2_log(
-        lambda m=metis: metis["wcu_source"].info(),
-        msg="Optical train effects (background)",
-    )
-
-    # check for science-taking
-    # sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask,
-    # pp_mask=pp_mask)
-    # hdul_perfect = metis.image_planes[0].hdu
-
-    # background-subtract
-    raw_sci_readout = outhdul_on[1].data
-    bckgd_subted = raw_sci_readout - background
-
-    basename_file_name_write = (
-        "IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_"
-        + str(fp_mask)
-        + "_pupil_mask_"
-        + str(pp_mask)
-        + "_filter_"
-        + str(obs_filter)
-        + ".fits"
-    )
-    abs_file_name_write = out_dir + basename_file_name_write
-
-    # Copy the primary header
-    primary_hdu = fits.PrimaryHDU(header=outhdul_on[0].header)
-    # Add background-subtracted readout as first extension
-    hdu_bckgd_subted = fits.ImageHDU(data=bckgd_subted, name="BCKGD_SUBTED")
-    # Add raw science readout as second extension
-    hdu_raw_readout = fits.ImageHDU(data=raw_sci_readout, name="RAW_READOUT")
-    # Add background as third extension
-    hdu_background = fits.ImageHDU(data=background, name="BACKGROUND")
-    hdul_new = fits.HDUList(
-        [primary_hdu, hdu_bckgd_subted, hdu_raw_readout, hdu_background]
-    )
-
-    # add some stuff to the header, some of which may be redundant
-    hdul_new[0].header["FILTER"] = (obs_filter, "Observing filter")
-    hdul_new[0].header["WCU_FP"] = (fp_mask, "WCU focal plane mask")
-    hdul_new[0].header["WCU_PP"] = (pp_mask, "WCU pupil plane mask")
-    hdul_new[0].header["PSF_KERN"] = (psf_kernel, "ScopeSim PSF kernel")
-    hdul_new[0].header["BB_TEMP"] = (bb_temp.value, "BB temperature")
-    if ndit is not None:
-        hdul_new[0].header["NDIT"] = (ndit, "Number of dithered exposures")
-        hdul_new[0].header["DIT"] = (dit, "Det integration time")
-    else:
-        hdul_new[0].header["EXPTIME"] = (exptime, "Exposure time")
-
-    hdul_new.writeto(abs_file_name_write, overwrite=True)
-    logging.info(
-        "Saved background-subtracted readout without aberrations to %s",
-        abs_file_name_write,
-    )
-
-    logging.info("--------------------------------")
-    logging.info("Median of raw science readout: %.4f", np.median(raw_sci_readout))
-    logging.info("Median of background: %.4f", np.median(background))
-    logging.info(
-        "Median of background-subtracted readout: %.4f", np.median(bckgd_subted)
-    )
-
-
 def main():
     """
-    Simulate the IMG-OPT-03 PSF image quality data for each observing configuration.
+    Generate IMG-OPT-03 PSF image quality simulations, one set per requirement, as set
+    in the scenario config.
     """
-
     stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
+    out_dir = stem + "data/IMG_OPT_03_psf_quality_simmed_data/"
 
     now = datetime.datetime.now()
-    log_dir = stem + "logs/IMG_03_logs/"
-    log_file_name = (
-        log_dir
-        + "log_IMG_03_simulation_psf_image_quality_"
-        + now.strftime("%Y-%m-%d_%H-%M-%S")
-        + ".txt"
+    sim_common.start_sim_logging(
+        stem, "IMG_03_logs", "IMG_03_simulation_psf_image_quality", now
     )
-    out_dir = (
-        stem + "data/IMG_OPT_03_psf_quality_simmed_data/"
-    )  # directory to write the simulated data to
-
-    # Ensure log directory exists and force config in case handlers already set
-    os.makedirs(log_dir, exist_ok=True)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[logging.FileHandler(log_file_name), logging.StreamHandler()],
-        force=True,
-    )
-    os.makedirs(out_dir, exist_ok=True)
-
-    logging.info("Log file created at %s", now.strftime("%Y-%m-%d %H:%M:%S"))
-    logging.info("Log file name: %s", log_file_name)
-    logging.info("Log file directory: %s", stem + log_dir)
     logging.info("Simmed file output directory: %s", out_dir)
+    sim_common.setup_scopesim()
 
-    # clocking angles for the PSF
-    # angle_array = [0, 45, 60]
-    angle_array = [0]  # can be implemented later
-
-    # LM filters
-    # dict_keys(['open', 'Lp', 'short-L', 'L_spec', 'Mp', 'M_spec', 'Br_alpha',
-    # 'Br_alpha_ref', 'PAH_3.3', 'PAH_3.3_ref', 'CO_1-0_ice', 'CO_ref', 'H2O-ice',
-    # 'IB_4.05', 'HCI_L_short', 'HCI_L_long', 'HCI_M'])
-    #
-    # Active configs are the (filter, cold stop) rows of E-REP-MPIA-1203 0-1, Table 4-1
-    # (p. 40);
-    # see also config/config_file_IMG_OPT_03_table_4-1_inputs.yaml.
-    # PSF kernels on the ScopeSim server (METIS_psfs/PSF_<psf_kernel>.fits): only the
-    # PPS masks have a
-    # _WCU (no ELT spiders) variant; SPM, CLS and RLS kernels include the ELT spiders.
-    # The table's "METISsim" row (IB 4.05) is left out: PSF_METISsim exists, but
-    # METISsim is not a
-    # mask in the WCU pupil-mask wheel.
-    # TODO: dit values are placeholders (ndit=1) -- tune by hand to avoid saturation /
-    # reach SNR
-    # lm_obs_configs = []
-    lm_obs_configs = [
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "SPM-LM",
-            "psf_kernel": "SPM-LM",
-            "obs_filter": "HCI_L_short",
-            "nd_filter": None,
-            "dit": 0.004,
-            "ndit": 1,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "PPS-LM",
-            "psf_kernel": "PPS-LM_WCU",
-            "obs_filter": "HCI_L_short",
-            "nd_filter": None,
-            "dit": 0.005,
-            "ndit": 1,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "RLS-LM",
-            "psf_kernel": "RLS-LM",
-            "obs_filter": "HCI_L_short",
-            "nd_filter": None,
-            "dit": 0.01,
-            "ndit": 1,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "PPS-CFO2",
-            "psf_kernel": "PPS-CFO2_WCU",
-            "obs_filter": "Lp",
-            "nd_filter": None,
-            "dit": 0.002,
-            "ndit": 1,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "CLS-LM",
-            "psf_kernel": "CLS-LM",
-            "obs_filter": "IB_4.05",
-            "nd_filter": None,
-            "dit": 0.01,
-            "ndit": 1,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "CLS-LM",
-            "psf_kernel": "CLS-LM",
-            "obs_filter": "Mp",
-            "nd_filter": None,
-            "dit": 0.004,
-            "ndit": 1,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "CLS-LM",
-            "psf_kernel": "CLS-LM",
-            "obs_filter": "CO_ref",
-            "nd_filter": None,
-            "dit": 0.008,
-            "ndit": 1,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-    ]
-
-    # N filters (Table 4-1 rows); placeholder dit from the IMG-OPT-04 N2 config
-    # TODO: dit values are placeholders (ndit=1) -- tune by hand to avoid saturation /
-    # reach SNR
-    # n_obs_configs = []
-    n_obs_configs = [
-        {
-            "fp_mask": "pinhole_n",
-            "pp_mask": "SPM-N",
-            "psf_kernel": "SPM-N",
-            "obs_filter": "N1",
-            "nd_filter": None,
-            "dit": 0.0025,
-            "ndit": 50,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_n",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "pinhole_n",
-            "pp_mask": "CLS-N",
-            "psf_kernel": "CLS-N",
-            "obs_filter": "N2",
-            "nd_filter": None,
-            "dit": 0.0030,
-            "ndit": 50,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_n",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "pinhole_n",
-            "pp_mask": "CLS-N",
-            "psf_kernel": "CLS-N",
-            "obs_filter": "N3",
-            "nd_filter": None,
-            "dit": 0.0060,
-            "ndit": 50,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_n",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "pinhole_n",
-            "pp_mask": "SPM-N",
-            "psf_kernel": "SPM-N",
-            "obs_filter": "PAH_8.6",
-            "nd_filter": None,
-            "dit": 0.0200,
-            "ndit": 50,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_n",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "pinhole_n",
-            "pp_mask": "SPM-N",
-            "psf_kernel": "SPM-N",
-            "obs_filter": "S_IV",
-            "nd_filter": None,
-            "dit": 0.0150,
-            "ndit": 50,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_n",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "pinhole_n",
-            "pp_mask": "SPM-N",
-            "psf_kernel": "SPM-N",
-            "obs_filter": "Ne_II",
-            "nd_filter": None,
-            "dit": 0.0200,
-            "ndit": 50,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_n",
-            "use_exp_time_only": False,
-        },
-    ]
-
-    # for debug
-    # ipdb.set_trace()
-    # for config in lm_obs_configs:
-    #     #_ = debug_mwe(fp_mask = "grid_lm", pp_mask = "Open", nd_filter = None,
-    # obs_filter = "Br_alpha", obs_mode = "wcu_img_lm", exptime = 0.1)
-    #     #ipdb.set_trace()
-    #     _ = debug_mwe(fp_mask = 'open', pp_mask= config["pp_mask"], nd_filter =
-    # "ND_OD3", obs_filter= config["obs_filter"], obs_mode= config["obs_mode"],
-    # exptime=config["exptime"])
-    #     _ = debug_mwe(fp_mask = config["fp_mask"], pp_mask= config["pp_mask"],
-    # nd_filter = "ND_OD3", obs_filter= config["obs_filter"], obs_mode=
-    # config["obs_mode"], exptime=config["exptime"])
-    #     exit()
-    #     #ipdb.set_trace()
-    # ipdb.set_trace()
-    #
-
-    for config in lm_obs_configs + n_obs_configs:
-
-        # below line is kludge for testing just one combo
-        # config = {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Mp",
-        # "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode":
-        # "wcu_img_lm", "use_exp_time_only": True}
-
-        generate_psf_image_quality_data(
-            fp_mask=config["fp_mask"],
-            pp_mask=config["pp_mask"],
-            nd_filter=config["nd_filter"],
-            obs_filter=config["obs_filter"],
-            obs_mode=config["obs_mode"],
-            angle_array=angle_array,
-            dit=config["dit"],
-            ndit=config["ndit"],
-            exptime=config["exptime"],
-            use_exp_time_only=config["use_exp_time_only"],
-            out_dir=out_dir,
-            intrapixel_capacitance=True,
-            psf_kernel=config.get("psf_kernel"),
-        )
+    observing = load_observing_config(stem)
+    scenario = load_config_and_pipe(
+        config_file_choice=stem + "config/config_file_IMG_OPT_03_SIM.yaml",
+        print_one_line=False,
+    )
+    sim_common.run_scenario(scenario, SIMULATORS, observing, out_dir, TEST_PREFIX)
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ for _p in (_ROOT / "main_scripts", _ROOT / "misc"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from modules.backbone_img_06_out_of_field import (  # noqa: E402
+from modules.backbone_img_opt_06_out_of_field import (  # noqa: E402
     _attenuation_verdict,
     make_out_of_field_scatter,
 )

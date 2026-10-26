@@ -1,6 +1,6 @@
-# IMG-OPT-06 specifics; merged on top of config_file_IMG_04_stray_light_observing.yaml
-# (filters, pixel scales, sensitivities, D_aperture, ...) by the ANALYSIS script;
-# keys set here override the IMG-OPT-04 ones
+# IMG-OPT-06 specifics; merged on top of config_file_common_observing_params.yaml and
+# config_file_IMG_04_stray_light_observing.yaml (in that order) by
+# modules.config_common.load_observing_config; keys set here override the earlier ones
 
 # radius of the mask over the real PSF, in units of lambda/D; everything inside is
 # excluded from the stray light segmentation (METIS-9522) and the background

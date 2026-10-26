@@ -9,8 +9,9 @@ import os
 
 from astropy.io import fits
 
-import modules.backbone_img_06_out_of_field as oof
+import modules.backbone_img_opt_06_out_of_field as oof
 import modules.stray_light_common as slc
+from modules.config_common import load_observing_config
 from modules.helpers import load_config_and_pipe, setup_logging
 from modules.psf_grid_prep import load_fits_data
 
@@ -48,22 +49,13 @@ from modules.psf_grid_prep import load_fits_data
 # -> tested the same way as in IMG-OPT-04
 #
 # Pass/fail of each requirement is decided in one place:
-# backbone_img_06_out_of_field.log_test_outcome
+# backbone_img_opt_06_out_of_field.log_test_outcome
 
 
 def main():
     """Run the IMG-OPT-06 out-of-field stray light analysis for each data state."""
 
     stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
-    # generic observing parameters (filters, pixel scales, sensitivities, ...),
-    # shared with IMG-OPT-04
-    observing_config_file_img_04 = (
-        stem + "config/config_file_IMG_04_stray_light_observing.yaml"
-    )
-    # IMG-OPT-06 specifics (METIS-5838 parameters)
-    observing_config_file_img_06 = (
-        stem + "config/config_file_IMG_06_out_of_field_observing.yaml"
-    )
     # config file with the data states, incl. file names
     data_states_config_file = (
         stem + "config/config_file_IMG_06_out_of_field_data_states.yaml"
@@ -76,7 +68,7 @@ def main():
     now = datetime.datetime.now()
 
     # initialize logging
-    log_dir = stem + "IMG_06_out_of_field_analysis_logs/"
+    log_dir = stem + "logs/IMG_06_out_of_field_analysis_logs/"
     log_file_name = (
         log_dir
         + "log_IMG_06_out_of_field_analysis_"
@@ -85,15 +77,14 @@ def main():
     )
     setup_logging(log_dir=log_dir, log_file_name=log_file_name, now=now)
 
-    # IMG-OPT-06 values override the IMG-OPT-04 ones where both are set
-    observing_config = {
-        **load_config_and_pipe(
-            config_file_choice=observing_config_file_img_04, print_one_line=False
-        ),
-        **load_config_and_pipe(
-            config_file_choice=observing_config_file_img_06, print_one_line=False
-        ),
-    }
+    # common observing parameters (filters, pixel scales, ...), then the IMG-OPT-04
+    # ones (sensitivities, ...), then the IMG-OPT-06 specifics (METIS-5838
+    # parameters); later files override earlier ones where keys are set in both
+    observing_config = load_observing_config(
+        stem,
+        "config/config_file_IMG_04_stray_light_observing.yaml",
+        "config/config_file_IMG_06_out_of_field_observing.yaml",
+    )
 
     data_states_config = load_config_and_pipe(
         config_file_choice=data_states_config_file, print_one_line=False
@@ -110,12 +101,12 @@ def main():
         logging.info("==================================================")
         logging.info("Processing file: %s", file_name)
 
-        # HDU 2 = BCKGD_SUBTED from the SIM writer (1: RAW_READOUT, 3: BACKGROUND,
-        # 4: BACKGROUND_2)
-        data_readout, header_readout = load_fits_data(file_name, hdu_index=2)
+        data_readout, header_readout = load_fits_data(
+            file_name, hdu_index="BCKGD_SUBTED"
+        )
         if header_readout.get("EXTNAME") != "BCKGD_SUBTED":
             logging.warning(
-                "HDU 2 has EXTNAME %s, not BCKGD_SUBTED",
+                "No BCKGD_SUBTED extension; using EXTNAME %s",
                 header_readout.get("EXTNAME"),
             )
 

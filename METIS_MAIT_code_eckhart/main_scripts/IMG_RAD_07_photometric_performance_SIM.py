@@ -41,317 +41,310 @@ the full field of view.
 
 8. Stretch goal 1 (not an FDR req.): Aperture correction factor shall
 be known.
+
+Structure: one function per requirement (simulate_metis_NNNN), driven by the scenario in
+config/config_file_IMG_RAD_07_SIM.yaml (limits and injected values per case) and run by
+modules.sim_common.run_scenario. Each function writes at least one case that clearly
+passes and one that clearly fails, named
+IMG_RAD_07_<requirement>_<filter>_<case>[_...].fits, with the requirement and the
+injected truth in the primary header:
+  REQ_ID    requirement ID, e.g. 'METIS-2594'
+  CASE      case name from the config ('pass', 'fail', 'near', ...)
+  EXPECTED  'PASS' or 'FAIL' (injected value vs. limit)
+  REQ_QTY, REQ_LIM, PASS_IF, INJ_VAL   quantity, limit, sense and injected value
+            (numbered REQ_QTY1, REQ_LIM1, ... if a requirement has several quantities)
+  REQ_PLH   True if the limit is a placeholder
+  SIMVER    ScopeSim and IRDB METIS versions, and the git commit of this code
+so the ANALYSIS can check its verdict against the injected truth.
+
+The injection is applied to the ScopeSim signal (flat - dark):
+raw = flat + (factor - 1) * (flat - dark_1), and the written BACKGROUND is an
+independent dark (dark_2), so BCKGD_SUBTED = raw - dark_2 has realistic noise. Images
+are written as float32.
 """
 
 import datetime
 import logging
-import os
-import sys
 
 import numpy as np
-import scopesim as sim
-from astropy import units as u
-from astropy.io import fits
 
-from modules.helpers import pipe_2_log
-from pipeline_registry import pipeline_stage
+from modules import sim_common
+from modules.config_common import load_observing_config
+from modules.helpers import load_config_and_pipe
+from pipeline_registry import (  # pylint: disable=import-error,wrong-import-order
+    CLUSTER_PHOT,
+    COLOR_PHOT,
+    pipeline_stage,
+)
 
-# no IMG-RAD-07 cluster in pipeline_registry yet; move these there when there is one
-CLUSTER_PHOT = "IMG-RAD-07 Photometric performance"
-COLOR_PHOT = "#9467bd"
-
-# Edit this path if you have a custom install directory, otherwise comment it out. [For
-# ReadTheDocs only]
-sim.link_irdb("../../../../")
-
-# simulate observations with METIS (comment this out if packages already exist)
-# sim.download_packages(["METIS"])   # or git pull your IRDB clone
-
-# print versions of things
-sim.bug_report()
+TEST_PREFIX = "IMG_RAD_07"
 
 
-def sanity_check_user_inputs(metis, obs_filter, fp_mask, pp_mask):
-    """Exit if the filter/masks the OpticalTrain uses do not match the user inputs."""
-    checks = (
-        ("OBS filter", "!OBS.filter_name", obs_filter),
-        ("WCU FP mask", "!WCU.current_fpmask", fp_mask),
-        ("OBS PP mask", "!OBS.pupil_mask", pp_mask),
-    )
-    for label, key, user_value in checks:
-        if metis.cmds.get(key) != user_value:
-            logging.error(
-                "! ------- %s: %s does not match user input: %s",
-                label,
-                metis.cmds.get(key),
-                user_value,
-            )
-            sys.exit(1)
-    logging.info("User filter inputs match instrument inputs")
+def signal_factor_for_raw_level(dark, signal, target, n_iter=5):
+    """
+    Factor k such that the median of the raw frame dark + k * signal is target (ADU).
+    The median is not linear, so k is refined iteratively from the first guess
+    (target - median(dark)) / median(signal).
+
+    Raises ValueError if target is below the median of the dark (not reachable by
+    scaling the signal).
+    """
+    median_dark = float(np.median(dark))
+    median_signal = float(np.median(signal))
+    if target < median_dark:
+        raise ValueError(
+            f"Target raw level {target:.4g} ADU is below the median of the dark "
+            f"({median_dark:.4g} ADU): not reachable by scaling the signal"
+        )
+    factor = (target - median_dark) / median_signal
+    for _ in range(n_iter):
+        factor += (target - float(np.median(dark + factor * signal))) / median_signal
+    return max(factor, 0.0)
 
 
 @pipeline_stage(
-    name="make_flat_frames",
+    name="simulate_metis_2594",
     cluster=CLUSTER_PHOT,
     cluster_color=COLOR_PHOT,
-    label="Generate flats",
+    label="SIM METIS-2594: calibration flux range",
 )
-def make_flat_frames(
-    t_integration,
-    fp_mask,
-    pp_mask,
-    psf_kernel,
-    nd_filter,
-    obs_filter,
-    obs_mode,
-    use_exp_time_only=False,
-    out_dir=None,
-    intrapixel_capacitance=True,
-):
+def simulate_metis_2594(ctx, req_key, req_cfg):
     """
-    Generate simulated data for the IMG-RAD-07 photometric performance test
+    Simulated data for METIS-2594: METIS internal calibration shall provide a range of
+    flux levels matching that encountered in scientific operation as defined in
+    METIS-3137.
 
-    INPUTS:
-    - fp_mask: focal plane mask
-    - pp_mask: pupil plane mask
-    - nd_filter: ND filter
-    - obs_filter: observing filter
-    - obs_mode: observing mode
-    - dit: dit time
-    - ndit: number of DITs
-    - exptime: exposure time
-    - use_exp_time_only: if True, only use the exposure time to set the exposure time;
-      but this will be broken
-        down into dit and ndit to avoid saturation, so integration parameters may change
-        accordingly
-    - out_dir: directory to write the simulated data to
-    - intrapixel_capacitance: if False, turn off inter-pixel capacitance
+    Per case, two flats at the faintest and brightest flux the calibration provides
+    (injected flux_min, flux_max as fractions of the detector saturation level,
+    saturation_adu in the common observing config, in ADU per DIT). The level is the
+    total raw level (the median of the raw frame, background included). Each flat is
+    made by scaling the signal (flat - dark) of a full-aperture ScopeSim flat so that
+    median(dark_1 + factor * signal) = fraction * saturation_adu; the noise of the
+    scaled signal is scaled with it, so it is not shot-noise correct for large factors.
+    Writes ..._<case>_min.fits and ..._<case>_max.fits for one PASS case and one FAIL
+    case on each side.
 
     OUTPUTS:
-    - None; writes out files
+    - list[str]: written files
     """
-
-    # set up instrument
-    cmd = None  # reset
-
-    if nd_filter is not None:
-        cmd = sim.UserCommands(
-            use_instrument="METIS",
-            set_modes=[obs_mode],
-            properties={
-                "!OBS.filter_name": obs_filter,
-                "!WCU.current_fpmask": fp_mask,
-                "!OBS.pupil_mask": pp_mask,
-                "!OBS.nd_filter_name": nd_filter,
-                "!SIM.psf.interp_order": 1,
-            },
-            # ignore_effects=["shot_noise", "readout_noise", "dark_current", "ipc"]
-        )
-    else:
-        cmd = sim.UserCommands(
-            use_instrument="METIS",
-            set_modes=[obs_mode],
-            properties={
-                "!OBS.filter_name": obs_filter,
-                "!WCU.current_fpmask": fp_mask,
-                "!OBS.pupil_mask": pp_mask,
-                "!SIM.psf.interp_order": 1,
-            },
-            # ignore_effects=["shot_noise", "readout_noise", "dark_current", "ipc"]
-        )
-
-    metis = sim.OpticalTrain(cmd)
-    # metis['ipc'].included = False # turn off inter-pixel capacitance for now
-
-    if not intrapixel_capacitance:
-        # metis['ipc'].update(alpha_edge=0.0, alpha_corner=0.0, alpha_aniso=0.0) # turn
-        # off inter-pixel capacitance for now
-        metis["ipc"].include = False
-        logging.info("Turning off inter-pixel capacitance for now")
-    else:
-        logging.info("Using default inter-pixel capacitance")
-
-    # Set the pupil mask (transmission) and the matching PSF kernel (ScopeSim doesn't
-    # link the two)
-    if psf_kernel is None:
-        psf_kernel = pp_mask + "_WCU"
-    metis["pupil_masks"].change_mask(pp_mask)
-    metis["psf"].update(pupil_mask=psf_kernel)
-    logging.info("Setting WCU PP mask to be: %s", pp_mask)
-    logging.info("Setting PSF kernel to be: %s", psf_kernel)
-
-    wcu = metis["wcu_source"]
-
-    bb_temp = 1000 * u.K
-
-    pipe_2_log(
-        lambda m=metis: m.effects.pprint_all(),
-        msg="Optical train effects (initial)",
+    expected = sim_common.check_cases(req_key, req_cfg)
+    dark_1, _ = ctx.darks()
+    flat, _ = ctx.lit_frame()
+    signal = flat - dark_1
+    saturation = float(ctx.observing["saturation_adu"][ctx.det_key])
+    logging.info(
+        "%s: full-aperture raw median %.4g ADU/DIT = %.3g of saturation (%.0f ADU, "
+        "%s); dark median %.4g ADU = %.3g of saturation",
+        req_key,
+        float(np.median(flat)),
+        float(np.median(flat)) / saturation,
+        saturation,
+        ctx.det_key,
+        float(np.median(dark_1)),
+        float(np.median(dark_1)) / saturation,
     )
 
-    #########################################################
-    # BACKGROUND ONLY (WE WANT A DARK)
-
-    # loop over the integration times; each one gives one frame
-    for t_int in t_integration:
-
-        # integration parameters for this frame: one DIT of length t_int (or
-        # exptime=t_int)
-        dit = float(t_int)
-        ndit = 1
-        exptime = np.nan  # dont modify for now
-        logging.info("Integration time: %s s", t_int)
-
-        logging.info("Closing WCU BB to get a background ...")
-        wcu.set_bb_aperture(value=0.0)
-
-        metis.observe()
-
-        # save a perfect background (for debugging)
-        # hdul_perfect_background = metis.image_planes[0].hdu
-        # hdul_perfect_background.writeto(out_dir + 'junk_perfect_background.fits',
-        # overwrite=True)
-
-        pipe_2_log(
-            lambda m=metis: m.effects.pprint_all(),
-            msg="Optical train effects (background)",
+    written = []
+    for case, case_cfg in req_cfg["cases"].items():
+        inject = case_cfg["inject"]
+        cards = sim_common.requirement_cards(
+            req_key, req_cfg, case, inject, expected[case], ctx.simver
         )
+        for end in ("min", "max"):
+            frac = float(inject[f"flux_{end}"])
+            target = frac * saturation
+            factor = signal_factor_for_raw_level(dark_1, signal, target)
+            raw = dark_1 + factor * signal
+            logging.info(
+                "%s case %s %s: target raw median %.4g ADU; signal factor %.4g; raw "
+                "median %.4g, max %.4g ADU",
+                req_key,
+                case,
+                end,
+                target,
+                factor,
+                float(np.median(raw)),
+                float(np.max(raw)),
+            )
+            if np.max(raw) > saturation:
+                logging.warning(
+                    "%s case %s %s: max of the raw frame %.4g ADU > saturation",
+                    req_key,
+                    case,
+                    end,
+                    float(np.max(raw)),
+                )
+            written.append(
+                ctx.write_case(
+                    req_key,
+                    case,
+                    f"_{end}",
+                    raw,
+                    cards
+                    + [
+                        ("LEVEL", end.upper(), "Faintest/brightest calibration flux"),
+                        ("FLUXFRAC", frac, "Injected raw level / saturation"),
+                        ("FLUXINJ", target, "Injected raw level (ADU/DIT, median)"),
+                        ("SIGFAC", factor, "Signal scaling factor"),
+                        ("SAT_ADU", saturation, "Saturation level (ADU/DIT)"),
+                    ],
+                )
+            )
+    return written
 
-        if use_exp_time_only:
-            # Method 1 for setting exposure times: exptime alone
-            outhdul_off = metis.readout(exptime=exptime, reset=False)[0]
-        else:
-            # Method 2 for setting exposure times: use ndit and dit together
-            outhdul_off = metis.readout(ndit=ndit, dit=dit, reset=False)[0]
 
-        logging.info("--------------------------------")
-        logging.info("Background readout:")
-        logging.info("OBS filter: %s", metis.cmds.get("!OBS.filter_name"))
-        logging.info("WCU FP mask: %s", metis.cmds.get("!WCU.current_fpmask"))
-        logging.info("OBS PP mask: %s", metis.cmds.get("!OBS.pupil_mask"))
-        logging.info("OBS ND filter: %s", metis.cmds.get("!OBS.nd_filter_name"))
-        logging.info("NDIT: %s", metis.cmds["!OBS.ndit"])
-        logging.info("DIT: %s", metis.cmds["!OBS.dit"])
-        logging.info("WCU source state:")
-        pipe_2_log(
-            lambda m=metis: metis["wcu_source"].info(),
-            msg="Optical train effects (background)",
+@pipeline_stage(
+    name="simulate_metis_2883",
+    cluster=CLUSTER_PHOT,
+    cluster_color=COLOR_PHOT,
+    label="SIM METIS-2883: flat homogeneity",
+)
+def simulate_metis_2883(ctx, req_key, req_cfg):
+    """
+    Simulated data for METIS-2883: the source used for detector linearity calibration
+    shall provide an illumination that is spatially homogeneous within +/- 3%
+    peak-to-valley over the science field of view.
+
+    Per case, a full-aperture ScopeSim flat with a smooth illumination pattern injected
+    so that max |pixel / mean - 1| = injected half_ptv (on top of whatever
+    inhomogeneity ScopeSim itself produces). Writes one PASS case and one FAIL case
+    (and e.g. one near the limit, if configured).
+
+    OUTPUTS:
+    - list[str]: written files
+    """
+    expected = sim_common.check_cases(req_key, req_cfg)
+    dark_1, _ = ctx.darks()
+    flat, _ = ctx.lit_frame()
+    signal = flat - dark_1
+    pattern = sim_common.smooth_pattern(signal.shape, "tilt_and_radial")
+
+    written = []
+    for case, case_cfg in req_cfg["cases"].items():
+        inject = case_cfg["inject"]
+        raw = flat + float(inject["half_ptv"]) * pattern * signal
+        written.append(
+            ctx.write_case(
+                req_key,
+                case,
+                "",
+                raw,
+                sim_common.requirement_cards(
+                    req_key, req_cfg, case, inject, expected[case], ctx.simver
+                ),
+            )
         )
+    return written
 
-        # check for background-taking
-        # sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask,
-        # pp_mask=pp_mask)
 
-        if use_exp_time_only:
-            # Method 1 for setting exposure times: exptime alone
-            outhdul_off = metis.readout(exptime=exptime, reset=False)[0]
-        else:
-            # Method 2 for setting exposure times: use ndit and dit together
-            outhdul_off = metis.readout(ndit=ndit, dit=dit, reset=False)[0]
+@pipeline_stage(
+    name="simulate_metis_3300",
+    cluster=CLUSTER_PHOT,
+    cluster_color=COLOR_PHOT,
+    label="SIM METIS-3300: 15 flat-field flux steps",
+)
+def simulate_metis_3300(ctx, req_key, req_cfg):
+    """
+    Simulated data for METIS-3300: the level of flux of the flat field shall be tunable
+    to 15 discrete values and shall be known at each step to 0.3%; the resulting
+    spatial illumination pattern shall remain constant across the field within 0.5%
+    after tuning.
 
-        # background-subtract (there is none, actually, since we are taking a dark)
-        raw_sci_readout = outhdul_off[1].data
-        bckgd_subted = raw_sci_readout
+    Flux steps: ScopeSim flats at n_steps WCU black-body apertures (header BB_APER, the
+    nominal relative flux). Per case and step, injected:
+    - flux error: the flux is off the nominal by +/- flux_error (alternating sign),
+    - pattern change: a smooth pattern with amplitude ramping from -pattern_change to
+      +pattern_change over the steps (so each step's normalised flat differs from the
+      step-averaged one by at most pattern_change).
+    Writes ..._<case>_stepNN.fits for one PASS case and one FAIL case (more if
+    configured), one ScopeSim readout per step shared by all cases.
 
-        basename_file_name_write = (
-            "IMG_OPT_03_wcu_focal_mask_bckgrnd_subted_"
-            + str(fp_mask)
-            + "_pupil_mask_"
-            + str(pp_mask)
-            + "_filter_"
-            + str(obs_filter)
-            + f"_tint_{t_int:.3f}s"
-            + ".fits"
-        )
-        abs_file_name_write = out_dir + basename_file_name_write
+    OUTPUTS:
+    - list[str]: written files
+    """
+    expected = sim_common.check_cases(req_key, req_cfg)
+    n_steps = int(req_cfg["n_steps"])
+    apertures = np.linspace(
+        float(req_cfg["bb_aperture_min"]), float(req_cfg["bb_aperture_max"]), n_steps
+    )
+    dark_1, dark_2 = ctx.darks()
+    pattern = None
+    signs = np.where(np.arange(n_steps) % 2 == 0, 1.0, -1.0)
+    ramp = np.linspace(-1.0, 1.0, n_steps)
 
-        # Copy the primary header (just copy the same frame into the ImageHDUs)
-        primary_hdu = fits.PrimaryHDU(header=outhdul_off[0].header)
-        # Add background-subtracted readout as first extension
-        hdu_bckgd_subted = fits.ImageHDU(data=bckgd_subted, name="BCKGD_SUBTED")
-        # Add raw science readout as second extension
-        hdu_raw_readout = fits.ImageHDU(data=bckgd_subted, name="RAW_READOUT")
-        # Add background as third extension
-        hdu_background = fits.ImageHDU(data=bckgd_subted, name="BACKGROUND")
-        hdul_new = fits.HDUList(
-            [primary_hdu, hdu_bckgd_subted, hdu_raw_readout, hdu_background]
-        )
+    written = []
+    for step, aperture in enumerate(apertures):
+        # one ScopeSim readout per step, injected differently for each case
+        flat, header = sim_common.readout_frame(ctx.metis, aperture, ctx.instrument)
+        signal = flat - dark_1
+        if pattern is None:
+            pattern = sim_common.smooth_pattern(signal.shape, "saddle")
+        for case, case_cfg in req_cfg["cases"].items():
+            inject = case_cfg["inject"]
+            flux_factor = 1.0 + float(inject["flux_error"]) * signs[step]
+            pattern_factor = (
+                1.0 + float(inject["pattern_change"]) * ramp[step] * pattern
+            )
+            raw = flat + (flux_factor * pattern_factor - 1.0) * signal
+            written.append(
+                sim_common.write_case_file(
+                    ctx.out_dir,
+                    ctx.test_prefix,
+                    req_key,
+                    ctx.instrument,
+                    case,
+                    f"_step{step + 1:02d}",
+                    raw,
+                    dark_2,
+                    header,
+                    sim_common.requirement_cards(
+                        req_key, req_cfg, case, inject, expected[case], ctx.simver
+                    )
+                    + [
+                        ("STEP", step + 1, "Flux step"),
+                        ("N_STEPS", n_steps, "Number of flux steps"),
+                        ("BB_APER", float(aperture), "WCU BB aperture (nominal flux)"),
+                        ("FLUXFAC", flux_factor, "Injected flux / nominal"),
+                        (
+                            "PATTAMP",
+                            float(inject["pattern_change"]) * ramp[step],
+                            "Injected pattern amplitude",
+                        ),
+                    ],
+                )
+            )
+    return written
 
-        # add some stuff to the header, some of which may be redundant
-        hdul_new[0].header["FILTER"] = (obs_filter, "Observing filter")
-        hdul_new[0].header["WCU_FP"] = (fp_mask, "WCU focal plane mask")
-        hdul_new[0].header["WCU_PP"] = (pp_mask, "WCU pupil plane mask")
-        hdul_new[0].header["PSF_KERN"] = (psf_kernel, "ScopeSim PSF kernel")
-        hdul_new[0].header["BB_TEMP"] = (bb_temp.value, "BB temperature")
-        if ndit is not None:
-            hdul_new[0].header["NDIT"] = (ndit, "Number of dithered exposures")
-            hdul_new[0].header["DIT"] = (dit, "Det integration time")
-        else:
-            hdul_new[0].header["EXPTIME"] = (exptime, "Exposure time")
 
-        hdul_new.writeto(abs_file_name_write, overwrite=True)
-        logging.info(
-            "Saved background-subtracted readout without aberrations to %s",
-            abs_file_name_write,
-        )
-
-        logging.info("--------------------------------")
-        logging.info("Median of dark frame: %.4f", np.median(bckgd_subted))
+# requirement key (in the scenario config) -> function writing its simulated data
+SIMULATORS = {
+    "METIS-2594": simulate_metis_2594,
+    "METIS-2883": simulate_metis_2883,
+    "METIS-3300": simulate_metis_3300,
+}
 
 
 def main():
     """
-    Generate IMG-RAD-07 photometric performance simulations for the configured filters.
+    Generate IMG-RAD-07 photometric performance simulations, one set per requirement,
+    as set in the scenario config.
     """
-
-    # set up paths, logging and output directory
     stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
+    out_dir = stem + "data/IMG_OPT_07_photometric_performance_simmed_data/"
 
     now = datetime.datetime.now()
-    log_dir = stem + "logs/IMG_07_phot_logs/"
-    log_file_name = (
-        log_dir
-        + "log_IMG_07_photometric_performance_"
-        + now.strftime("%Y-%m-%d_%H-%M-%S")
-        + ".txt"
+    sim_common.start_sim_logging(
+        stem, "IMG_07_phot_logs", "IMG_07_photometric_performance", now
     )
-    out_dir = (
-        stem + "data/IMG_OPT_07_photometric_performance_simmed_data/"
-    )  # directory to write the simulated data to
-
-    # Ensure log directory exists and force config in case handlers already set
-    os.makedirs(log_dir, exist_ok=True)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[logging.FileHandler(log_file_name), logging.StreamHandler()],
-        force=True,
-    )
-    os.makedirs(out_dir, exist_ok=True)
-
-    logging.info("Log file created at %s", now.strftime("%Y-%m-%d %H:%M:%S"))
-    logging.info("Log file name: %s", log_file_name)
-    logging.info("Log file directory: %s", stem + log_dir)
     logging.info("Simmed file output directory: %s", out_dir)
+    sim_common.setup_scopesim()
 
-    # observing configurations (filters, masks, ND filters, integration times)
-    lm_dark_configs = [
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "SPM-LM",
-            "psf_kernel": "SPM-LM",
-            "obs_filter": "HCI_L_short",
-            "nd_filter": None,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        }
-    ]
-
-    # use different integration times (need at least 15 background levels)
-    t_integration = np.linspace(0.01, 0.04, num=15)
-    make_flat_frames(**lm_dark_configs[0], t_integration=t_integration, out_dir=out_dir)
-
-    # loop over configurations and generate the simulated data
+    observing = load_observing_config(stem)
+    scenario = load_config_and_pipe(
+        config_file_choice=stem + "config/config_file_IMG_RAD_07_SIM.yaml",
+        print_one_line=False,
+    )
+    sim_common.run_scenario(scenario, SIMULATORS, observing, out_dir, TEST_PREFIX)
 
 
 if __name__ == "__main__":

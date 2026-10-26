@@ -1,6 +1,6 @@
 # Scenario for IMG_OPT_06_METIS_AIT_out_of_field_SIM.py: one entry per requirement.
 # Format and options: see modules/sim_common.py and config_file_IMG_RAD_07_SIM.yaml.
-# Files: data/IMG_06_simmed_out_of_field_data/
+# Files: data/IMG_OPT_06_out_of_field_simmed_data/
 #   IMG_OPT_06_<requirement>_<instrument>_<case>.fits
 
 # Deep exposures: DIT as for IMG-OPT-04 (so no single DIT saturates on the PSF), but

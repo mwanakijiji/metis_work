@@ -1,8 +1,12 @@
 # Same per-data-state options as config_file_IMG_04_stray_light_data_states.yaml
 # (segmentation_method, segmentation_params, segmentation_weights,
 # segmentation_vote_fraction); the segmentation is used for METIS-9522
+#
+# Files as written by IMG_OPT_06_METIS_AIT_out_of_field_SIM.py
+# (config/config_file_IMG_06_SIM.yaml): IMG_OPT_06_<requirement>_<instrument>_<case>.fits,
+# with the injected truth (EXPECTED, ATT_INJ, ...) in the primary header
 
-# note: if gradient is smooth,  
+# note: if gradient is smooth,
 #      threshold: 1.0
 #      hough_circle: 0.0
 #      active_contour: 0.0
@@ -12,12 +16,12 @@
 
 data_states:
 
-  - file_name: data/IMG_06_simmed_out_of_field_data/IMG_OPT_06_out_of_field_pinhole_lm_pupil_mask_PPS-CFO2_filter_Br_alpha_with_stray_light.fits
+  - file_name: data/IMG_OPT_06_out_of_field_simmed_data/IMG_OPT_06_METIS-5838_Br_alpha_fail.fits
     filter_name: Br_alpha
     detector: LM
     segmentation_method: combined
     segmentation_vote_fraction: 0.5
-    segmentation_weights:
+    segmentation_weights: &weights_smooth
       threshold: 1.0
       hough_circle: 0.0
       active_contour: 0.0
@@ -25,41 +29,23 @@ data_states:
       kmeans: 1.0
       meanshift: 0.0
 
-  - file_name: data/IMG_06_simmed_out_of_field_data/IMG_OPT_06_out_of_field_pinhole_lm_pupil_mask_PPS-CFO2_filter_Br_alpha_no_stray_light.fits
+  - file_name: data/IMG_OPT_06_out_of_field_simmed_data/IMG_OPT_06_METIS-5838_Br_alpha_pass.fits
     filter_name: Br_alpha
     detector: LM
     segmentation_method: combined
     segmentation_vote_fraction: 0.5
-    segmentation_weights:
-      threshold: 1.0
-      hough_circle: 0.0
-      active_contour: 0.0
-      watershed: 1.0
-      kmeans: 1.0
-      meanshift: 0.0
+    segmentation_weights: *weights_smooth
 
-  - file_name: data/IMG_06_simmed_out_of_field_data/IMG_OPT_06_out_of_field_pinhole_n_pupil_mask_PPS-CFO2_filter_N2_with_stray_light.fits
+  - file_name: data/IMG_OPT_06_out_of_field_simmed_data/IMG_OPT_06_METIS-5838_N2_fail.fits
     filter_name: N2
     detector: N
     segmentation_method: combined
     segmentation_vote_fraction: 0.5
-    segmentation_weights:
-      threshold: 1.0
-      hough_circle: 0.0
-      active_contour: 0.0
-      watershed: 1.0
-      kmeans: 1.0
-      meanshift: 0.0
+    segmentation_weights: *weights_smooth
 
-  - file_name: data/IMG_06_simmed_out_of_field_data/IMG_OPT_06_out_of_field_pinhole_n_pupil_mask_PPS-CFO2_filter_N2_no_stray_light.fits
+  - file_name: data/IMG_OPT_06_out_of_field_simmed_data/IMG_OPT_06_METIS-5838_N2_pass.fits
     filter_name: N2
     detector: N
     segmentation_method: combined
     segmentation_vote_fraction: 0.5
-    segmentation_weights:
-      threshold: 1.0
-      hough_circle: 0.0
-      active_contour: 0.0
-      watershed: 1.0
-      kmeans: 1.0
-      meanshift: 0.0
+    segmentation_weights: *weights_smooth

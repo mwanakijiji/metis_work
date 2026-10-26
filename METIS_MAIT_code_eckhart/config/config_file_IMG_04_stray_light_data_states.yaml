@@ -11,14 +11,18 @@
 #     segmentation_weights: weight in [0,1] per method; omitted methods default to 1, 0 disables a method
 #     segmentation_vote_fraction: N in [0,1] (default 0.5); a pixel is stray light if the summed
 #       weight of the methods detecting it > N * (sum of all weights)
+#
+# Files as written by IMG_OPT_04_METIS_AIT_img_cal_stray_light_SIM.py
+# (config/config_file_IMG_04_SIM.yaml): IMG_OPT_04_<requirement>_<instrument>_<case>.fits,
+# with the injected truth (REQ_ID, EXPECTED, INJ_VAL, ...) in the primary header
 data_states:
 
-  - file_name: data/IMG_04_simmed_stray_light_data/IMG_OPT_04_stray_light_pinhole_lm_pupil_mask_PPS-CFO2_filter_Br_alpha.fits
+  - file_name: data/IMG_OPT_04_stray_light_simmed_data/IMG_OPT_04_METIS-1189-1429_Br_alpha_pass.fits
     filter_name: Br_alpha
     detector: LM
     segmentation_method: combined
     segmentation_vote_fraction: 0.5
-    segmentation_weights:
+    segmentation_weights: &weights_all
       threshold: 1.0
       hough_circle: 1.0
       active_contour: 1.0
@@ -26,16 +30,51 @@ data_states:
       kmeans: 1.0
       meanshift: 1.0
 
-  - file_name: data/IMG_04_simmed_stray_light_data/IMG_OPT_04_stray_light_pinhole_n_pupil_mask_PPS-CFO2_filter_N2.fits
+  - file_name: data/IMG_OPT_04_stray_light_simmed_data/IMG_OPT_04_METIS-1189-1429_Br_alpha_fail.fits
+    filter_name: Br_alpha
+    detector: LM
+    segmentation_method: combined
+    segmentation_vote_fraction: 0.5
+    segmentation_weights: *weights_all
+
+  - file_name: data/IMG_OPT_04_stray_light_simmed_data/IMG_OPT_04_METIS-9522_Br_alpha_pass.fits
+    filter_name: Br_alpha
+    detector: LM
+    segmentation_method: combined
+    segmentation_vote_fraction: 0.5
+    segmentation_weights: *weights_all
+
+  - file_name: data/IMG_OPT_04_stray_light_simmed_data/IMG_OPT_04_METIS-9522_Br_alpha_fail.fits
+    filter_name: Br_alpha
+    detector: LM
+    segmentation_method: combined
+    segmentation_vote_fraction: 0.5
+    segmentation_weights: *weights_all
+
+  - file_name: data/IMG_OPT_04_stray_light_simmed_data/IMG_OPT_04_METIS-1189-1429_N2_pass.fits
     filter_name: N2
     detector: N
     segmentation_method: combined
     segmentation_vote_fraction: 0.5
-    segmentation_weights:
-      threshold: 1.0
-      hough_circle: 1.0
-      active_contour: 1.0
-      watershed: 1.0
-      kmeans: 1.0
-      meanshift: 1.0
+    segmentation_weights: *weights_all
 
+  - file_name: data/IMG_OPT_04_stray_light_simmed_data/IMG_OPT_04_METIS-1189-1429_N2_fail.fits
+    filter_name: N2
+    detector: N
+    segmentation_method: combined
+    segmentation_vote_fraction: 0.5
+    segmentation_weights: *weights_all
+
+  - file_name: data/IMG_OPT_04_stray_light_simmed_data/IMG_OPT_04_METIS-9522_N2_pass.fits
+    filter_name: N2
+    detector: N
+    segmentation_method: combined
+    segmentation_vote_fraction: 0.5
+    segmentation_weights: *weights_all
+
+  - file_name: data/IMG_OPT_04_stray_light_simmed_data/IMG_OPT_04_METIS-9522_N2_fail.fits
+    filter_name: N2
+    detector: N
+    segmentation_method: combined
+    segmentation_vote_fraction: 0.5
+    segmentation_weights: *weights_all

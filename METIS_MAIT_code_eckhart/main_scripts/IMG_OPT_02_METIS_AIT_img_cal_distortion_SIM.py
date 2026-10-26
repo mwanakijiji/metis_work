@@ -20,53 +20,48 @@ configuration, even after
               change of observing modes) to an accuracy of 10-3 (goal: 10-4) at L/M-band
               and 2×10-3 (goal: 2×10-4)
               at N-band with respect to the full field of view.
+
+No requirement cases are simulated for this test (yet): one plain frame per observing
+configuration, with the OpticalTrain and readouts from modules/sim_common.py.
 """
 
 import datetime
 import logging
 import os
-import sys
 
 import numpy as np
-import scopesim as sim
-from astropy import units as u
 from astropy.io import fits
 
-from modules.helpers import pipe_2_log
-from pipeline_registry import (
+from modules import sim_common
+from pipeline_registry import (  # pylint: disable=import-error,wrong-import-order
     CLUSTER_DISTORTION,
     COLOR_DISTORTION,
     pipeline_stage,
 )
 
-# Edit this path if you have a custom install directory, otherwise comment it out. [For
-# ReadTheDocs only]
-sim.link_irdb("../../../")
-
-# simulate observations with METIS (comment this out if packages already exist)
-# sim.download_packages(["METIS", "ELT", "Armazones"])
-
-# print versions of things
-sim.bug_report()
-
-
-def sanity_check_user_inputs(metis, obs_filter, fp_mask, pp_mask):
-    """Exit if the filter/masks the OpticalTrain uses do not match the user inputs."""
-    checks = (
-        ("OBS filter", "!OBS.filter_name", obs_filter),
-        ("WCU FP mask", "!WCU.current_fpmask", fp_mask),
-        ("OBS PP mask", "!OBS.pupil_mask", pp_mask),
-    )
-    for label, key, user_value in checks:
-        if metis.cmds.get(key) != user_value:
-            logging.error(
-                "! ------- %s: %s does not match user input: %s",
-                label,
-                metis.cmds.get(key),
-                user_value,
-            )
-            sys.exit(1)
-    logging.info("User filter inputs match instrument inputs")
+# LM filters
+# dict_keys(['open', 'Lp', 'short-L', 'L_spec', 'Mp', 'M_spec', 'Br_alpha',
+# 'Br_alpha_ref', 'PAH_3.3', 'PAH_3.3_ref', 'CO_1-0_ice', 'CO_ref', 'H2O-ice',
+# 'IB_4.05', 'HCI_L_short', 'HCI_L_long', 'HCI_M'])
+# (filter, ND filter, DIT, NDIT); all with grid_lm, PPS-CFO2, wcu_img_lm
+LM_OBS_CONFIGS = [
+    ("Br_alpha", None, 0.065, 2),
+    ("Br_alpha_ref", "ND_OD1", 0.4, 5),
+    ("Lp", "ND_OD2", 3 / 8, 3),
+    ("H2O-ice", "ND_OD1", 0.06, 1),
+    ("short-L", "ND_OD2", 0.375, 4),
+    ("PAH_3.3", "ND_OD1", 0.1875, 7),
+    ("PAH_3.3_ref", "ND_OD1", 0.1875, 8),
+    ("IB_4.05", "ND_OD1", 1 / 6, 12),
+    ("HCI_L_short", "ND_OD2", 5 / 6, 3),
+    ("HCI_L_long", "ND_OD1", 0.06, 25),
+    ("Mp", "ND_OD2", 0.5, 5),
+    ("CO_1-0_ice", "ND_OD1", 2 / 21, 21),
+    ("CO_ref", "ND_OD1", 2 / 21, 21),
+    ("HCI_M", "ND_OD1", 1 / 11, 22),
+    ("L_spec", "ND_OD2", 0.12, 11),
+    ("M_spec", "ND_OD2", 2 / 7, 7),
+]
 
 
 @pipeline_stage(
@@ -75,477 +70,89 @@ def sanity_check_user_inputs(metis, obs_filter, fp_mask, pp_mask):
     cluster_color=COLOR_DISTORTION,
     label="Generate distortion sims",
 )
-def generate_psf_image_quality_data(
-    fp_mask,
-    pp_mask,
-    nd_filter,
-    obs_filter,
-    obs_mode,
-    angle_array,
-    dit=1,
-    ndit=1,
-    exptime=0.01,
-    use_exp_time_only=False,
-    out_dir=None,
-):
+def generate_distortion_data(instrument, out_dir):
     """
-    Generate simulated data for the IMG-OPT-02 image distortion test
+    Generate simulated data for the IMG-OPT-02 image distortion test: a background and
+    an illuminated frame for one WCU set-up (see sim_common.build_optical_train).
 
-    INPUTS:
-    - fp_mask: focal plane mask
-    - pp_mask: pupil plane mask
-    - nd_filter: ND filter
-    - obs_filter: observing filter
-    - obs_mode: observing mode
-    - angle_array: array of clocking angles
-    - dit: dit time
-    - ndit: number of dithered exposures
-    - exptime: exposure time
-    - use_exp_time_only: if True, only use the exposure time to set the exposure time;
-      but this will be broken down into dit and ndit to avoid saturation, so integration
-      parameters may change accordingly
+    Writes IMG_OPT_02_wcu_focal_mask_bckgrnd_subted_<fp_mask>_pupil_mask_<pp_mask>
+    _filter_<filter>.fits with BCKGD_SUBTED, RAW_READOUT and BACKGROUND (the layout the
+    IMG-OPT-02 ANALYSIS was written for).
 
     OUTPUTS:
-    - None; writes out files
+    - str: path of the written file
     """
-    del angle_array  # clocking angles not implemented yet
-
-    # set up instrument
-
-    cmd = None  # reset
-    if nd_filter is not None:
-        cmd = sim.UserCommands(
-            use_instrument="METIS",
-            set_modes=[obs_mode],
-            properties={
-                "!OBS.filter_name": obs_filter,
-                "!WCU.current_fpmask": fp_mask,
-                "!OBS.pupil_mask": pp_mask,
-                "!OBS.nd_filter_name": nd_filter,
-            },
-        )
-    else:
-        cmd = sim.UserCommands(
-            use_instrument="METIS",
-            set_modes=[obs_mode],
-            properties={
-                "!OBS.filter_name": obs_filter,
-                "!WCU.current_fpmask": fp_mask,
-            },
-        )
-
-    metis = sim.OpticalTrain(cmd)
-
-    # Generate a circularly-symmetric PSF from an annular aperture
-    metis["pupil_masks"].change_mask(pp_mask)
-    metis["psf"].update(pupil_mask=pp_mask + "_WCU")
-    logging.info("Setting WCU PP mask to be: %s", pp_mask + "_WCU")
-
-    wcu = metis["wcu_source"]
-
-    bb_temp = 1000 * u.K
-
-    pipe_2_log(
-        lambda m=metis: m.effects.pprint_all(),
-        msg="Optical train effects (initial)",
-    )
-
-    #########################################################
-    # BACKGROUND
+    metis = sim_common.build_optical_train(instrument)
 
     logging.info("Closing WCU BB aperture first to get a background ...")
-    wcu.set_bb_aperture(value=0.0)
-
-    metis.observe()
-
-    pipe_2_log(
-        lambda m=metis: m.effects.pprint_all(),
-        msg="Optical train effects (background)",
-    )
-
-    if use_exp_time_only:
-        # Method 1 for setting exposure times: exptime alone
-        outhdul_off = metis.readout(exptime=exptime, reset=False)[0]
-    else:
-        # Method 2 for setting exposure times: use ndit and dit together
-        outhdul_off = metis.readout(ndit=ndit, dit=dit, reset=False)[0]
-
-    logging.info("--------------------------------")
-    logging.info("Background readout:")
-    logging.info("OBS filter: %s", metis.cmds.get("!OBS.filter_name"))
-    logging.info("WCU FP mask: %s", metis.cmds.get("!WCU.current_fpmask"))
-    logging.info("OBS PP mask: %s", metis.cmds.get("!OBS.pupil_mask"))
-    logging.info("OBS ND filter: %s", metis.cmds.get("!OBS.nd_filter_name"))
-    logging.info("NDIT: %s", metis.cmds["!OBS.ndit"])
-    logging.info("DIT: %s", metis.cmds["!OBS.dit"])
-    logging.info("WCU source state:")
-    pipe_2_log(
-        lambda m=metis: metis["wcu_source"].info(),
-        msg="Optical train effects (background)",
-    )
-
-    # check for background-taking
-    # sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask,
-    # pp_mask=pp_mask)
-    background = outhdul_off[1].data
-
-    #########################################################
-    # SCIENCE FRAME
-
+    background, _ = sim_common.readout_frame(metis, 0.0, instrument)
     logging.info("Re-opening WCU BB aperture to get a PSF ...")
-    wcu.set_bb_aperture(value=1.0)  # open BB source
-    metis.observe()
-    # print the ingredients of the PSF generation
-    # pipe_2_log(lambda m=metis: [print(f"{k}: {v}") for k, v in
-    # vars(m["psf"]).items()], msg="PSF ingredients") # this prints EVERYTHING
-    logging.info("PSF model wavel range: %s", vars(metis["psf"])["_waveset"])
-    logging.info("PSF model kernel shape: %s", vars(metis["psf"])["kernel"].shape)
-    logging.info(
-        "PSF model kernel file name: %s", vars(metis["psf"])["meta"]["filename"]
-    )
-    pipe_2_log(
-        lambda m=metis: str(vars(m["psf"])["_waveset"]),
-        msg="PSF model wavel range",
-    )
-
-    # Get perfect PSF - no detector noise
-    # hdul_perfect = metis.image_planes[0].hdu
-
-    pipe_2_log(
-        lambda m=metis: m.effects.pprint_all(),
-        msg="Optical train effects (science)",
-    )
-
-    if use_exp_time_only:
-        # Method 1 for setting exposure times: exptime alone
-        outhdul_on = metis.readout(exptime=exptime, reset=False)[0]
-    else:
-        # Method 2 for setting exposure times: use ndit and dit together
-        outhdul_on = metis.readout(ndit=ndit, dit=dit, reset=False)[0]
-    logging.info("--------------------------------")
-    logging.info("Science readout:")
-    logging.info("OBS filter: %s", metis.cmds.get("!OBS.filter_name"))
-    logging.info("WCU FP mask: %s", metis.cmds.get("!WCU.current_fpmask"))
-    logging.info("OBS PP mask: %s", metis.cmds.get("!OBS.pupil_mask"))
-    logging.info("OBS ND filter: %s", metis.cmds.get("!OBS.nd_filter_name"))
-    logging.info("NDIT:%s", metis.cmds["!OBS.ndit"])
-    logging.info("DIT:%s", metis.cmds["!OBS.dit"])
-    logging.info("WCU source state:")
-    pipe_2_log(
-        lambda m=metis: metis["wcu_source"].info(),
-        msg="Optical train effects (background)",
-    )
-
-    # check for science-taking
-    # sanity_check_user_inputs(metis, obs_filter=obs_filter, fp_mask=fp_mask,
-    # pp_mask=pp_mask)
-    # hdul_perfect = metis.image_planes[0].hdu
-
-    # background-subtract
-    raw_sci_readout = outhdul_on[1].data
+    raw_sci_readout, header = sim_common.readout_frame(metis, 1.0, instrument)
     bckgd_subted = raw_sci_readout - background
 
-    basename_file_name_write = (
-        "IMG_OPT_02_wcu_focal_mask_bckgrnd_subted_"
-        + str(fp_mask)
-        + "_pupil_mask_"
-        + str(pp_mask)
-        + "_filter_"
-        + str(obs_filter)
-        + ".fits"
-    )
-    abs_file_name_write = out_dir + basename_file_name_write
-
-    # Copy the primary header
-    primary_hdu = fits.PrimaryHDU(header=outhdul_on[0].header)
-    # Add background-subtracted readout as first extension
-    hdu_bckgd_subted = fits.ImageHDU(data=bckgd_subted, name="BCKGD_SUBTED")
-    # Add raw science readout as second extension
-    hdu_raw_readout = fits.ImageHDU(data=raw_sci_readout, name="RAW_READOUT")
-    # Add background as third extension
-    hdu_background = fits.ImageHDU(data=background, name="BACKGROUND")
     hdul_new = fits.HDUList(
-        [primary_hdu, hdu_bckgd_subted, hdu_raw_readout, hdu_background]
+        [
+            fits.PrimaryHDU(header=header),
+            fits.ImageHDU(data=bckgd_subted, name="BCKGD_SUBTED"),
+            fits.ImageHDU(data=raw_sci_readout, name="RAW_READOUT"),
+            fits.ImageHDU(data=background, name="BACKGROUND"),
+        ]
     )
+    hdr = hdul_new[0].header
+    hdr["FILTER"] = (instrument["obs_filter"], "Observing filter")
+    hdr["WCU_FP"] = (instrument["fp_mask"], "WCU focal plane mask")
+    hdr["WCU_PP"] = (instrument["pp_mask"], "WCU pupil plane mask")
+    hdr["PSF_KERN"] = (sim_common.psf_kernel_of(instrument), "ScopeSim PSF kernel")
+    hdr["ND_FILT"] = (str(instrument.get("nd_filter")), "ND filter")
+    hdr["BB_TEMP"] = (sim_common.BB_TEMP.value, "BB temperature")
+    hdr["NDIT"] = (instrument["ndit"], "Number of DITs")
+    hdr["DIT"] = (instrument["dit"], "Det integration time")
 
-    # add some stuff to the header, some of which may be redundant
-    hdul_new[0].header["FILTER"] = (obs_filter, "Observing filter")
-    hdul_new[0].header["WCU_FP"] = (fp_mask, "WCU focal plane mask")
-    hdul_new[0].header["WCU_PP"] = (pp_mask, "WCU pupil plane mask")
-    hdul_new[0].header["BB_TEMP"] = (bb_temp.value, "BB temperature")
-    if ndit is not None:
-        hdul_new[0].header["NDIT"] = (ndit, "Number of dithered exposures")
-        hdul_new[0].header["DIT"] = (dit, "Det integration time")
-    else:
-        hdul_new[0].header["EXPTIME"] = (exptime, "Exposure time")
-
+    abs_file_name_write = os.path.join(
+        out_dir,
+        f"IMG_OPT_02_wcu_focal_mask_bckgrnd_subted_{instrument['fp_mask']}"
+        f"_pupil_mask_{instrument['pp_mask']}_filter_{instrument['obs_filter']}.fits",
+    )
     hdul_new.writeto(abs_file_name_write, overwrite=True)
+    logging.info("Saved %s", abs_file_name_write)
     logging.info(
-        "Saved background-subtracted readout without aberrations to %s",
-        abs_file_name_write,
+        "Median of raw science readout / background / background-subtracted: "
+        "%.4f / %.4f / %.4f",
+        np.median(raw_sci_readout),
+        np.median(background),
+        np.median(bckgd_subted),
     )
-
-    logging.info("--------------------------------")
-    logging.info("Median of raw science readout: %.4f", np.median(raw_sci_readout))
-    logging.info("Median of background: %.4f", np.median(background))
-    logging.info(
-        "Median of background-subtracted readout: %.4f", np.median(bckgd_subted)
-    )
+    return abs_file_name_write
 
 
 def main():
     """Simulate the IMG-OPT-02 distortion data for each observing configuration."""
 
-    stem = "/podman-share/metis_work/playing_with_scopesim/"
-
-    now = datetime.datetime.now()
-    log_dir = stem + "IMG_02_logs/"
-    log_file_name = (
-        log_dir
-        + "log_IMG_02_simulation_psf_image_quality_"
-        + now.strftime("%Y-%m-%d_%H-%M-%S")
-        + ".txt"
-    )
-    out_dir = stem + "IMG_02_simmed_data/"  # directory to write the simulated data to
-
-    # Ensure log directory exists and force config in case handlers already set
-    os.makedirs(log_dir, exist_ok=True)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[logging.FileHandler(log_file_name), logging.StreamHandler()],
-        force=True,
-    )
+    stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
+    # write simulated data here, where the ANALYSIS reads it
+    # (config/config_file_IMG_02_strehl_runs.yaml)
+    out_dir = stem + "data/IMG_OPT_02_distortion_simmed_data/"
     os.makedirs(out_dir, exist_ok=True)
 
-    logging.info("Log file created at %s", now.strftime("%Y-%m-%d %H:%M:%S"))
-    logging.info("Log file name: %s", log_file_name)
-    logging.info("Log file directory: %s", stem + "IMG_02_logs/")
-    logging.info("Log file directory: %s", stem + "IMG_02_logs/")
+    now = datetime.datetime.now()
+    sim_common.start_sim_logging(
+        stem, "IMG_02_logs", "IMG_02_simulation_psf_image_quality", now
+    )
     logging.info("Simmed file output directory: %s", out_dir)
+    sim_common.setup_scopesim()
 
-    # clocking angles for the PSF
-    # angle_array = [0, 45, 60]
-    angle_array = [0]  # can be implemented later
-
-    # LM filters
-    # dict_keys(['open', 'Lp', 'short-L', 'L_spec', 'Mp', 'M_spec', 'Br_alpha',
-    # 'Br_alpha_ref', 'PAH_3.3', 'PAH_3.3_ref', 'CO_1-0_ice', 'CO_ref', 'H2O-ice',
-    # 'IB_4.05', 'HCI_L_short', 'HCI_L_long', 'HCI_M'])
-    lm_obs_configs = [
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "PPS-CFO2",
-            "obs_filter": "Br_alpha",
-            "nd_filter": None,
-            "dit": 0.065,
-            "ndit": 2,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "PPS-CFO2",
-            "obs_filter": "Br_alpha_ref",
-            "nd_filter": "ND_OD1",
-            "dit": 0.4,
-            "ndit": 5,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "PPS-CFO2",
-            "obs_filter": "Lp",
-            "nd_filter": "ND_OD2",
-            "dit": float(3 / 8),
-            "ndit": 3,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "PPS-CFO2",
-            "obs_filter": "H2O-ice",
-            "nd_filter": "ND_OD1",
-            "dit": 0.06,
-            "ndit": 1,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "PPS-CFO2",
-            "obs_filter": "short-L",
-            "nd_filter": "ND_OD2",
-            "dit": 0.375,
-            "ndit": 4,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "PPS-CFO2",
-            "obs_filter": "PAH_3.3",
-            "nd_filter": "ND_OD1",
-            "dit": 0.1875,
-            "ndit": 7,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "PPS-CFO2",
-            "obs_filter": "PAH_3.3_ref",
-            "nd_filter": "ND_OD1",
-            "dit": 0.1875,
-            "ndit": 8,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "PPS-CFO2",
-            "obs_filter": "IB_4.05",
-            "nd_filter": "ND_OD1",
-            "dit": float(1 / 6),
-            "ndit": 12,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "PPS-CFO2",
-            "obs_filter": "HCI_L_short",
-            "nd_filter": "ND_OD2",
-            "dit": float(5 / 6),
-            "ndit": 3,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "PPS-CFO2",
-            "obs_filter": "HCI_L_long",
-            "nd_filter": "ND_OD1",
-            "dit": 0.06,
-            "ndit": 25,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "PPS-CFO2",
-            "obs_filter": "Mp",
-            "nd_filter": "ND_OD2",
-            "dit": 0.5,
-            "ndit": 5,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "PPS-CFO2",
-            "obs_filter": "CO_1-0_ice",
-            "nd_filter": "ND_OD1",
-            "dit": float(2 / 21),
-            "ndit": 21,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "PPS-CFO2",
-            "obs_filter": "CO_ref",
-            "nd_filter": "ND_OD1",
-            "dit": float(2 / 21),
-            "ndit": 21,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "PPS-CFO2",
-            "obs_filter": "HCI_M",
-            "nd_filter": "ND_OD1",
-            "dit": float(1 / 11),
-            "ndit": 22,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "PPS-CFO2",
-            "obs_filter": "L_spec",
-            "nd_filter": "ND_OD2",
-            "dit": 0.12,
-            "ndit": 11,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-        {
-            "fp_mask": "grid_lm",
-            "pp_mask": "PPS-CFO2",
-            "obs_filter": "M_spec",
-            "nd_filter": "ND_OD2",
-            "dit": float(2 / 7),
-            "ndit": 7,
-            "exptime": np.nan,
-            "obs_mode": "wcu_img_lm",
-            "use_exp_time_only": False,
-        },
-    ]
-
-    # for debug
-    # ipdb.set_trace()
-    # for config in lm_obs_configs:
-    #     #_ = debug_mwe(fp_mask = "grid_lm", pp_mask = "Open", nd_filter = None,
-    # obs_filter = "Br_alpha", obs_mode = "wcu_img_lm", exptime = 0.1)
-    #     #ipdb.set_trace()
-    #     _ = debug_mwe(fp_mask = 'open', pp_mask= config["pp_mask"], nd_filter =
-    # "ND_OD3", obs_filter= config["obs_filter"], obs_mode= config["obs_mode"],
-    # exptime=config["exptime"])
-    #     _ = debug_mwe(fp_mask = config["fp_mask"], pp_mask= config["pp_mask"],
-    # nd_filter = "ND_OD3", obs_filter= config["obs_filter"], obs_mode=
-    # config["obs_mode"], exptime=config["exptime"])
-    #     exit()
-    #     #ipdb.set_trace()
-    # ipdb.set_trace()
-    #
-
-    for config in lm_obs_configs:
-
-        # below line is kludge for testing just one combo
-        # config = {"fp_mask": "grid_lm", "pp_mask": "Open", "obs_filter": "Mp",
-        # "nd_filter": "ND_OD2",  "dit": 1, "ndit": 10, "exptime": 1,   "obs_mode":
-        # "wcu_img_lm", "use_exp_time_only": True}
-
-        generate_psf_image_quality_data(
-            fp_mask=config["fp_mask"],
-            pp_mask=config["pp_mask"],
-            nd_filter=config["nd_filter"],
-            obs_filter=config["obs_filter"],
-            obs_mode=config["obs_mode"],
-            angle_array=angle_array,
-            dit=config["dit"],
-            ndit=config["ndit"],
-            exptime=config["exptime"],
-            out_dir=out_dir,
+    for obs_filter, nd_filter, dit, ndit in LM_OBS_CONFIGS:
+        generate_distortion_data(
+            {
+                "fp_mask": "grid_lm",
+                "pp_mask": "PPS-CFO2",
+                "obs_filter": obs_filter,
+                "nd_filter": nd_filter,
+                "obs_mode": "wcu_img_lm",
+                "dit": float(dit),
+                "ndit": ndit,
+            },
+            out_dir,
         )
 
 
