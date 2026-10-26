@@ -1,5 +1,7 @@
 """
 Analysis of simulated images written out by IMG_OPT_01_METIS_AIT_img_cal_fov_SIM.py
+
+!!! TBD MORE DISTORTION INFO FROM DD NEEDED FIRST (warned in the log and on any plots)
 """
 
 import datetime
@@ -8,6 +10,7 @@ import logging
 from modules.backbone_img_opt_01_fov import fov_calc
 from modules.config_common import load_observing_config
 from modules.helpers import load_config_and_pipe, setup_logging
+from modules.tbd_warnings import log_tbd_distortion, stamp_all_saved_figures
 
 # Reqs.:
 # - Ref. Overleaf doc
@@ -37,6 +40,9 @@ def main():
         + ".txt"
     )
     setup_logging(log_dir=log_dir, log_file_name=log_file_name, now=now)
+    log_tbd_distortion("IMG-OPT-01 ANALYSIS")
+    # any plot saved by this run gets the warning banner
+    stamp_all_saved_figures()
 
     # observing parameters (common to all tests); pixel scales for an FYI nominal FoV
     observing_config = load_observing_config(stem)
@@ -71,6 +77,13 @@ def main():
                 * float(state.get("illuminated_pixels_x", 0)),
             )
         fov_calc(run_state=state, stem=stem)
+        # the verdict just logged is provisional
+        log_tbd_distortion(
+            f"IMG-OPT-01 ANALYSIS, {state.get('filter_name')} "
+            f"{state.get('run_label', '')}".strip()
+        )
+
+    log_tbd_distortion("IMG-OPT-01 ANALYSIS")
 
 
 if __name__ == "__main__":

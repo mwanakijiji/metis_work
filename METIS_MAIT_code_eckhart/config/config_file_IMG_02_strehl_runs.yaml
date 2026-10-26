@@ -13,7 +13,7 @@ defaults:
   # fit_method: 'curve_fit' (default) or 'amoeba' for annular aperture free-parameter fit
   fit_method: curve_fit
   config_coords_guesses_file_name: config/config_file_IMG_02_coords_ver11.yaml
-  results_write_dir: results/IMG_02_analysis_results/
+  results_write_dir: results/IMG_OPT_02_distortion_analysis_results/
 
 runs:
   - filter_name: Br_alpha

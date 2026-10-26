@@ -20,11 +20,11 @@ from pipeline_registry import CLUSTER_STRAY, COLOR_STRAY, pipeline_stage
 from . import stray_light_common as slc
 
 # where IMG-OPT-04 analysis plots are written
-# (METIS_MAIT_code_eckhart/results/IMG_04_stray_light_analysis_results/)
+# (METIS_MAIT_code_eckhart/results/IMG_OPT_04_stray_light_analysis_results/)
 RESULTS_DIR_IMG_04 = str(
     Path(__file__).resolve().parents[2]
     / "results"
-    / "IMG_04_stray_light_analysis_results"
+    / "IMG_OPT_04_stray_light_analysis_results"
 )
 
 # METIS-1189 and -1429: stray light irradiance must be below this fraction of the

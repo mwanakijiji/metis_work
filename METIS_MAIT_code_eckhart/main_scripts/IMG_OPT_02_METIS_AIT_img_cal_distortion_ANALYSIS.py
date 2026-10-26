@@ -1,13 +1,18 @@
 """
 Does some simple analysis of simulated images written out by the sim notebook.
+
+!!! TBD MORE DISTORTION INFO FROM DD NEEDED FIRST (warned in the log and stamped on
+every plot this script saves)
 """
 
 import datetime
+import logging
 import os
 
 from modules.backbone_img_opt_02_distortion import image_distortion
 from modules.config_common import load_observing_config
 from modules.helpers import load_config_and_pipe, setup_logging
+from modules.tbd_warnings import log_tbd_distortion, stamp_all_saved_figures
 
 # Make simulated data for the IMG-OPT-02 image distorition test
 
@@ -50,6 +55,10 @@ def main():
         + ".txt"
     )
     setup_logging(log_dir=log_dir, log_file_name=log_file_name, now=now)
+    log_tbd_distortion("IMG-OPT-02 ANALYSIS")
+    # the plots are made deep in the backbone and helpers: stamp the warning banner on
+    # every figure this run saves
+    stamp_all_saved_figures()
 
     # observing parameters (common to all tests)
     observing_config = load_observing_config(stem)
@@ -78,6 +87,7 @@ def main():
 
     # loop over each data state
     for state in data_states:  # [0:1]: # if just for a small test
+        logging.info("==================================================")
         image_distortion(
             state["file_name"],
             fp_mask=state["fp_mask"],
@@ -92,6 +102,9 @@ def main():
             results_write_dir=state["results_write_dir"],
             fit_method="curve_fit",
         )
+        log_tbd_distortion(f"IMG-OPT-02 ANALYSIS, {state['filter_name']}")
+
+    log_tbd_distortion("IMG-OPT-02 ANALYSIS")
 
 
 if __name__ == "__main__":

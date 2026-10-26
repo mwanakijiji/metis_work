@@ -23,11 +23,11 @@ from pipeline_registry import (  # pylint: disable=import-error
 from . import stray_light_common as slc
 
 # where IMG-OPT-06 analysis plots are written
-# (METIS_MAIT_code_eckhart/results/IMG_06_out_of_field_analysis_results/)
+# (METIS_MAIT_code_eckhart/results/IMG_OPT_06_out_of_field_analysis_results/)
 RESULTS_DIR_IMG_06 = str(
     Path(__file__).resolve().parents[2]
     / "results"
-    / "IMG_06_out_of_field_analysis_results"
+    / "IMG_OPT_06_out_of_field_analysis_results"
 )
 
 

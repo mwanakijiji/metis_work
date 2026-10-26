@@ -21,6 +21,8 @@ configuration, even after
               and 2×10-3 (goal: 2×10-4)
               at N-band with respect to the full field of view.
 
+!!! TBD MORE DISTORTION INFO FROM DD NEEDED FIRST (warned in the log)
+
 No requirement cases are simulated for this test (yet): one plain frame per observing
 configuration, with the OpticalTrain and readouts from modules/sim_common.py.
 """
@@ -33,6 +35,7 @@ import numpy as np
 from astropy.io import fits
 
 from modules import sim_common
+from modules.tbd_warnings import log_tbd_distortion
 from pipeline_registry import (  # pylint: disable=import-error,wrong-import-order
     CLUSTER_DISTORTION,
     COLOR_DISTORTION,
@@ -138,6 +141,7 @@ def main():
     sim_common.start_sim_logging(
         stem, "IMG_02_logs", "IMG_02_simulation_psf_image_quality", now
     )
+    log_tbd_distortion("IMG-OPT-02 SIM")
     logging.info("Simmed file output directory: %s", out_dir)
     sim_common.setup_scopesim()
 
@@ -154,6 +158,8 @@ def main():
             },
             out_dir,
         )
+
+    log_tbd_distortion("IMG-OPT-02 SIM")
 
 
 if __name__ == "__main__":

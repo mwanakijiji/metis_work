@@ -68,7 +68,9 @@ requirement texts are quoted in the script docstrings) has a pair of scripts in
   and an independent dark_2 is written as `BACKGROUND`. FITS layout convention:
   header-only primary, then `RAW_READOUT`, `BCKGD_SUBTED`, `BACKGROUND` (+ extras such
   as `BACKGROUND_2`, `TRUTH_LABELS`); read extensions by EXTNAME (`load_fits_data(...,
-  hdu_index="BCKGD_SUBTED")`). Shared SIM machinery: `modules/sim_common.py`.
+  hdu_index="BCKGD_SUBTED")`). Shared SIM machinery: `modules/sim_common.py`. A SIM can
+  write FYI plots of what it simulated to `ctx.results_dir` (pass `results_dir` to
+  `run_scenario`; e.g. IMG-OPT-01's `fyi_sim_*.png`).
 - `*_ANALYSIS.py`: thin `main()` that loads YAML configs, loops over "data states" (one
   per FITS file) and calls the pipeline stages in order, ending with the test's
   `log_test_outcome()`, the one place where pass/fail of each requirement is decided
@@ -94,7 +96,8 @@ Data flow and conventions:
   `/podman-share/metis_work/METIS_MAIT_code_eckhart/`, never `playing_with_scopesim/`):
   simulated data in `data/IMG_OPT_<NN>_<test name>_simmed_data/` (e.g.
   `data/IMG_OPT_04_stray_light_simmed_data/`), logs in `logs/<...>_logs/`, analysis
-  results (plots, FITS) in `results/IMG_<NN>_*_results/`; for the shared stray-light
+  results (plots, FITS) in `results/IMG_OPT_<NN>_<test name>_analysis_results/` (e.g.
+  `results/IMG_OPT_06_out_of_field_analysis_results/`); for the shared stray-light
   stages the results directory comes from the result object's `results_dir`.
 - Results are carried through the pipeline as dataclasses mutated by each stage, e.g.
   `StrayLightResult` in `stray_light_common.py`, subclassed by `OutOfFieldResult` in

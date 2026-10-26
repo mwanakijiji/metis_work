@@ -396,21 +396,32 @@ def write_case_file(
     return file_name
 
 
-class SimContext:
+class SimContext:  # pylint: disable=too-many-instance-attributes
     """
     What a requirement simulator needs for one instrument set-up: the OpticalTrain,
-    the instrument config, the merged observing config, where and how to write, and
-    (cached, so requirements simulated for the same instrument share them) two
-    independent darks and a full-aperture illuminated frame.
+    the instrument config, the merged observing config, where and how to write (incl.
+    an optional directory for FYI plots), and (cached, so requirements simulated for
+    the same instrument share them) two independent darks and a full-aperture
+    illuminated frame.
     """
 
-    def __init__(self, metis, instrument, observing, out_dir, test_prefix, simver):
+    def __init__(
+        self,
+        metis,
+        instrument,
+        observing,
+        out_dir,
+        test_prefix,
+        simver,
+        results_dir=None,
+    ):
         self.metis = metis
         self.instrument = instrument
         self.observing = observing
         self.out_dir = out_dir
         self.test_prefix = test_prefix
         self.simver = simver
+        self.results_dir = results_dir
         self.det_key = detector_key(instrument["obs_mode"])
         self._darks = None
         self._lit = None
@@ -466,7 +477,9 @@ def requirement_applies(req_cfg, name, instrument):
     return True
 
 
-def run_scenario(scenario, simulators, observing, out_dir, test_prefix):
+def run_scenario(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    scenario, simulators, observing, out_dir, test_prefix, results_dir=None
+):
     """
     Run the requirement simulators of a scenario config: for each instrument, one
     OpticalTrain; for each requirement with simulate: true that applies to it, the
@@ -479,6 +492,7 @@ def run_scenario(scenario, simulators, observing, out_dir, test_prefix):
     - observing (dict): merged observing config (common + test-specific)
     - out_dir (str): directory to write to
     - test_prefix (str): file name prefix, e.g. 'IMG_OPT_04'
+    - results_dir (str or None): directory for FYI plots (ctx.results_dir), if any
 
     OUTPUTS:
     - dict: (requirement key, instrument name) -> list of written files
@@ -521,6 +535,7 @@ def run_scenario(scenario, simulators, observing, out_dir, test_prefix):
             out_dir,
             test_prefix,
             simver,
+            results_dir=results_dir,
         )
         for req_key, req_cfg in applicable.items():
             logging.info("==================================================")
