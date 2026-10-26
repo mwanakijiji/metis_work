@@ -24,8 +24,10 @@ digraph pipeline {
     style="dashed";
     color="#2ca02c";
     generate_psf_quality_sim;
+    prepare_psf_grid;
     process_one_psf;
-    strehl_psfs;
+    collect_strehls;
+    plot_strehl_fov;
     img_03_test_outcome;
   }
 
@@ -68,8 +70,10 @@ digraph pipeline {
   make_flat_frames [label="Generate flats"];
   fov_calc [label="Compute FOV"];
   image_distortion [label="Measure distortion"];
+  prepare_psf_grid [label="Load frame, 1st-pass centroids"];
   process_one_psf [label="Fit one PSF"];
-  strehl_psfs [label="Measure Strehl"];
+  collect_strehls [label="Collect Strehl over FOV"];
+  plot_strehl_fov [label="Plot Strehl over FOV"];
   img_03_test_outcome [label="IMG-OPT-03 pass/fail"];
   populate_result_obj_info [label="Populate result object"];
   stray_light_brightness_spectrum [label="Arrange segments into brightnesses as function of spatial scales"];
@@ -84,9 +88,11 @@ digraph pipeline {
 
   generate_fov_sim -> fov_calc;
   generate_distortion_sim -> image_distortion;
-  strehl_psfs -> process_one_psf;
-  generate_psf_quality_sim -> strehl_psfs;
-  strehl_psfs -> img_03_test_outcome;
+  generate_psf_quality_sim -> prepare_psf_grid;
+  prepare_psf_grid -> process_one_psf;
+  process_one_psf -> collect_strehls;
+  collect_strehls -> plot_strehl_fov;
+  collect_strehls -> img_03_test_outcome;
   generate_stray_light_sim -> populate_result_obj_info;
   stray_light_segmentation -> stray_light_brightness_spectrum;
   stray_light_segmentation_combined -> stray_light_brightness_spectrum;

@@ -1,5 +1,8 @@
 """
-Prepare oversampled PSF grid data and first-pass centroids for strehl_psfs.
+Prepare oversampled PSF grid data and first-pass centroids, and load FITS data.
+
+Used by the IMG-OPT-03 (backbone_img_03_psf_quality.prepare_psf_grid) and IMG-OPT-04/06
+(backbone_img_04_stray_light.centroid_2passes_oversample) analyses.
 
 The core entry point is oversample_1st_pass_centroid(): pass in-memory arrays and a
 coords
@@ -27,7 +30,9 @@ from . import helpers
 @dataclass(frozen=True)
 class PsfGridPrep:
     """
-    Everything strehl_psfs needs before the per-PSF loop (except observing config).
+    Output of oversample_1st_pass_centroid: the original and oversampled grids, the
+    first-pass centroids, and how many PSFs to process (everything needed before the
+    per-PSF fits, except the observing config).
     """
 
     grid_data: np.ndarray  # original data (native pixel scale)
@@ -151,7 +156,7 @@ def oversample_1st_pass_centroid(
     PsfGridPrep
         Dataclass containing the original and oversampled grids, first-pass centroid
         coordinates in both oversampled and native pixel units, and related bookkeeping
-        values needed by downstream Strehl-analysis code.
+        values needed by downstream analysis code.
     """
 
     grid_data = np.asarray(grid_data)
@@ -210,20 +215,29 @@ def oversample_1st_pass_centroid(
 
 def refine_2nd_pass_centroids(
     data_original: np.ndarray, prep: PsfGridPrep, oversample_factor: int = 3
-) -> PsfGridPrep:
+) -> dict:
     """
-    Refine the centroids of the PSFs using a Gaussian fit.
+    Refine the first-pass centroids of the PSFs with a Gaussian fit to each one.
+
+    N.b. only the result for the last PSF processed is returned, so this is meant for
+    frames with a single PSF (as in IMG-OPT-04/06).
 
     INPUTS:
     ----------
+    data_original : np.ndarray
+        Frame containing the PSF(s), native pixel sampling.
     prep : PsfGridPrep
-        Dataclass containing the original and oversampled grids, first-pass centroid
-        coordinates in both oversampled and native pixel units, and some other (legacy)
-        stuff
+        From oversample_1st_pass_centroid (first-pass centroids, number of PSFs to
+        process).
+    oversample_factor : int, optional
+        Oversampling factor for the Gaussian fit.
 
     OUTPUTS:
     -------
-    PsfGridPrep
+    dict
+        2nd-pass centroid of the last PSF processed, from
+        helpers.fit_psf_gaussian_from_native_array (e.g. keys
+        ``x_center_pix_fullarray_normsamp``, ``y_center_pix_fullarray_normsamp``).
     """
 
     # loop over all the PSFs on this FITS file (might just be one)
@@ -325,7 +339,8 @@ def load_grid_data_from_fits(
     file_name: str, hdu_index: int = 1
 ) -> tuple[np.ndarray, Any]:
     """
-    Load image data and header metadata from a selected FITS HDU.
+    Load image data and header metadata from a selected FITS HDU (alias of
+    load_fits_data).
 
     INPUTS
     ----------
@@ -348,8 +363,8 @@ def load_fits_data(file_name: str, hdu_index: int = 1) -> tuple[np.ndarray, Any]
     Load image data and header metadata from a selected FITS HDU.
 
     Uses ``memmap=False``. If the path is on a flaky Podman/macOS share and open
-    raises errno 35 (Resource deadlock avoided), copies the file to ``/tmp`` via
-    shell ``cp`` and opens that instead.
+    raises errno 35 (Resource deadlock avoided), copies the file to ``/tmp`` (with
+    ``cp``, ``dd`` or ``cat``) and opens that instead.
 
     If ``hdu_index`` is past the end of the file, or that HDU has no array data,
     falls back to the first HDU that contains a usable image array (usually the
@@ -360,8 +375,9 @@ def load_fits_data(file_name: str, hdu_index: int = 1) -> tuple[np.ndarray, Any]
     file_name : str
         Abs path to the FITS file containing the PSF-grid data.
     hdu_index : int, optional
-        Preferred HDU index. Science arrays from the IMG-OPT SIM writers often
-        live in extension 1 (``BCKGD_SUBTED``); simpler FITS may only have HDU 0.
+        Preferred HDU index. Which extension holds the science array depends on the
+        IMG-OPT SIM writer (e.g. ``BCKGD_SUBTED`` is extension 1 for IMG-OPT-04 and
+        extension 2 for IMG-OPT-06); simpler FITS may only have HDU 0.
 
     OUTPUTS
     -------

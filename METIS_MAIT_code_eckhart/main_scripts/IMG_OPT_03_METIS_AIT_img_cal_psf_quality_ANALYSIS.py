@@ -9,7 +9,7 @@ import os
 import numpy as np
 from astropy.io import fits
 
-from modules.backbone_img_03_psf_quality import log_test_outcome, strehl_psfs
+import modules.backbone_img_03_psf_quality as pq
 from modules.helpers import load_config_and_pipe, setup_logging
 from modules.strehl_fcns import imaging_band_from_fp_mask
 
@@ -133,25 +133,45 @@ def main():
             fp_mask=state["fp_mask"],
             config_observing=observing_config,
         )
-        run_result = strehl_psfs(
+
+        # load the frame and find the 1st-pass centroids of the PSFs
+        grid_prep = pq.prepare_psf_grid(
             state["file_name_abs"],
             fp_mask=state["fp_mask"],
             pp_mask=state["pp_mask"],
             filter_name=state["filter_name"],
-            fit_simmed_psf=state["fit_simmed_psf"],
-            fit_annular_aperture_free=state["fit_annular_aperture_free"],
-            fit_annular_aperture_fixed=state["fit_annular_aperture_fixed"],
             psfs_subset=state["psfs_subset"],
             config_coords_guesses_file_name_abs=state[
                 "config_coords_guesses_file_name_abs"
             ],
             config_observing=observing_config,
-            results_write_dir=state["results_write_dir"],
-            fit_method="curve_fit",
         )
 
-        # pass/fail of each requirement
-        log_test_outcome(run_result)
+        # fit each PSF
+        fit_results = []
+        for num_coord in range(grid_prep.num_psfs_to_process):
+            fit_results.append(
+                pq.process_one_psf(
+                    num_coord,
+                    grid_prep.num_psfs_to_process,
+                    cookie_cutout_original_this_psf=pq.cutout_psf(grid_prep, num_coord),
+                    oversample_factor=grid_prep.oversample_factor,
+                    filter_name=state["filter_name"],
+                    fp_mask=state["fp_mask"],
+                    pp_mask=state["pp_mask"],
+                    config_observing=grid_prep.config_observing,
+                    results_write_dir=state["results_write_dir"],
+                    fit_method="curve_fit",
+                    fit_simmed_psf=state["fit_simmed_psf"],
+                    fit_annular_aperture_fixed=state["fit_annular_aperture_fixed"],
+                    fit_annular_aperture_free=state["fit_annular_aperture_free"],
+                )
+            )
+
+        # collect the Strehls over the FOV, plot them, and decide pass/fail
+        run_result = pq.collect_strehls(grid_prep, fit_results)
+        pq.plot_strehl_fov(run_result, grid_prep.grid_data, state["results_write_dir"])
+        pq.log_test_outcome(run_result)
 
 
 if __name__ == "__main__":

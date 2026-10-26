@@ -46,7 +46,7 @@ from modules.helpers import load_config_and_pipe, setup_logging  # noqa: E402
 from modules.psf_grid_prep import load_fits_data  # noqa: E402
 from modules.strehl_fcns import imaging_band_from_fp_mask  # noqa: E402
 
-OVERSAMPLE_FACTOR = 3  # same as strehl_psfs
+OVERSAMPLE_FACTOR = 3  # same as the default of prepare_psf_grid (ANALYSIS script)
 COLUMNS = [
     "filter",
     "cold stop",

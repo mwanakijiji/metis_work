@@ -1,9 +1,16 @@
-"""Analysis backbone for the IMG-OPT-03 PSF image quality (Strehl) test."""
+"""
+Analysis backbone for the IMG-OPT-03 PSF image quality (Strehl) test.
+
+Stages, called in this order by the ANALYSIS script:
+prepare_psf_grid -> process_one_psf (once per PSF, on cutout_psf) -> collect_strehls
+-> plot_strehl_fov and log_test_outcome
+"""
 
 import logging
 import os
 import random
 from dataclasses import dataclass, field
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -160,9 +167,31 @@ class SinglePsfFitResult:
 
 
 @dataclass
+class PsfGrid:
+    """
+    One FITS file of PSFs, loaded and 1st-pass centroided (from prepare_psf_grid):
+    everything needed to cut out and fit each PSF. (Not to be confused with
+    psf_grid_prep.PsfGridPrep, the lower-level centroiding output it is built from.)
+    """
+
+    file_name_abs: str
+    filter_name: str
+    fp_mask: str
+    pp_mask: str
+    config_observing: dict  # with mask-dependent values resolved
+    grid_data: np.ndarray  # frame (native pixel scale), for plotting
+    grid_data_original: np.ndarray  # frame (native pixel scale), for the cutouts
+    coords_centroided_1st_pass_all_native: Any  # per PSF: (y, x), native pixels
+    num_psfs_to_process: int
+    total_psfs: int
+    oversample_factor: int
+    edge_size_original: int  # cutout edge, native pixels
+
+
+@dataclass
 class StrehlRunResult:
     """
-    Strehl results for all PSFs of one FITS file (from strehl_psfs), plus the
+    Strehl results for all PSFs of one FITS file (from collect_strehls), plus the
     requirement verdicts (from log_test_outcome).
     """
 
@@ -182,8 +211,138 @@ class StrehlRunResult:
 
 
 @pipeline_stage(
+    name="prepare_psf_grid",
+    depends_on=("generate_psf_quality_sim",),
+    cluster=CLUSTER_PSF,
+    cluster_color=COLOR_PSF,
+    label="Load frame, 1st-pass centroids",
+)
+def prepare_psf_grid(
+    file_name_abs,
+    fp_mask,
+    pp_mask,
+    filter_name=None,
+    psfs_subset="all",
+    config_coords_guesses_file_name_abs=None,
+    config_observing=None,
+    oversample_factor=3,
+):
+    """
+    Load a FITS file with a grid of PSFs, resolve the mask-dependent observing config,
+    and find the 1st-pass centroids of the PSFs.
+
+    INPUTS
+    ----------
+    file_name_abs : str
+        Path to the FITS file containing the PSF grid to analyze.
+    fp_mask : str
+        Focal-plane mask label (sets the LM/N band).
+    pp_mask : str
+        Pupil-plane mask label (sets the reference aperture geometry).
+    filter_name : str, optional
+        Name of the observing filter associated with the PSF grid.
+    psfs_subset : str or int, optional
+        Either ``"all"`` to process the full grid or an integer giving how many PSFs
+        from the start of the centroid list to process.
+    config_coords_guesses_file_name_abs : str, optional
+        Path to the configuration file containing initial coordinate guesses.
+    config_observing : dict, optional
+        Observing configuration dictionary.
+    oversample_factor : int, optional
+        Oversampling factor for centroiding and fitting (keep odd to facilitate
+        centering).
+
+    OUTPUTS
+    -------
+    PsfGrid
+        The frame, the resolved observing config, the 1st-pass centroids and PSF
+        counts; input to cutout_psf / process_one_psf, collect_strehls and
+        plot_strehl_fov.
+    """
+
+    # resolve cold-stop geometry and LM/N band settings for this mask combination
+    config_observing = resolve_config_for_masks(config_observing, fp_mask, pp_mask)
+
+    edge_size_original = config_observing[
+        "cutout_edge_native"
+    ]  # pixels along one side of the cutout, original pixel sampling
+    logging.info("PSF oversampling factor: %s", oversample_factor)
+
+    # retrieve coord guesses as a starting point
+    config_coords_guesses_config = load_config_and_pipe(
+        config_file_choice=config_coords_guesses_file_name_abs,
+        print_one_line=False,
+    )
+
+    # retrieve data, oversample, and do 1st-pass centroiding
+    # (note oversampled empirical frame is only used for centroiding; the cost function
+    # for fitting later on just uses the frame as-is)
+    grid_data, grid_header = load_grid_data_from_fits(file_name_abs, hdu_index=1)
+
+    prep = oversample_1st_pass_centroid(
+        grid_data,
+        config_coords_guesses_config,
+        psfs_subset=psfs_subset,
+        oversample_factor=oversample_factor,
+        grid_header=grid_header,
+    )
+
+    logging.info("Finding PSF centroids, first pass (via oversample_1st_pass_centroid)")
+    logging.info(
+        "Raw PSF cutout size (oversampled): %s", prep.raw_cutout_size_oversampled
+    )
+    logging.info("Total PSFs: %s", prep.total_psfs)
+    logging.info(
+        "Processing %s out of %s PSFs", prep.num_psfs_to_process, prep.total_psfs
+    )
+
+    return PsfGrid(
+        file_name_abs=file_name_abs,
+        filter_name=filter_name,
+        fp_mask=fp_mask,
+        pp_mask=pp_mask,
+        config_observing=config_observing,
+        grid_data=prep.grid_data,
+        grid_data_original=prep.grid_data_original,
+        coords_centroided_1st_pass_all_native=(
+            prep.coords_centroided_1st_pass_all_native
+        ),
+        num_psfs_to_process=int(prep.num_psfs_to_process),
+        total_psfs=int(prep.total_psfs),
+        oversample_factor=oversample_factor,
+        edge_size_original=int(edge_size_original),
+    )
+
+
+def cutout_psf(psf_grid, num_coord):
+    """
+    Native-sampling square cutout of PSF num_coord, around the closest ints to its
+    1st-pass centroid (input to process_one_psf).
+
+    INPUTS
+    ----------
+    psf_grid : PsfGrid
+        From prepare_psf_grid.
+    num_coord : int
+        Zero-based index of the PSF.
+
+    OUTPUTS
+    -------
+    np.ndarray
+        Cutout of side psf_grid.edge_size_original (native pixels).
+    """
+    x_cen_1st_pass_native = psf_grid.coords_centroided_1st_pass_all_native[num_coord][1]
+    y_cen_1st_pass_native = psf_grid.coords_centroided_1st_pass_all_native[num_coord][0]
+    half_edge = 0.5 * psf_grid.edge_size_original
+    return psf_grid.grid_data_original[
+        int(x_cen_1st_pass_native - half_edge) : int(x_cen_1st_pass_native + half_edge),
+        int(y_cen_1st_pass_native - half_edge) : int(y_cen_1st_pass_native + half_edge),
+    ]
+
+
+@pipeline_stage(
     name="process_one_psf",
-    depends_on=("strehl_psfs",),
+    depends_on=("prepare_psf_grid",),
     cluster=CLUSTER_PSF,
     cluster_color=COLOR_PSF,
     label="Fit one PSF",
@@ -215,7 +374,8 @@ def process_one_psf(
     num_psfs_to_process : int
         Total number of PSFs being processed from this detector image.
     cookie_cutout_original_this_psf : np.ndarray
-        Native-sampling square cutout containing the PSF of interest.
+        Native-sampling square cutout containing the PSF of interest (e.g. from
+        cutout_psf).
     oversample_factor : int
         Factor used to oversample the PSF cutout before centroiding and model fitting.
     filter_name : str
@@ -225,7 +385,8 @@ def process_one_psf(
     pp_mask : str
         Pupil-plane mask label used for bookkeeping and plot naming.
     config_observing : dict
-        Observing configuration dictionary passed to downstream fitting routines.
+        Observing configuration dictionary with mask-dependent values resolved (e.g.
+        PsfGrid.config_observing), passed to downstream fitting routines.
     results_write_dir : str
         Directory where diagnostic plots and fit products are written.
     fit_method : str
@@ -242,7 +403,7 @@ def process_one_psf(
     SinglePsfFitResult
         Dataclass containing the Gaussian-fit centroid/FWHM/amplitude values in native
         pixel units, the Gaussian-based Strehl estimate, and any optional Strehl
-        metrics.
+        metrics (input to collect_strehls).
     """
     del fit_simmed_psf  # ScopeSim PSF fit is disabled for now (see below)
     logging.info("Processing PSF %s of %s", num_coord, num_psfs_to_process)
@@ -375,166 +536,37 @@ def process_one_psf(
 
 
 @pipeline_stage(
-    name="strehl_psfs",
-    depends_on=("generate_psf_quality_sim",),
+    name="collect_strehls",
+    depends_on=("process_one_psf",),
     cluster=CLUSTER_PSF,
     cluster_color=COLOR_PSF,
-    label="Measure Strehl",
+    label="Collect Strehl over FOV",
 )
-def strehl_psfs(
-    file_name_abs,
-    fp_mask,
-    pp_mask,
-    filter_name=None,
-    fit_simmed_psf=False,
-    fit_annular_aperture_free=False,
-    fit_annular_aperture_fixed=False,
-    psfs_subset="all",
-    config_coords_guesses_file_name_abs=None,
-    config_observing=None,
-    results_write_dir="figs_dump",
-    fit_method="curve_fit",
-):
+def collect_strehls(psf_grid, fit_results):
     """
-    Measure Strehl-related quantities for a grid of PSFs, and generate summary
-    diagnostic plots over the detector frame. Pass/fail is decided separately, by
-    log_test_outcome.
+    Gather the per-PSF fit results (in the order of the 1st-pass centroids) into one
+    result for the file.
 
     INPUTS
     ----------
-    file_name_abs : str
-        Path to the FITS file containing the PSF grid to analyze.
-    fp_mask : str
-        Focal-plane mask label used for bookkeeping and output naming.
-    pp_mask : str
-        Pupil-plane mask label used for bookkeeping and output naming.
-    filter_name : str, optional
-        Name of the observing filter associated with the PSF grid.
-    fit_simmed_psf : bool, optional
-        Whether to evaluate the ScopeSim-based Strehl workflow if enabled downstream.
-    fit_annular_aperture_free : bool, optional
-        Whether to evaluate the free-geometry annular-aperture Strehl fit.
-    fit_annular_aperture_fixed : bool, optional
-        Whether to evaluate the fixed-geometry annular-aperture Strehl fit.
-    psfs_subset : str or int, optional
-        Either ``"all"`` to process the full grid or an integer giving how many PSFs
-        from the start of the centroid list to process.
-    config_coords_guesses_file_name : str, optional
-        Path to the configuration file containing initial coordinate guesses.
-    config_observing : dict, optional
-        Observing configuration dictionary passed to downstream PSF-fitting routines.
-    results_write_dir : str, optional
-        Directory where pickled results and diagnostic figures are saved.
-    fit_method : str, optional
-        Name of the fitting backend to use for the free annular-aperture fit.
+    psf_grid : PsfGrid
+        From prepare_psf_grid.
+    fit_results : list[SinglePsfFitResult]
+        From process_one_psf, one per PSF processed (index = num_coord).
 
     OUTPUTS
     -------
     StrehlRunResult
-        Per-PSF Strehl results and PSF counts for this file (verdicts still empty).
-        Also saves detector-frame diagnostic plots annotated with Strehl values.
+        Per-PSF Strehl estimates (+ 1st-pass centroids) and PSF counts; verdicts still
+        empty (see log_test_outcome).
     """
-
-    # resolve cold-stop geometry and LM/N band settings for this mask combination
-    config_observing = resolve_config_for_masks(config_observing, fp_mask, pp_mask)
-
-    edge_size_original = config_observing[
-        "cutout_edge_native"
-    ]  # pixels along one side of the cutout, original pixel sampling
-    oversample_factor = 3  # try to keep odd to facilitate centering
-    logging.info("PSF oversampling factor: %s", oversample_factor)
-
-    # retrieve coord guesses as a starting point
-    config_coords_guesses_config = load_config_and_pipe(
-        config_file_choice=config_coords_guesses_file_name_abs,
-        print_one_line=False,
-    )
-
-    # retrieve data, oversample, and do 1st-pass centroiding
-    # (note oversampled empirical frame is only used for centroiding; the cost function
-    # for fitting later on just uses the frame as-is)
-    grid_data, grid_header = load_grid_data_from_fits(file_name_abs, hdu_index=1)
-
-    prep = oversample_1st_pass_centroid(
-        grid_data,
-        config_coords_guesses_config,
-        psfs_subset=psfs_subset,
-        oversample_factor=oversample_factor,
-        grid_header=grid_header,
-    )
-
-    # unpack quantities
-    grid_data = prep.grid_data  # original data (native pixel scale)
-    grid_data_original = prep.grid_data_original  # original data (native pixel scale)
-    coords_centroided_1st_pass_all_native = (
-        prep.coords_centroided_1st_pass_all_native
-    )  # coordinates of the centroids (native pixel scale)
-    raw_cutout_size_oversampled = (
-        prep.raw_cutout_size_oversampled
-    )  # size of the raw cutout in oversampled pixels (note no cutout has been made yet)
-    num_psfs_to_process = prep.num_psfs_to_process  # number of PSFs to process
-    total_psfs = prep.total_psfs  # total number of PSFs in the grid
-
-    logging.info("Finding PSF centroids, first pass (via oversample_1st_pass_centroid)")
-    logging.info("Raw PSF cutout size (oversampled): %s", raw_cutout_size_oversampled)
-    logging.info("Total PSFs: %s", total_psfs)
-    if psfs_subset == "all":
-        logging.info("Processing all %s PSFs", total_psfs)
-    elif isinstance(psfs_subset, int):
-        logging.info("Processing %s out of %s PSFs", num_psfs_to_process, total_psfs)
-    logging.info("Processing %s out of %s PSFs", num_psfs_to_process, total_psfs)
-
-    # initialize dict to store results
-    strehl_results_all = {}  # to contain info from all the PSFs
-
-    # loop over all PSFs that we want to process from this one detector readout
-    for num_coord in range(num_psfs_to_process):
-        # ipdb.set_trace(context=10)
-
-        strehl_results_this_psf = {}  # to contain info from this PSF alone
-        # make cutout of the PSF from the original array, using the closest int to the
-        # 1st pass centroids
-
-        # 1-st pass coords of the PSF in the original array
-        x_cen_1st_pass_native = coords_centroided_1st_pass_all_native[num_coord][1]
-        y_cen_1st_pass_native = coords_centroided_1st_pass_all_native[num_coord][0]
-
-        # cut out the PSF
-        grid_data_original_cutout_this_psf = grid_data_original[
-            int(x_cen_1st_pass_native - 0.5 * edge_size_original) : int(
-                x_cen_1st_pass_native + 0.5 * edge_size_original
-            ),
-            int(y_cen_1st_pass_native - 0.5 * edge_size_original) : int(
-                y_cen_1st_pass_native + 0.5 * edge_size_original
-            ),
-        ]
-
-        # find strehls
-        result = process_one_psf(
-            num_coord,
-            num_psfs_to_process,
-            cookie_cutout_original_this_psf=grid_data_original_cutout_this_psf,
-            oversample_factor=oversample_factor,
-            filter_name=filter_name,
-            fp_mask=fp_mask,
-            pp_mask=pp_mask,
-            config_observing=config_observing,
-            results_write_dir=results_write_dir,
-            fit_method=fit_method,
-            fit_simmed_psf=fit_simmed_psf,
-            fit_annular_aperture_fixed=fit_annular_aperture_fixed,
-            fit_annular_aperture_free=fit_annular_aperture_free,
-        )
-
-        # for each strehl value in result, put it in strehl_results_this_psf as a
-        # key-value pair
-        for key, value in result.strehl_updates.items():
-            strehl_results_this_psf[key] = value
+    strehl_results_all = {}
+    for num_coord, fit_result in enumerate(fit_results):
+        strehl_results_this_psf = dict(fit_result.strehl_updates)
         # also include the 1st-pass centroid coordinates
-        strehl_results_this_psf["x_cen_1st_pass_native"] = x_cen_1st_pass_native
-        strehl_results_this_psf["y_cen_1st_pass_native"] = y_cen_1st_pass_native
-
-        # put the results from this PSF into the overall dictionary
+        coords = psf_grid.coords_centroided_1st_pass_all_native[num_coord]
+        strehl_results_this_psf["x_cen_1st_pass_native"] = coords[1]
+        strehl_results_this_psf["y_cen_1st_pass_native"] = coords[0]
         strehl_results_all[f"psf_num_{num_coord:02d}"] = strehl_results_this_psf
 
     # pickle the results (skipped for now)
@@ -543,16 +575,53 @@ def strehl_psfs(
     # )
     # abs_file_name_pickle = os.path.join(results_write_dir, basename_file_name_pickle)
     # with open(abs_file_name_pickle, "wb") as f:
-    #     pickle.dump(
-    #         {
-    #             "strehl_results_all": strehl_results_all,
-    #         },
-    #         f,
-    #     )
+    #     pickle.dump({"strehl_results_all": strehl_results_all}, f)
     # logging.info(f"Saved strehl results to {abs_file_name_pickle}")
-    #
 
-    # plot the grid_data and annotate it with the best-fit fwhm in x and y for each PSF
+    return StrehlRunResult(
+        file_name_abs=psf_grid.file_name_abs,
+        filter_name=psf_grid.filter_name,
+        fp_mask=psf_grid.fp_mask,
+        pp_mask=psf_grid.pp_mask,
+        band=psf_grid.config_observing["band"],
+        strehl_results_all=strehl_results_all,
+        total_psfs=psf_grid.total_psfs,
+        num_psfs_processed=len(fit_results),
+    )
+
+
+@pipeline_stage(
+    name="plot_strehl_fov",
+    depends_on=("collect_strehls",),
+    cluster=CLUSTER_PSF,
+    cluster_color=COLOR_PSF,
+    label="Plot Strehl over FOV",
+)
+def plot_strehl_fov(run_result, grid_data, results_write_dir):
+    """
+    FYI plots on the detector frame: the Strehl of each PSF, and the Strehl from all
+    methods for one randomly chosen PSF.
+
+    INPUTS
+    ----------
+    run_result : StrehlRunResult
+        From collect_strehls.
+    grid_data : np.ndarray
+        The detector frame (native pixel scale), e.g. PsfGrid.grid_data.
+    results_write_dir : str
+        Directory where the plots are saved.
+
+    OUTPUTS
+    -------
+    None
+        Saves the plots.
+    """
+    strehl_results_all = run_result.strehl_results_all
+    filter_name = run_result.filter_name
+    fp_mask = run_result.fp_mask
+    pp_mask = run_result.pp_mask
+
+    # plot the grid_data and annotate it with the Strehl of each PSF
     plt.clf()
     plt.figure(figsize=(18, 12))
     plt.imshow(grid_data, origin="lower", cmap="gray_r")
@@ -640,21 +709,10 @@ def strehl_psfs(
     )
     plt.close()
 
-    return StrehlRunResult(
-        file_name_abs=file_name_abs,
-        filter_name=filter_name,
-        fp_mask=fp_mask,
-        pp_mask=pp_mask,
-        band=config_observing["band"],
-        strehl_results_all=strehl_results_all,
-        total_psfs=int(total_psfs),
-        num_psfs_processed=int(num_psfs_to_process),
-    )
-
 
 @pipeline_stage(
     name="img_03_test_outcome",
-    depends_on=("strehl_psfs",),
+    depends_on=("collect_strehls",),
     cluster=CLUSTER_PSF,
     cluster_color=COLOR_PSF,
     label="IMG-OPT-03 pass/fail",
@@ -683,7 +741,7 @@ def log_test_outcome(
     INCONCLUSIVE.
 
     INPUTS:
-    - run_result (StrehlRunResult): from strehl_psfs
+    - run_result (StrehlRunResult): from collect_strehls
     - criterion_key (str): Strehl estimator used for pass/fail
     - strehl_min (float): minimum Strehl ratio
 
