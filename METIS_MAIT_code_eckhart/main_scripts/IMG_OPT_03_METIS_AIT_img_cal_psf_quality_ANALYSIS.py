@@ -9,7 +9,7 @@ import os
 import numpy as np
 from astropy.io import fits
 
-from modules.backbone_img_03_psf_quality import strehl_psfs
+from modules.backbone_img_03_psf_quality import log_test_outcome, strehl_psfs
 from modules.helpers import load_config_and_pipe, setup_logging
 from modules.strehl_fcns import imaging_band_from_fp_mask
 
@@ -68,6 +68,9 @@ def check_saturation(file_name_abs, fp_mask, config_observing, hdu_index=2, frac
 # 4. METIS-3503: METIS shall be able to characterise the shape of the instrument PSF
 # across the entire
 # FoV using the WCU.
+#
+# Pass/fail of each requirement is decided in one place:
+# backbone_img_03_psf_quality.log_test_outcome
 
 
 def main():
@@ -130,7 +133,7 @@ def main():
             fp_mask=state["fp_mask"],
             config_observing=observing_config,
         )
-        strehl_psfs(
+        run_result = strehl_psfs(
             state["file_name_abs"],
             fp_mask=state["fp_mask"],
             pp_mask=state["pp_mask"],
@@ -146,6 +149,9 @@ def main():
             results_write_dir=state["results_write_dir"],
             fit_method="curve_fit",
         )
+
+        # pass/fail of each requirement
+        log_test_outcome(run_result)
 
 
 if __name__ == "__main__":

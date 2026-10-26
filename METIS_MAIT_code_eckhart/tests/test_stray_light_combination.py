@@ -15,16 +15,18 @@ for _p in (_ROOT / "main_scripts", _ROOT / "misc"):
 from modules.backbone_img_04_stray_light import (  # noqa: E402
     SEGMENTATION_METHODS,
     _combine_method_regions,
+    _relabel_min_area,
     _resolve_segmentation_weights,
     _resolve_vote_fraction,
+    iter_regions,
 )
 
 SHAPE = (60, 60)
 
 
-def _box(y0, y1, x0, x1):
-    m = np.zeros(SHAPE, dtype=np.uint8)
-    m[y0:y1, x0:x1] = 255
+def _box(y0, y1, x0, x1, label=1):
+    m = np.zeros(SHAPE, dtype=np.int32)
+    m[y0:y1, x0:x1] = label
     return m
 
 
@@ -39,13 +41,13 @@ def psf_mask():
 def combo(psf_mask):
     # blob A: seen by a (large) and b (offset, overlapping); blob B: seen by c only;
     # a also covers part of the PSF
-    method_region_masks = {
-        "a": [_box(0, 20, 0, 20)],
-        "b": [_box(10, 25, 10, 25)],
-        "c": [_box(40, 50, 40, 50)],
+    method_region_maps = {
+        "a": _box(0, 20, 0, 20),
+        "b": _box(10, 25, 10, 25),
+        "c": _box(40, 50, 40, 50),
     }
     weights = {"a": 1.0, "b": 1.0, "c": 0.2}
-    return _combine_method_regions(method_region_masks, weights, 0.5, psf_mask)
+    return _combine_method_regions(method_region_maps, weights, 0.5, psf_mask)
 
 
 def test_overlapping_regions_share_label(combo):
@@ -73,13 +75,38 @@ def test_weighted_vote(combo):
     # final region keeps the shared group label; the c-only blob is rejected
     a = combo["method_label_maps"]["a"]
     assert combo["final_labels"] == list(np.unique(a[a > 0]))
-    assert len(combo["final_region_masks"]) == 1
+    assert len(combo["final_labels"]) == 1
 
 
 def test_psf_never_in_regions(combo, psf_mask):
     assert not np.any(combo["final_label_map"][psf_mask])
     for label_map in combo["method_label_maps"].values():
         assert not np.any(label_map[psf_mask])
+
+
+def test_label_maps_are_int32(combo):
+    # one compact label map per method (not one full-frame mask per region)
+    assert combo["final_label_map"].dtype == np.int32
+    for label_map in combo["method_label_maps"].values():
+        assert label_map.dtype == np.int32
+
+
+def test_relabel_min_area(psf_mask):
+    labels = _box(0, 3, 10, 13, label=7) + _box(30, 40, 30, 40, label=3)
+    labels += _box(0, 5, 0, 5, label=9)  # entirely inside the PSF
+    out = _relabel_min_area(labels, psf_mask, min_area=10)
+    # the 9-pixel region and the PSF-only region are dropped; the rest is renumbered 1..n
+    assert set(np.unique(out)) == {0, 1}
+    assert np.array_equal(out > 0, _box(30, 40, 30, 40) > 0)
+
+
+def test_iter_regions():
+    labels = _box(2, 4, 2, 6, label=1) + _box(20, 30, 40, 45, label=3)
+    regions = {lab: (slices, inside) for lab, slices, inside in iter_regions(labels)}
+    assert set(regions) == {1, 3}  # absent label 2 is skipped
+    slices, inside = regions[3]
+    assert slices == (slice(20, 30), slice(40, 45))
+    assert inside.all() and inside.shape == (10, 5)
 
 
 def test_resolve_weights_defaults_and_overrides():

@@ -12,12 +12,17 @@ IMG       | CFO FP2     | IMG-N detector  | 14"x14" square | N    | 1e4
 IMG       | CFO FP2     | IMG-LM detector | 11"x11" square | L, M | 1e4
 
 The WCU pinhole in ScopeSim is centred, so a truly out-of-field source
-cannot be simulated. Instead, a centred in-field PSF is simulated as the
-reference (its peak is the unattenuated irradiance), and synthetic
-scattered light from a virtual out-of-field source is added to background
-frames at a level of peak / attenuation. For each filter, two out-of-field
-frames are made: one which violates the attenuation requirement, and one
-which meets it.
+cannot be simulated. Instead, as for IMG-OPT-04, a single PSF is simulated
+in the middle of the detector (its peak is the unattenuated irradiance),
+and synthetic scattered light from a virtual out-of-field source is added
+at a level of peak / attenuation. For each filter, two files are written:
+'_with_stray_light' (violates the attenuation requirement) and
+'_no_stray_light' (meets it).
+
+The exposures are deep (many NDIT at an unsaturated DIT), as in the test
+description, so that an attenuation of 1e4 is measurable above the noise.
+Each file also contains a second, independent background frame, so the
+analysis can measure the noise from a null frame (BACKGROUND_2 - BACKGROUND).
 """
 
 import datetime
@@ -43,7 +48,7 @@ COLOR_OOF = "#8c564b"
 sim.link_irdb("../../../")
 
 # simulate observations with METIS (comment this out if packages already exist)
-sim.download_packages(["METIS", "ELT", "Armazones"])
+#sim.download_packages(["METIS", "ELT", "Armazones"])
 
 # print versions of things
 sim.bug_report()
@@ -133,10 +138,10 @@ def generate_out_of_field_data(
       exposure time; but this will be broken down into dit and ndit to
       avoid saturation, so integration parameters may change accordingly
     - attenuation_req: required attenuation factor
-    - attenuation_fail: injected attenuation for the frame which violates
-      the requirement (< attenuation_req)
-    - attenuation_pass: injected attenuation for the frame which meets
-      the requirement (> attenuation_req)
+    - attenuation_fail: injected attenuation for the '_with_stray_light'
+      file, which violates the requirement (< attenuation_req)
+    - attenuation_pass: injected attenuation for the '_no_stray_light'
+      file, which meets the requirement (> attenuation_req)
     - oof_direction: side of the detector the virtual out-of-field source
       sits beyond ('+x', '-x', '+y', '-y')
     - out_dir: directory to write to
@@ -201,7 +206,9 @@ def generate_out_of_field_data(
         return metis.readout(ndit=ndit, dit=dit, reset=False)[0]
 
     #########################################################
-    # BACKGROUND
+    # BACKGROUND (two independent readouts: the second one is for the null frame
+    # BACKGROUND_2 - BACKGROUND, which has the same noise as the
+    # background-subtracted science frame but no signal)
 
     logging.info("Closing WCU BB aperture first to get a background ...")
     wcu.set_bb_aperture(value=0.0)
@@ -211,10 +218,20 @@ def generate_out_of_field_data(
     sanity_check_user_inputs(metis, obs_filter, fp_mask, pp_mask)
     background = outhdul_off[1].data
 
-    #########################################################
-    # REFERENCE (IN-FIELD) FRAME: single PSF in the middle
+    outhdul_off_2 = readout()
+    log_readout_state(metis, "Background 2 (independent, for the null frame)")
+    background_2 = outhdul_off_2[1].data
+    null_std = float(np.std(background_2 - background))
+    logging.info(
+        "Std of null frame (BACKGROUND_2 - BACKGROUND): %.4g counts%s",
+        null_std,
+        "" if null_std > 0 else " -- NOT INDEPENDENT READOUTS!",
+    )
 
-    logging.info("Re-opening WCU BB aperture to get a reference PSF ...")
+    #########################################################
+    # SCIENCE FRAME: single PSF in the middle
+
+    logging.info("Re-opening WCU BB aperture to get a PSF ...")
     wcu.set_bb_aperture(value=1.0)
     metis.observe()
     logging.info("PSF model wavel range: %s", vars(metis["psf"])["_waveset"])
@@ -224,88 +241,83 @@ def generate_out_of_field_data(
         vars(metis["psf"])["meta"]["filename"],
     )
     outhdul_on = readout()
-    log_readout_state(metis, "Reference")
+    log_readout_state(metis, "Science")
     sanity_check_user_inputs(metis, obs_filter, fp_mask, pp_mask)
 
-    ref_raw = outhdul_on[1].data
-    ref_bckgd_subted = ref_raw - background
-    ref_peak = float(np.max(ref_bckgd_subted))
-    logging.info("Reference PSF peak (bckgd-subtracted): %.4f", ref_peak)
+    psf_readout = outhdul_on[1].data
+    ref_peak = float(np.max(psf_readout - background))
+    logging.info("PSF peak (bckgd-subtracted): %.4f", ref_peak)
 
     #########################################################
-    # OUT-OF-FIELD FRAMES: background + scattered light from a virtual
-    # source outside the FOV (no PSF on the detector)
-    # (note the OOF frames re-use the background frame's noise realization)
+    # ADD SCATTERED LIGHT from a virtual source outside the FOV;
+    # one file per case
 
-    oof_hdus = []
-    for case, attenuation in (("FAIL", attenuation_fail), ("PASS", attenuation_pass)):
+    cases = (
+        ("FAIL", attenuation_fail, "_with_stray_light"),
+        ("PASS", attenuation_pass, "_no_stray_light"),
+    )
+    for case, attenuation, file_suffix in cases:
         scatter = backbone.make_out_of_field_scatter(
             shape=background.shape,
             peak=ref_peak,
             attenuation=attenuation,
             direction=oof_direction,
         )
-        oof_raw = background + scatter
-        oof_bckgd_subted = oof_raw - background
+        raw_sci_readout = psf_readout + scatter
+        bckgd_subted = raw_sci_readout - background
 
         logging.info(
-            "OOF %s frame: injected attenuation %.1e (req. %.1e); "
+            "%s case: injected attenuation %.1e (req. %.1e); "
             "mean scattered irradiance %.4f",
             case,
             attenuation,
             attenuation_req,
-            np.mean(oof_bckgd_subted),
+            np.mean(scatter),
         )
 
-        for suffix, data in (("BCKGD_SUBTED", oof_bckgd_subted), ("RAW", oof_raw)):
-            hdu = fits.ImageHDU(data=data, name=f"OOF_{case}_{suffix}")
-            hdu.header["ATT_INJ"] = (attenuation, "Injected attenuation factor")
-            hdu.header["EXPECTED"] = (case, "Expected outcome vs. requirement")
-            oof_hdus.append(hdu)
+        primary_hdu = fits.PrimaryHDU(header=outhdul_on[0].header)
+        hdul_new = fits.HDUList(
+            [
+                primary_hdu,
+                fits.ImageHDU(data=raw_sci_readout, name="RAW_READOUT"),
+                fits.ImageHDU(data=bckgd_subted, name="BCKGD_SUBTED"),
+                fits.ImageHDU(data=background, name="BACKGROUND"),
+                fits.ImageHDU(data=background_2, name="BACKGROUND_2"),
+            ]
+        )
 
-    #########################################################
-    # WRITE OUT
+        # add some stuff to the header, some of which may be redundant
+        hdr = hdul_new[0].header
+        hdr["FILTER"] = (obs_filter, "Observing filter")
+        hdr["WCU_FP"] = (fp_mask, "WCU focal plane mask")
+        hdr["WCU_PP"] = (pp_mask, "WCU pupil plane mask")
+        hdr["BB_TEMP"] = (bb_temp.value, "BB temperature")
+        if use_exp_time_only:
+            hdr["EXPTIME"] = (exptime, "Exposure time")
+        else:
+            hdr["NDIT"] = (ndit, "Number of dithered exposures")
+            hdr["DIT"] = (dit, "Det integration time")
+        hdr["ATT_REQ"] = (attenuation_req, "Required out-of-field attenuation")
+        hdr["ATT_INJ"] = (attenuation, "Injected attenuation factor")
+        hdr["EXPECTED"] = (case, "Expected outcome vs. requirement")
+        hdr["FOV_REQ"] = (fov_req, "Required square FOV side (arcsec)")
+        hdr["OOF_DIR"] = (oof_direction, "Side of virtual out-of-field source")
+        hdr["REF_PEAK"] = (ref_peak, "Peak of bckgd-subted PSF")
 
-    primary_hdu = fits.PrimaryHDU(header=outhdul_on[0].header)
-    hdul_new = fits.HDUList(
-        [
-            primary_hdu,
-            fits.ImageHDU(data=ref_bckgd_subted, name="REF_BCKGD_SUBTED"),
-            fits.ImageHDU(data=ref_raw, name="REF_RAW"),
-            *oof_hdus,
-            fits.ImageHDU(data=background, name="BACKGROUND"),
-        ]
-    )
+        basename_file_name_write = (
+            "IMG_OPT_06_out_of_field_"
+            + str(fp_mask)
+            + "_pupil_mask_"
+            + str(pp_mask)
+            + "_filter_"
+            + str(obs_filter)
+            + file_suffix
+            + ".fits"
+        )
+        abs_file_name_write = out_dir + basename_file_name_write
 
-    # add some stuff to the header, some of which may be redundant
-    hdr = hdul_new[0].header
-    hdr["FILTER"] = (obs_filter, "Observing filter")
-    hdr["WCU_FP"] = (fp_mask, "WCU focal plane mask")
-    hdr["WCU_PP"] = (pp_mask, "WCU pupil plane mask")
-    hdr["BB_TEMP"] = (bb_temp.value, "BB temperature")
-    if use_exp_time_only:
-        hdr["EXPTIME"] = (exptime, "Exposure time")
-    else:
-        hdr["NDIT"] = (ndit, "Number of dithered exposures")
-        hdr["DIT"] = (dit, "Det integration time")
-    hdr["ATT_REQ"] = (attenuation_req, "Required out-of-field attenuation")
-    hdr["FOV_REQ"] = (fov_req, "Required square FOV side (arcsec)")
-    hdr["OOF_DIR"] = (oof_direction, "Side of virtual out-of-field source")
-    hdr["REF_PEAK"] = (ref_peak, "Peak of bckgd-subted reference PSF")
-
-    basename_file_name_write = (
-        "IMG_OPT_06_out_of_field_"
-        + str(fp_mask)
-        + "_pupil_mask_"
-        + str(pp_mask)
-        + "_filter_"
-        + str(obs_filter)
-        + ".fits"
-    )
-    abs_file_name_write = out_dir + basename_file_name_write
-
-    hdul_new.writeto(abs_file_name_write, overwrite=True)
-    logging.info("Saved out-of-field simulated data to %s", abs_file_name_write)
+        hdul_new.writeto(abs_file_name_write, overwrite=True)
+        logging.info("Saved out-of-field simulated data to %s", abs_file_name_write)
 
 
 def main():
@@ -323,7 +335,12 @@ def main():
         + now.strftime("%Y-%m-%d_%H-%M-%S")
         + ".txt"
     )
-    out_dir = stem + "IMG_06_simmed_out_of_field_data/"  # write simulated data here
+    # write simulated data here, where the ANALYSIS script reads it
+    # (data_states config: data/IMG_06_simmed_out_of_field_data/...)
+    out_dir = (
+        "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
+        "data/IMG_06_simmed_out_of_field_data/"
+    )
 
     os.makedirs(log_dir, exist_ok=True)
     logging.basicConfig(
@@ -338,6 +355,11 @@ def main():
     logging.info("Log file name: %s", log_file_name)
     logging.info("Simmed file output directory: %s", out_dir)
 
+    # Deep exposures: DIT as for IMG-OPT-04 (so no single DIT saturates on the PSF), but
+    # many NDIT. Signal grows as NDIT and noise as sqrt(NDIT); with the shallow
+    # IMG-OPT-04 settings (LM NDIT 2, N NDIT 1) the noise of the 31-pix-smoothed map
+    # was ~8e-5 (LM) and ~7e-4 (N) of the PSF peak, so 1e-4 was not measurable. These
+    # NDITs bring it to ~1e-5 of the PSF peak, i.e. 5-sigma ~ 0.5e-4 < 1e-4.
     obs_configs = [
         {
             "fp_mask": "pinhole_lm",
@@ -345,7 +367,7 @@ def main():
             "obs_filter": "Br_alpha",
             "nd_filter": None,
             "dit": 0.065,
-            "ndit": 2,
+            "ndit": 128,
             "exptime": np.nan,
             "obs_mode": "wcu_img_lm",
             "use_exp_time_only": False,
@@ -357,7 +379,7 @@ def main():
             "obs_filter": "N2",
             "nd_filter": None,
             "dit": 0.0025,
-            "ndit": 1,
+            "ndit": 5000,
             "exptime": np.nan,
             "obs_mode": "wcu_img_n",
             "use_exp_time_only": False,
@@ -384,8 +406,8 @@ def main():
             exptime=config["exptime"],
             use_exp_time_only=config["use_exp_time_only"],
             attenuation_req=1e4,
-            attenuation_fail=1e3,  # violates the requirement
-            attenuation_pass=1e5,  # meets the requirement
+            attenuation_fail=1e3,  # '_with_stray_light': violates the requirement
+            attenuation_pass=1e5,  # '_no_stray_light': meets the requirement
             oof_direction="+x",
             out_dir=out_dir,
             intrapixel_capacitance=True,

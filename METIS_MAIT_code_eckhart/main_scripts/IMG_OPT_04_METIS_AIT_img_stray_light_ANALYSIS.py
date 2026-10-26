@@ -40,6 +40,9 @@ from modules.psf_grid_prep import load_fits_data
 # source causing the artefact(s) corresponds to the saturation limit in
 # the fastest full-frame operation.
 
+# Pass/fail of each requirement is decided in one place:
+# backbone_img_04_stray_light.log_test_outcome
+
 
 def main():
     """Run the IMG-OPT-04 stray light analysis for each data state."""
@@ -140,10 +143,13 @@ def main():
             )
 
         # sort out the segments into different spatial scales, keeping track of
-        # illumination
+        # illumination, and measure what the requirements are tested against
         result = sl.stray_light_brightness_spectrum(
             result_obj=result, observing_config=observing_config
         )
+
+        # pass/fail of each requirement
+        result = sl.log_test_outcome(result)
 
 
 if __name__ == "__main__":

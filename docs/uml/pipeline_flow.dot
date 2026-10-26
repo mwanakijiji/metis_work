@@ -26,6 +26,7 @@ digraph pipeline {
     generate_psf_quality_sim;
     process_one_psf;
     strehl_psfs;
+    img_03_test_outcome;
   }
 
   subgraph cluster_img_opt_04_stray_light {
@@ -35,6 +36,7 @@ digraph pipeline {
     generate_stray_light_sim;
     populate_result_obj_info;
     stray_light_brightness_spectrum;
+    img_04_test_outcome;
     centroid_2passes_oversample;
     stray_light_segmentation;
     stray_light_segmentation_combined;
@@ -46,6 +48,9 @@ digraph pipeline {
     style="dashed";
     color="#8c564b";
     generate_out_of_field_sim;
+    metis_5838_attenuation;
+    metis_9522_check;
+    img_06_test_outcome;
   }
 
   subgraph cluster_img_rad_07_photometric_performance {
@@ -65,22 +70,35 @@ digraph pipeline {
   image_distortion [label="Measure distortion"];
   process_one_psf [label="Fit one PSF"];
   strehl_psfs [label="Measure Strehl"];
+  img_03_test_outcome [label="IMG-OPT-03 pass/fail"];
   populate_result_obj_info [label="Populate result object"];
   stray_light_brightness_spectrum [label="Arrange segments into brightnesses as function of spatial scales"];
+  img_04_test_outcome [label="IMG-OPT-04 pass/fail"];
   centroid_2passes_oversample [label="Centroid PSFs"];
   stray_light_segmentation [label="Segment stray light"];
   stray_light_segmentation_combined [label="Segment stray light (weighted combination of methods)"];
   stray_light_mask_real [label="Mask the real PSF"];
+  metis_5838_attenuation [label="METIS-5838: out-of-field attenuation"];
+  metis_9522_check [label="METIS-9522: artefacts vs. 3-sigma background"];
+  img_06_test_outcome [label="IMG-OPT-06 pass/fail"];
 
   generate_fov_sim -> fov_calc;
   generate_distortion_sim -> image_distortion;
   strehl_psfs -> process_one_psf;
   generate_psf_quality_sim -> strehl_psfs;
+  strehl_psfs -> img_03_test_outcome;
   generate_stray_light_sim -> populate_result_obj_info;
   stray_light_segmentation -> stray_light_brightness_spectrum;
   stray_light_segmentation_combined -> stray_light_brightness_spectrum;
+  stray_light_brightness_spectrum -> img_04_test_outcome;
   populate_result_obj_info -> centroid_2passes_oversample;
   stray_light_mask_real -> stray_light_segmentation;
   stray_light_mask_real -> stray_light_segmentation_combined;
   centroid_2passes_oversample -> stray_light_mask_real;
+  generate_out_of_field_sim -> metis_5838_attenuation;
+  stray_light_mask_real -> metis_5838_attenuation;
+  stray_light_segmentation -> metis_9522_check;
+  stray_light_segmentation_combined -> metis_9522_check;
+  metis_5838_attenuation -> img_06_test_outcome;
+  metis_9522_check -> img_06_test_outcome;
 }

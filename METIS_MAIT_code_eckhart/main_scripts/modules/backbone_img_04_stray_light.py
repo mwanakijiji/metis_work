@@ -13,6 +13,7 @@ import skimage as ski
 from astropy.io import fits
 from photutils.centroids import centroid_2dg, centroid_sources
 from pipeline_registry import CLUSTER_STRAY, COLOR_STRAY, pipeline_stage
+from scipy import ndimage
 from skimage.feature import peak_local_max
 from skimage.segmentation import active_contour
 
@@ -26,6 +27,14 @@ RESULTS_DIR_IMG_04 = str(
     / "IMG_04_stray_light_analysis_results"
 )
 
+# METIS-1189 and -1429: stray light irradiance must be below this fraction of the
+# peak irradiance (the stricter 0.04% of METIS-1429, in the IMG detector planes)
+METIS_1189_1429_PEAK_FRAC = 0.0004
+
+# METIS-9522: artefacts must contain less flux than this many sigma of the background
+# noise, for the spatial scale of the artefact
+METIS_9522_NSIGMA = 3.0
+
 
 # class for containing information about a stray light region
 @dataclass
@@ -38,6 +47,9 @@ class StrayLightRegion:
     total_flux: float
     area_pix: int
     surface_brightness: float
+    # METIS-9522 limit on total_flux: 3-sigma of the background noise of the summed
+    # flux over area_pix
+    metis_9522_limit: float | None = None
     # optional: bbox, centroid, ...
 
 
@@ -61,11 +73,9 @@ class StrayLightResult:
     # images
     # mask of the real PSF
     real_psf_mask: np.ndarray | None = None
-    # integer labels for each stray light region
+    # one integer label map of the stray light regions (0 = not stray light; each
+    # region has its own label > 0); see iter_regions to loop over the regions
     segment_map: np.ndarray | None = None
-    # list of masks of the stray light regions (could be larger than the regions
-    # themselves in segment_map)
-    stray_light_masks: list[np.ndarray] | None = None
 
     # segmentation choice (see stray_light_segmentation); can be set per data state
     segmentation_method: str | None = None
@@ -89,6 +99,128 @@ class StrayLightResult:
     # global quantities
     background_level: float | None = None
     background_rms: float | None = None
+    psf_max: float | None = None  # peak of the real PSF
+
+    # verdicts (from log_test_outcome)
+    pass_metis_1189_1429: bool | None = None
+    pass_metis_9522: bool | None = None
+    verdict_overall: str | None = None
+
+
+def iter_regions(label_map):
+    """
+    Loop over the regions of an integer label map without making a full-frame mask per
+    region.
+
+    INPUTS:
+    - label_map (ndarray[int]): 0 = no region; each region has its own label > 0
+
+    OUTPUTS (yielded, one per region present):
+    - label (int): label of the region
+    - slices (tuple[slice, slice]): bounding box of the region in label_map
+    - inside (ndarray[bool]): mask of the region within that bounding box
+    """
+    for i, slices in enumerate(ndimage.find_objects(label_map)):
+        if slices is None:  # label not present
+            continue
+        label = i + 1
+        yield label, slices, label_map[slices] == label
+
+
+def _contour_region(ax, slices, inside, **contour_kwargs):
+    """
+    Outline one region on a full-frame plot, from its bounding-box cutout (padded by 1
+    pixel so the contour closes at the edge of the box).
+    """
+    padded = np.pad(inside.astype(float), 1)
+    ys = np.arange(slices[0].start - 1, slices[0].stop + 1)
+    xs = np.arange(slices[1].start - 1, slices[1].stop + 1)
+    ax.contour(xs, ys, padded, levels=[0.5], **contour_kwargs)
+
+
+def nan_box_mean(image, valid, box_pix, min_valid_frac=0.5):
+    """
+    Box-car mean of an image using only the 'valid' (and finite) pixels; NaN where
+    fewer than min_valid_frac of the pixels in the box are valid.
+    """
+    valid = valid & np.isfinite(image)
+    num = ndimage.uniform_filter(
+        np.where(valid, image, 0.0), size=box_pix, mode="nearest"
+    )
+    den = ndimage.uniform_filter(valid.astype(float), size=box_pix, mode="nearest")
+    with np.errstate(invalid="ignore", divide="ignore"):
+        mean = num / den
+    mean[den < min_valid_frac] = np.nan
+    return mean
+
+
+def _robust_std(values):
+    """Standard deviation from the median absolute deviation (Gaussian-equivalent)."""
+    return 1.4826 * float(np.median(np.abs(values - np.median(values))))
+
+
+def area_noise_sigma(image, valid, area_pix, cache=None, min_samples=20):
+    """
+    1-sigma noise of the flux summed over area_pix pixels, measured from the image's own
+    background pixels: means over (almost) fully valid boxes of side round(sqrt(area)),
+    sampled on a grid with that spacing (so the samples are roughly independent). This
+    includes correlated noise (e.g. from inter-pixel capacitance), unlike
+    sigma_pix * sqrt(area).
+
+    INPUTS:
+    - image (ndarray): background-subtracted image
+    - valid (ndarray[bool]): background pixels (i.e. not PSF, not stray light)
+    - area_pix (float): area over which the flux is summed (pixels)
+    - cache (dict or None): per box side, the noise of the box mean (re-used across
+      calls for the same image and mask)
+    - min_samples (int): below this many boxes, fall back to sigma_pix * sqrt(area)
+
+    OUTPUTS:
+    - sigma_sum (float): 1-sigma noise of the summed flux (counts)
+    """
+    side = max(1, int(round(np.sqrt(area_pix))))
+    if cache is not None and side in cache:
+        return cache[side] * area_pix
+
+    valid = valid & np.isfinite(image)
+    if side == 1:
+        samples = image[valid]
+    else:
+        means = nan_box_mean(image, valid, side, min_valid_frac=0.9)
+        samples = means[side // 2 :: side, side // 2 :: side]
+        samples = samples[np.isfinite(samples)]
+
+    if samples.size >= min_samples:
+        sigma_mean = _robust_std(samples)
+    else:
+        # too few independent boxes of this size: assume white noise
+        sigma_mean = _robust_std(image[valid]) / side
+        logging.warning(
+            "Only %s background boxes of side %s pix; assuming white noise for the "
+            "noise of a %.0f-pixel area",
+            samples.size,
+            side,
+            area_pix,
+        )
+
+    if cache is not None:
+        cache[side] = sigma_mean
+    return sigma_mean * area_pix
+
+
+def metis_9522_surface_brightness_limit(image, valid, radii_pix, cache=None):
+    """
+    METIS-9522 pass/fail limit as a mean surface brightness (counts/pixel), for regions
+    with the area of a circle of each radius in radii_pix: METIS_9522_NSIGMA * (noise of
+    the summed flux over that area) / area.
+    """
+    areas = np.pi * np.asarray(radii_pix, dtype=float) ** 2
+    return np.array(
+        [
+            METIS_9522_NSIGMA * area_noise_sigma(image, valid, area, cache) / area
+            for area in areas
+        ]
+    )
 
 
 @pipeline_stage(
@@ -167,13 +299,10 @@ def _overplot_method_brightnesses(ax, result_obj, final_labels):
     for i, (method, label_map) in enumerate(method_label_maps.items()):
         color = SEGMENTATION_METHOD_COLORS.get(method, "gray")
         marker = markers[i % len(markers)]
-        for lab in np.unique(label_map):
-            if lab <= 0:
-                continue
-            inside = label_map == lab
+        for lab, slices, inside in iter_regions(label_map):
             area = int(inside.sum())
             radius = np.sqrt(area / np.pi)
-            surface_brightness = float(np.nansum(image[inside])) / area
+            surface_brightness = float(np.nansum(image[slices][inside])) / area
             ax.scatter(
                 radius,
                 surface_brightness,
@@ -261,38 +390,37 @@ def _metis_9522_limits(result_obj, observing_config):
 )
 def stray_light_brightness_spectrum(result_obj, observing_config):
     """
-    Sort out the segments into brightnesses as function of spatial scales.
+    Sort out the segments into brightnesses as function of spatial scales, and measure
+    the quantities the requirements are tested against (pass/fail itself is decided in
+    log_test_outcome).
 
     INPUTS:
     - result_obj: result object, which should contain
         - image (ndarray): science image
-        - segment_map (list[ndarray]): integer region labels (0 = not stray light)
-        - stray_light_masks (list[ndarray]): one mask per region (n.b. each mask can be
-          larger than the region itself in segment_map)
+        - segment_map (ndarray[int]): integer region labels (0 = not stray light)
     - observing_config: observing config
 
 
     OUTPUTS:
     - result_obj (StrayLightResult), updated attributes:
-        - TBD
+        - regions (list[StrayLightRegion]): flux statistics and METIS-9522 limit of
+          each region
+        - psf_max (float): peak of the real PSF
+        - background_rms (float): per-pixel rms outside the PSF and the regions
     """
 
     # required attributes are there?
-    if (
-        (result_obj.image is None)
-        or (result_obj.segment_map is None)
-        or (result_obj.stray_light_masks is None)
-    ):
+    if (result_obj.image is None) or (result_obj.segment_map is None):
         msg = "stray_light_brightness_spectrum missing required attributes"
         logging.error(msg)
         raise ValueError(msg)
 
-    # extract the stray light fluxes from inside the region masks
+    # extract the stray light fluxes from inside the regions
     result_obj.regions = []
 
     # segmentation found no stray light regions: nothing to measure, so return an empty
     # spectrum
-    if len(result_obj.stray_light_masks) == 0:
+    if not np.any(result_obj.segment_map):
         logging.warning(
             "No stray light regions from segmentation; returning an empty brightness "
             "spectrum"
@@ -312,89 +440,65 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
         fig.savefig(plot_file_name)
         logging.info("Saved plot of (empty) brightness spectrum to %s", plot_file_name)
         plt.close(fig)
-
-        # no stray light detected, so the requirements are trivially met
-        logging.info("--------------------------------------------------")
-        logging.info("--------------------------------------------------")
-        logging.info("METIS-1189 and -1429: Pass (no stray light regions detected)")
-        logging.info("METIS-9522: Pass (no stray light regions detected)")
-        logging.info("--------------------------------------------------")
-        logging.info("IMG 04 STRAY LIGHT TEST: PASS")
-        logging.info("--------------------------------------------------")
         return result_obj
 
-    # loop over each stray light region and get the flux statistics
-    for region_num, mask_this in enumerate(result_obj.stray_light_masks):
+    image = result_obj.image.astype(float)
 
-        # inside the stray light region
-        # inside = np.multiply(result_obj.image,mask_this)
-
-        # inside = region_mask_this.astype(bool)
-        inside_flag = np.where(mask_this > 0, 1.0, np.nan)  # 255 → True, 0 → nan
-        # the stray light in 2D, with all else masked
-        stray_light = np.multiply(inside_flag, result_obj.image.astype(float))
-
-        # segment_map[inside] = i # label the region
-
-        # append StrayLightRegions to the result_obj
+    # loop over each stray light region and get the flux statistics (within the
+    # region's bounding box); keep the cutouts for the regions plot below
+    region_cutouts = []
+    for lab, slices, inside in iter_regions(result_obj.segment_map):
+        stray_light = image[slices][inside]  # the stray light pixels of this region
+        area = int(inside.sum())
         result_obj.regions.append(
             StrayLightRegion(
-                label=int(
-                    result_obj.segment_map[region_num].max()
-                ),  # >0 to avoid confusion with non-stray-light regions
+                label=int(lab),  # >0 to avoid confusion with non-stray-light regions
                 spatial_scale=np.sqrt(
-                    float(np.nansum(inside_flag)) / np.pi
+                    area / np.pi
                 ),  # radius of an area-equivalent circle
                 peak_irradiance=float(
                     np.nanmax(stray_light)
                 ),  # max irradiance in the region
                 total_flux=float(np.nansum(stray_light)),  # total flux in the region
-                area_pix=int(np.nansum(inside_flag)),  # area in pixels
+                area_pix=area,  # area in pixels
                 surface_brightness=float(np.nansum(stray_light))
-                / float(
-                    np.nansum(inside_flag)
-                ),  # average surface brightness in the region
+                / area,  # average surface brightness in the region
             )
         )
+        region_cutouts.append((slices, inside))
 
     # mask the PSF and all stray light regions to get the background level
-    mask_all_stray_light_regions = np.asarray(
-        result_obj.stray_light_masks
-    )  # convert list to 3D array
-    mask_all_stray_light_regions = np.sum(mask_all_stray_light_regions, axis=0)
-    # add in the psf mask
-    mask_all_stray_light_regions = np.sum(
-        (mask_all_stray_light_regions, result_obj.real_psf_mask), axis=0
-    )
-    mask_all_stray_light_regions = np.where(
-        mask_all_stray_light_regions == 0, 1.0, np.nan
-    )  # 1: background; 0: psf or stray light
+    masked = (result_obj.segment_map > 0) | result_obj.real_psf_mask.astype(bool)
+    background_valid = ~masked
 
     # the background-only image
-    background_only = np.multiply(
-        result_obj.image, mask_all_stray_light_regions.astype(float)
-    )
+    background_only = np.where(masked, np.nan, image)
 
     # the psf-only image
-    psf_only = np.where(
-        result_obj.real_psf_mask.astype(bool),
-        result_obj.image.astype(float),
-        np.nan,
-    )
+    psf_only = np.where(result_obj.real_psf_mask.astype(bool), image, np.nan)
 
-    # get the stdev of the background
+    # get the stdev of the background (per pixel; FYI)
     stdev_background_only = np.nanstd(background_only)
+    result_obj.background_rms = float(stdev_background_only)
 
     # get the max of the psf
     psf_max = np.nanmax(psf_only)
+    result_obj.psf_max = float(psf_max)
 
     logging.info(
-        "Background rms (outside PSF and stray regions): %.4g", stdev_background_only
+        "Background rms per pixel (outside PSF and stray regions): %.4g",
+        stdev_background_only,
     )
     logging.info("PSF peak: %.4g", psf_max)
 
-    # threshold for significant stray light (req. METIS-9522)
-    noise_3sig = 3.0 * stdev_background_only
+    # METIS-9522 limit for each region: 3-sigma of the noise of the summed flux over
+    # its area, measured from the background pixels (cached per box size, as many
+    # regions have similar areas)
+    noise_cache = {}
+    for region_this in result_obj.regions:
+        region_this.metis_9522_limit = METIS_9522_NSIGMA * area_noise_sigma(
+            image, background_valid, region_this.area_pix, noise_cache
+        )
 
     # point/extended source sensitivities, for an FYI comparison only
     (
@@ -446,11 +550,20 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
     plt.axvline(
         x=lambda_over_d_pix, color="red", linestyle="--", label="Size scale: lambda/D"
     )
-    plt.axhline(
-        y=noise_3sig,
+    # METIS-9522 pass/fail: 3-sigma of the noise for the spatial scale of the region
+    max_radius = max(
+        [lambda_over_d_pix * 2] + [r.spatial_scale * 1.1 for r in result_obj.regions]
+    )
+    radii_limit = np.geomspace(1.0, max_radius, 30)
+    plt.plot(
+        radii_limit,
+        metis_9522_surface_brightness_limit(
+            image, background_valid, radii_limit, noise_cache
+        ),
         color="green",
         linestyle="--",
-        label="Counts: 3-sigma of background noise (METIS-9522 pass/fail)",
+        label="3-sigma of background noise for the region's area (METIS-9522 "
+        "pass/fail)",
     )
     # METIS-9522 limits as surface brightness: point-like regions are limited in total
     # flux (so flux / area of the region), extended regions in surface brightness
@@ -468,10 +581,7 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
     plt.hlines(
         y=extended_limit_counts_per_pix,
         xmin=lambda_over_d_pix,
-        xmax=max(
-            [lambda_over_d_pix * 2]
-            + [r.spatial_scale * 1.1 for r in result_obj.regions]
-        ),
+        xmax=max_radius,
         color="purple",
         linestyle="-",
         label=(
@@ -479,10 +589,10 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
         ),
     )
     plt.axhline(
-        y=0.0004 * psf_max,
+        y=METIS_1189_1429_PEAK_FRAC * psf_max,
         color="orange",
         linestyle="--",
-        label="Counts: 0.04% of PSF peak",
+        label=f"Counts: {100 * METIS_1189_1429_PEAK_FRAC:g}% of PSF peak",
     )
     plt.axhline(y=psf_max, color="blue", linestyle="--", label="Counts: PSF peak")
     plt.xlabel("Radius of equiv. circle (pixels)")
@@ -500,7 +610,6 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
 
     # display where each region is on the 2D readout (colors match the brightness
     # spectrum)
-    image = result_obj.image.astype(float)
     vmin, vmax = np.nanpercentile(image, [1.0, 99.5])
     fig, ax = plt.subplots(1, 1, figsize=(10, 10))
     im = ax.imshow(image, origin="lower", cmap="gray", vmin=vmin, vmax=vmax)
@@ -513,15 +622,15 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
         linestyles="--",
     )
     ax.plot([], [], color="red", linestyle="--", label="PSF mask")
-    for i, region in enumerate(result_obj.regions):
-        mask_this = result_obj.stray_light_masks[i] > 0
+    for i, (region, (slices, inside)) in enumerate(
+        zip(result_obj.regions, region_cutouts)
+    ):
         color = f"C{i % 10}"
-        ax.contour(mask_this.astype(float), levels=[0.5], colors=color, linewidths=1.5)
+        _contour_region(ax, slices, inside, colors=color, linewidths=1.5)
         # label just above-right of the region, so it doesn't hide the outline
-        ys, xs = np.nonzero(mask_this)
         ax.text(
-            xs.max() + 10,
-            ys.max() + 10,
+            slices[1].stop + 9,
+            slices[0].stop + 9,
             str(region.label),
             color=color,
             fontsize=12,
@@ -545,44 +654,6 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
         "Saved plot of stray light region locations to %s", regions_plot_file_name
     )
     plt.close(fig)
-
-    # displ
-
-    # Req. METIS-1189 and -1429: is the stray light irradiance <0.04% of the peak
-    # irradiance in the focal plane?
-    check_metis_1189_1429_array = []  # each stray light region: pass or no
-    for region_this in result_obj.regions:
-        if region_this.peak_irradiance < 0.0004 * psf_max:
-            logging.info(
-                "Stray light region %s fulfills <0.04%% of the peak irradiance",
-                region_this.label,
-            )
-            check_metis_1189_1429_array.append(True)
-        else:
-            logging.info(
-                "Stray light region %s >0.04%% of the peak irradiance!",
-                region_this.label,
-            )
-            check_metis_1189_1429_array.append(False)
-
-    # Req. METIS-9522: is the flux in optical artefacts and ghosts less than the
-    # 3-sigma thermal background noise for one hour of observations, for the respective
-    # spatial scale of the ghost? Pass/fail: peak irradiance of each region vs. 3-sigma
-    # of the measured background.
-    check_metis_9522_array = []
-    for region_this in result_obj.regions:
-        if region_this.peak_irradiance < noise_3sig:
-            logging.info(
-                "Stray light region %s fulfills <3-sigma of thermal background",
-                region_this.label,
-            )
-            check_metis_9522_array.append(True)
-        else:
-            logging.info(
-                "Stray light region %s >3-sigma of thermal background!",
-                region_this.label,
-            )
-            check_metis_9522_array.append(False)
 
     # FYI only (not used for pass/fail): comparison with the point/extended-source
     # sensitivities. Point-like (PSF-sized: equivalent radius <= lambda/D) regions:
@@ -626,22 +697,87 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
             unit,
         )
 
-    # check if all the regions passed the checks
+    return result_obj
+
+
+@pipeline_stage(
+    name="img_04_test_outcome",
+    depends_on=("stray_light_brightness_spectrum",),
+    cluster=CLUSTER_STRAY,
+    cluster_color=COLOR_STRAY,
+    label="IMG-OPT-04 pass/fail",
+)
+def log_test_outcome(result_obj):
+    """
+    Decide and log the pass/fail of each IMG-OPT-04 requirement, and of the whole test.
+
+    - METIS-1189 and -1429: the peak irradiance of every stray light region is below
+      METIS_1189_1429_PEAK_FRAC (0.04%) of the PSF peak.
+    - METIS-9522: the total flux of every stray light region is below 3-sigma of the
+      background noise of the summed flux over the region's area (i.e. for its spatial
+      scale; StrayLightRegion.metis_9522_limit).
+    No stray light regions: both pass. Overall: PASS if both pass, else FAIL.
+
+    INPUTS:
+    - result_obj (StrayLightResult): from stray_light_brightness_spectrum
+
+    OUTPUTS:
+    - result_obj (StrayLightResult), with pass_metis_1189_1429, pass_metis_9522 and
+      verdict_overall set
+    """
+    checks_1189_1429 = []
+    checks_9522 = []
+    for region_this in result_obj.regions:
+        limit_1189_1429 = METIS_1189_1429_PEAK_FRAC * result_obj.psf_max
+        ok_1189_1429 = region_this.peak_irradiance < limit_1189_1429
+        ok_9522 = region_this.total_flux < region_this.metis_9522_limit
+        checks_1189_1429.append(ok_1189_1429)
+        checks_9522.append(ok_9522)
+        logging.info(
+            "Stray light region %s: peak irradiance %.4g %s %g%% of PSF peak (%.4g); "
+            "flux %.4g %s 3-sigma of background for its area (%.4g over %s pix)",
+            region_this.label,
+            region_this.peak_irradiance,
+            "<" if ok_1189_1429 else ">=",
+            100 * METIS_1189_1429_PEAK_FRAC,
+            limit_1189_1429,
+            region_this.total_flux,
+            "<" if ok_9522 else ">=",
+            region_this.metis_9522_limit,
+            region_this.area_pix,
+        )
+
+    result_obj.pass_metis_1189_1429 = all(checks_1189_1429)
+    result_obj.pass_metis_9522 = all(checks_9522)
+    result_obj.verdict_overall = (
+        "PASS"
+        if result_obj.pass_metis_1189_1429 and result_obj.pass_metis_9522
+        else "FAIL"
+    )
+
+    n_regions = len(result_obj.regions)
     logging.info("--------------------------------------------------")
     logging.info("--------------------------------------------------")
-    if all(check_metis_1189_1429_array):
-        logging.info("METIS-1189 and -1429: Pass")
-    else:
-        logging.info("METIS-1189 and -1429: Fail")
-    if all(check_metis_9522_array):
-        logging.info("METIS-9522: Pass")
-    else:
-        logging.info("METIS-9522: Fail")
+    logging.info("File: %s", result_obj.file_absname)
+    if n_regions == 0:
+        logging.info("(no stray light regions detected)")
+    logging.info(
+        "METIS-1189 and -1429 (stray light < %g%% of peak irradiance): %s "
+        "(%s of %s regions above)",
+        100 * METIS_1189_1429_PEAK_FRAC,
+        "PASS" if result_obj.pass_metis_1189_1429 else "FAIL",
+        checks_1189_1429.count(False),
+        n_regions,
+    )
+    logging.info(
+        "METIS-9522 (artefact flux < 3-sigma of background for its spatial scale): %s "
+        "(%s of %s regions above)",
+        "PASS" if result_obj.pass_metis_9522 else "FAIL",
+        checks_9522.count(False),
+        n_regions,
+    )
     logging.info("--------------------------------------------------")
-    if all(check_metis_1189_1429_array) and all(check_metis_9522_array):
-        logging.info("IMG 04 STRAY LIGHT TEST: PASS")
-    else:
-        logging.info("IMG 04 STRAY LIGHT TEST: FAIL")
+    logging.info("IMG 04 STRAY LIGHT TEST: %s", result_obj.verdict_overall)
     logging.info("--------------------------------------------------")
 
     return result_obj
@@ -1008,15 +1144,22 @@ def _find_circles(tv, edge_percentile, min_area, min_circularity):
     binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
     binary = (binary > 0).astype(np.uint8)
 
-    # Fit a circle to each connected component
+    # Fit a circle to each connected component (within its bounding box, so as not to
+    # make a full-frame mask per component)
     n_lab, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
     circles_xyr = []
     for lab in range(1, n_lab):
         area = int(stats[lab, cv2.CC_STAT_AREA])
         if area < min_area:
             continue
-        comp = (labels == lab).astype(np.uint8)
-        contours, _ = cv2.findContours(comp, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        x0 = int(stats[lab, cv2.CC_STAT_LEFT])
+        y0 = int(stats[lab, cv2.CC_STAT_TOP])
+        w = int(stats[lab, cv2.CC_STAT_WIDTH])
+        h = int(stats[lab, cv2.CC_STAT_HEIGHT])
+        comp = (labels[y0 : y0 + h, x0 : x0 + w] == lab).astype(np.uint8)
+        contours, _ = cv2.findContours(
+            comp, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE, offset=(x0, y0)
+        )
         if not contours:
             continue
         cnt = max(contours, key=cv2.contourArea)
@@ -1038,27 +1181,32 @@ def _find_circles(tv, edge_percentile, min_area, min_circularity):
     return circles_xyr, binary
 
 
-def _binary_to_region_masks(binary, psf_mask, min_area):
-    """One 255-valued uint8 mask per connected component of 'binary' (PSF excluded)."""
+def _relabel_min_area(labels, psf_mask, min_area):
+    """
+    Renumber the positive labels in 'labels' as 1..n, with the PSF excluded and regions
+    of fewer than min_area pixels (outside the PSF) dropped.
+
+    OUTPUTS:
+    - label_map (ndarray[int32]): 0 = no region; regions labelled 1..n
+    """
+    labels = np.where(psf_mask, 0, labels).astype(np.int32, copy=False)
+    labels[labels < 0] = 0
+    counts = np.bincount(labels.ravel())
+    keep = counts >= max(min_area, 1)
+    keep[0] = False
+    new_labels = np.zeros(len(counts), dtype=np.int32)
+    new_labels[keep] = np.arange(1, int(keep.sum()) + 1, dtype=np.int32)
+    return new_labels[labels]
+
+
+def _binary_to_label_map(binary, psf_mask, min_area):
+    """Label map (1..n) of the connected components of 'binary' (PSF excluded)."""
     binary = ((binary > 0) & ~psf_mask).astype(np.uint8)
-    _, labels = cv2.connectedComponents(binary, connectivity=8)
-    return _labels_to_region_masks(labels, psf_mask, min_area)
+    _, labels = cv2.connectedComponents(binary, connectivity=8, ltype=cv2.CV_32S)
+    return _relabel_min_area(labels, psf_mask, min_area)
 
 
-def _labels_to_region_masks(labels, psf_mask, min_area):
-    """One 255-valued uint8 mask per positive label in 'labels' (PSF excluded)."""
-    region_masks = []
-    for lab in np.unique(labels):
-        if lab <= 0:
-            continue
-        region = (labels == lab) & ~psf_mask
-        if int(region.sum()) < min_area:
-            continue
-        region_masks.append(region.astype(np.uint8) * 255)
-    return region_masks
-
-
-def _plot_segmentation(tv, foreground, region_masks, method, plot_file_name):
+def _plot_segmentation(tv, foreground, label_map, method, plot_file_name):
     """
     FYI plot: denoised image, foreground used by the method, and the final region
     outlines; saved to plot_file_name.
@@ -1069,9 +1217,11 @@ def _plot_segmentation(tv, foreground, region_masks, method, plot_file_name):
     axs[1].imshow(foreground, origin="lower", cmap="gray")
     axs[1].set_title("Foreground")
     axs[2].imshow(tv, origin="lower", cmap="gray")
-    for region_mask in region_masks:
-        axs[2].contour(region_mask > 0, levels=[0.5], colors="lime", linewidths=1.5)
-    axs[2].set_title(f"Regions ({len(region_masks)})")
+    if np.any(label_map):
+        axs[2].contour(
+            (label_map > 0).astype(np.uint8), levels=[0.5], colors="lime", linewidths=1.5
+        )
+    axs[2].set_title(f"Regions ({int(label_map.max())})")
     for ax in axs:
         ax.set_aspect("equal")
     fig.suptitle(f"Stray light segmentation: {method}")
@@ -1107,7 +1257,8 @@ def _segment_single_method(tv, psf_mask, method, p):
 
     OUTPUTS:
     - foreground (ndarray[uint8]): foreground used by the method (for plotting)
-    - region_masks (list[ndarray]): one 255-valued uint8 mask per region, PSF excluded
+    - label_map (ndarray[int32]): 0 = no region; regions labelled 1..n, PSF excluded
+      (where regions of 'hough_circle' or 'active_contour' overlap, the later one wins)
     """
 
     if method == "threshold":
@@ -1115,19 +1266,17 @@ def _segment_single_method(tv, psf_mask, method, p):
         foreground = _threshold_binary(
             tv, psf_mask, p["threshold_kind"], p["threshold_factor"], p["open_kernel"]
         )
-        region_masks = _binary_to_region_masks(foreground, psf_mask, p["min_area"])
+        label_map = _binary_to_label_map(foreground, psf_mask, p["min_area"])
 
     elif method == "hough_circle":
 
         circles_xyr, foreground = _find_circles(
             tv, p["edge_percentile"], p["min_area"], p["min_circularity"]
         )
-        # make a mask for each circle
-        region_masks = []
-        for cx, cy, radius, *_ in circles_xyr:
-            region_mask = np.zeros(tv.shape, dtype=np.uint8)
-            cv2.circle(region_mask, (int(cx), int(cy)), int(radius), 255, -1)
-            region_masks.append(region_mask)
+        # draw each circle into the label map
+        label_map = np.zeros(tv.shape, dtype=np.int32)
+        for i, (cx, cy, radius, *_) in enumerate(circles_xyr):
+            cv2.circle(label_map, (int(cx), int(cy)), int(radius), i + 1, -1)
 
     elif method == "active_contour":
 
@@ -1139,7 +1288,9 @@ def _segment_single_method(tv, psf_mask, method, p):
             cv2.MORPH_ELLIPSE, (2 * expand_px + 1, 2 * expand_px + 1)
         )
         tv_blurred = ski.filters.gaussian(tv, sigma=0.5)
-        expanded_contours = []
+        label_map = np.zeros(tv.shape, dtype=np.int32)
+        comp = np.zeros(tv.shape, dtype=np.uint8)  # scratch, re-used for each snake
+        n_regions = 0
 
         for cx, cy, radius, *_ in circles_xyr:
             # Generate an initial circular contour
@@ -1157,7 +1308,7 @@ def _segment_single_method(tv, psf_mask, method, p):
             snake_int = np.array(
                 [(int(point[1]), int(point[0])) for point in snake], dtype=np.int32
             )
-            comp = np.zeros(tv.shape, dtype=np.uint8)
+            comp[:] = 0
             cv2.fillPoly(comp, [snake_int], 255)
             # expand the contour, to make sure we capture all of the stray light
             comp_exp = cv2.dilate(comp, expand_kernel, iterations=1)
@@ -1165,14 +1316,10 @@ def _segment_single_method(tv, psf_mask, method, p):
             cnts, _ = cv2.findContours(
                 comp_exp, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
             )
-            expanded_contours.extend(cnts)
-
-        # make a mask for each expanded contour
-        region_masks = []
-        for contour in expanded_contours:
-            region_mask_this = np.zeros(tv.shape, dtype=np.uint8)
-            cv2.fillPoly(region_mask_this, [contour], 255)
-            region_masks.append(region_mask_this)
+            # one region per expanded contour
+            for contour in cnts:
+                n_regions += 1
+                cv2.fillPoly(label_map, [contour], n_regions)
 
     elif method == "watershed":
 
@@ -1197,12 +1344,12 @@ def _segment_single_method(tv, psf_mask, method, p):
         logging.info("Watershed seeds: %s", len(peaks))
 
         markers = np.zeros(tv.shape, dtype=np.int32)
-        yy, xx = np.indices(tv.shape)
+        r = p["marker_radius"]
         for i, (py, px) in enumerate(peaks):
-            r = p["marker_radius"]
             y0, y1 = max(0, py - r), min(tv.shape[0], py + r + 1)
             x0, x1 = max(0, px - r), min(tv.shape[1], px + r + 1)
-            disk = (yy[y0:y1, x0:x1] - py) ** 2 + (xx[y0:y1, x0:x1] - px) ** 2 <= r**2
+            yy, xx = np.ogrid[y0:y1, x0:x1]
+            disk = (yy - py) ** 2 + (xx - px) ** 2 <= r**2
             markers[y0:y1, x0:x1][disk] = i + 1
 
         if len(peaks) > 0:
@@ -1214,7 +1361,7 @@ def _segment_single_method(tv, psf_mask, method, p):
             labels = np.where((foreground > 0) & (labels > 0), labels, 0)
         else:
             labels = np.zeros(tv.shape, dtype=np.int32)
-        region_masks = _labels_to_region_masks(labels, psf_mask, p["min_area"])
+        label_map = _relabel_min_area(labels, psf_mask, p["min_area"])
 
     elif method == "kmeans":
 
@@ -1232,7 +1379,7 @@ def _segment_single_method(tv, psf_mask, method, p):
         )
         foreground = np.zeros(tv.shape, dtype=np.uint8)
         foreground[~psf_mask] = np.isin(labels_1d.ravel(), bright).astype(np.uint8)
-        region_masks = _binary_to_region_masks(foreground, psf_mask, p["min_area"])
+        label_map = _binary_to_label_map(foreground, psf_mask, p["min_area"])
 
     elif method == "meanshift":
 
@@ -1249,7 +1396,7 @@ def _segment_single_method(tv, psf_mask, method, p):
             )
         thr = float(ski.filters.threshold_otsu(filtered[~psf_mask]))
         foreground = ((filtered > thr) & ~psf_mask).astype(np.uint8)
-        region_masks = _binary_to_region_masks(foreground, psf_mask, p["min_area"])
+        label_map = _binary_to_label_map(foreground, psf_mask, p["min_area"])
 
     else:
         raise ValueError(
@@ -1258,16 +1405,14 @@ def _segment_single_method(tv, psf_mask, method, p):
         )
 
     # never count the real PSF as stray light; drop regions that were entirely inside it
-    region_masks = [np.where(psf_mask, 0, m).astype(np.uint8) for m in region_masks]
-    region_masks = [m for m in region_masks if np.any(m)]
-    if not region_masks:
+    label_map = _relabel_min_area(label_map, psf_mask, 1)
+    n_regions = int(label_map.max())
+    if n_regions == 0:
         logging.warning("Segmentation method %r found no stray light regions", method)
     else:
-        logging.info(
-            "Segmentation method %r found %s regions", method, len(region_masks)
-        )
+        logging.info("Segmentation method %r found %s regions", method, n_regions)
 
-    return foreground, region_masks
+    return foreground, label_map
 
 
 @pipeline_stage(
@@ -1311,9 +1456,8 @@ def stray_light_segmentation(
 
     OUTPUTS:
     - result_obj (StrayLightResult), updated attributes:
-        - segment_map list(np.ndarray): integer region labels (0 = not stray light), one
-          map per region
-        - stray_light_masks list(np.ndarray): one 255-valued uint8 mask per region
+        - segment_map (np.ndarray[int32]): integer region labels (0 = not stray light),
+          regions labelled 1..n
         - segmentation_method (str): the method used
     """
 
@@ -1332,28 +1476,17 @@ def stray_light_segmentation(
     # fill the masked PSF with the background and denoise
     _, tv, psf_mask = _prepare_segmentation_image(result_obj)
 
-    foreground, region_masks = _segment_single_method(tv, psf_mask, method, p)
+    foreground, label_map = _segment_single_method(tv, psf_mask, method, p)
 
     os.makedirs(RESULTS_DIR_IMG_04, exist_ok=True)
     fits_stem = os.path.splitext(os.path.basename(result_obj.file_absname))[0]
     segmentation_plot_file_name = os.path.join(
         RESULTS_DIR_IMG_04, f"stray_light_segmentation_{method}_{fits_stem}.png"
     )
-    _plot_segmentation(
-        tv, foreground, region_masks, method, segmentation_plot_file_name
-    )
+    _plot_segmentation(tv, foreground, label_map, method, segmentation_plot_file_name)
 
-    # turn the masks into a segment map: one integer map per region, region i labelled
-    # i+1
-    segment_map = []
-    for i, mask_this in enumerate(region_masks):
-        segment_this = np.zeros(mask_this.shape, dtype=int)
-        segment_this[mask_this > 0] = i + 1
-        segment_map.append(segment_this)
-
-    # update the masks and labels for each stray light region
-    result_obj.segment_map = segment_map
-    result_obj.stray_light_masks = region_masks
+    # update the labels for each stray light region
+    result_obj.segment_map = label_map
     result_obj.segmentation_method = method
 
     return result_obj
@@ -1412,7 +1545,7 @@ def _resolve_vote_fraction(vote_fraction):
     return vote_fraction
 
 
-def _combine_method_regions(method_region_masks, weights, vote_fraction, psf_mask):
+def _combine_method_regions(method_region_maps, weights, vote_fraction, psf_mask):
     """
     Combine the regions found by several segmentation methods.
 
@@ -1429,8 +1562,8 @@ def _combine_method_regions(method_region_masks, weights, vote_fraction, psf_mas
     keep their group label.
 
     INPUTS:
-    - method_region_masks (dict[str, list[ndarray]]): per method, its region masks (>0 =
-      in region)
+    - method_region_maps (dict[str, ndarray]): per method, its label map (>0 = in a
+      region)
     - weights (dict[str, float]): weight per method (all methods, incl. those with
       weight 0)
     - vote_fraction (float): N, in [0, 1]
@@ -1438,39 +1571,36 @@ def _combine_method_regions(method_region_masks, weights, vote_fraction, psf_mas
 
     OUTPUTS:
     - dict with:
-        - group_labels (ndarray[int]): label of each group (0 = no method detected
+        - group_labels (ndarray[int32]): label of each group (0 = no method detected
           anything)
-        - method_label_maps (dict[str, ndarray[int]]): per method, group labels where it
-          detected something
+        - method_label_maps (dict[str, ndarray[int32]]): per method, group labels where
+          it detected something
         - score_map (ndarray[float]): summed weight of the methods detecting each pixel
         - sigma (float): sum of all weights
         - threshold (float): vote_fraction * sigma
-        - final_label_map (ndarray[int]): group labels of the pixels passing the
+        - final_label_map (ndarray[int32]): group labels of the pixels passing the
           weighted vote
         - final_labels (list[int]): group labels with at least one final pixel
-        - final_region_masks (list[ndarray]): one 255-valued uint8 mask per entry in
-          final_labels
     """
     psf_mask = psf_mask.astype(bool)
     shape = psf_mask.shape
 
-    # per method: OR of its regions, never inside the PSF
-    method_detected = {}
-    for method, region_masks in method_region_masks.items():
-        detected = np.zeros(shape, dtype=bool)
-        for region_mask in region_masks:
-            detected |= region_mask > 0
-        method_detected[method] = detected & ~psf_mask
+    # per method: its regions, never inside the PSF
+    method_detected = {
+        method: (np.asarray(label_map) > 0) & ~psf_mask
+        for method, label_map in method_region_maps.items()
+    }
 
     # group regions across methods: connected components of the union
     union = np.zeros(shape, dtype=bool)
     for detected in method_detected.values():
         union |= detected
-    _, group_labels = cv2.connectedComponents(union.astype(np.uint8), connectivity=8)
-    group_labels = group_labels.astype(int)
+    _, group_labels = cv2.connectedComponents(
+        union.astype(np.uint8), connectivity=8, ltype=cv2.CV_32S
+    )
 
     method_label_maps = {
-        method: np.where(detected, group_labels, 0)
+        method: np.where(detected, group_labels, 0).astype(np.int32, copy=False)
         for method, detected in method_detected.items()
     }
 
@@ -1481,12 +1611,9 @@ def _combine_method_regions(method_region_masks, weights, vote_fraction, psf_mas
     for method, detected in method_detected.items():
         score_map += weights[method] * detected
     final = (score_map > threshold) & ~psf_mask
-    final_label_map = np.where(final, group_labels, 0)
+    final_label_map = np.where(final, group_labels, 0).astype(np.int32, copy=False)
 
     final_labels = [int(lab) for lab in np.unique(final_label_map) if lab > 0]
-    final_region_masks = [
-        (final_label_map == lab).astype(np.uint8) * 255 for lab in final_labels
-    ]
 
     return {
         "group_labels": group_labels,
@@ -1496,8 +1623,15 @@ def _combine_method_regions(method_region_masks, weights, vote_fraction, psf_mas
         "threshold": threshold,
         "final_label_map": final_label_map,
         "final_labels": final_labels,
-        "final_region_masks": final_region_masks,
     }
+
+
+def _labels_str(labels, max_shown=20):
+    """Comma-separated labels, truncated after max_shown."""
+    labels = [str(lab) for lab in labels]
+    if len(labels) > max_shown:
+        return ", ".join(labels[:max_shown]) + f", ... ({len(labels)} total)"
+    return ", ".join(labels)
 
 
 def _plot_segmentation_combined(
@@ -1522,13 +1656,14 @@ def _plot_segmentation_combined(
     )
     ax.plot([], [], color="red", linestyle="--", label="PSF mask")
 
-    # each method's regions, one outline per group label
+    # each method's regions (one outline per method; regions of a method never touch
+    # each other's groups, so the outlines are the same as one per group)
     for method, label_map in combo["method_label_maps"].items():
         color = SEGMENTATION_METHOD_COLORS[method]
-        labels_this = [lab for lab in np.unique(label_map) if lab > 0]
-        for lab in labels_this:
+        labels_this = [int(lab) for lab in np.unique(label_map) if lab > 0]
+        if labels_this:
             ax.contour(
-                (label_map == lab).astype(float),
+                (label_map > 0).astype(np.uint8),
                 levels=[0.5],
                 colors=color,
                 linewidths=1.2,
@@ -1538,26 +1673,26 @@ def _plot_segmentation_combined(
             [],
             color=color,
             label=f"{method} (w={weights[method]:g}; labels "
-            f"{', '.join(map(str, labels_this)) or '-'})",
+            f"{_labels_str(labels_this) or '-'})",
         )
 
     # final regions: bold white border over a black underlay
-    for lab in combo["final_labels"]:
-        final_this = (combo["final_label_map"] == lab).astype(float)
-        ax.contour(final_this, levels=[0.5], colors="black", linewidths=1.5)
-        ax.contour(final_this, levels=[0.5], colors="white", linewidths=1.2)
+    if combo["final_labels"]:
+        final_any = (combo["final_label_map"] > 0).astype(np.uint8)
+        ax.contour(final_any, levels=[0.5], colors="black", linewidths=1.5)
+        ax.contour(final_any, levels=[0.5], colors="white", linewidths=1.2)
     ax.plot([], [], color="white", linewidth=2.5, label="Final (weighted vote)")
 
     # label each group just above-right of its bbox; white if it survived the vote
-    group_labels = combo["group_labels"]
-    for lab in np.unique(group_labels):
-        if lab <= 0:
+    final_labels = set(combo["final_labels"])
+    for i, slices in enumerate(ndimage.find_objects(combo["group_labels"])):
+        if slices is None:
             continue
-        ys, xs = np.nonzero(group_labels == lab)
-        is_final = int(lab) in combo["final_labels"]
+        lab = i + 1
+        is_final = lab in final_labels
         ax.text(
-            xs.max() + 10,
-            ys.max() + 10,
+            slices[1].stop + 9,
+            slices[0].stop + 9,
             str(lab),
             color="white" if is_final else "khaki",
             fontsize=12,
@@ -1599,7 +1734,7 @@ def _write_segmentation_combined_fits(
     def _bool_map(label_map):
         return ((label_map > 0) & ~psf_mask).astype(np.uint8)
 
-    def _labels_str(label_map):
+    def _labels_str_fits(label_map):
         return ",".join(str(lab) for lab in np.unique(label_map) if lab > 0)
 
     primary = fits.PrimaryHDU()
@@ -1628,7 +1763,7 @@ def _write_segmentation_combined_fits(
             "number of regions",
         )
         hdu.header["LABELS"] = (
-            _labels_str(label_map),
+            _labels_str_fits(label_map),
             "group labels present (see FYI plot)",
         )
         hdus.append(hdu)
@@ -1645,7 +1780,7 @@ def _write_segmentation_combined_fits(
         "number of final regions",
     )
     final_hdu.header["LABELS"] = (
-        _labels_str(combo["final_label_map"]),
+        _labels_str_fits(combo["final_label_map"]),
         "group labels present (see FYI plot)",
     )
     hdus.append(final_hdu)
@@ -1695,13 +1830,13 @@ def stray_light_segmentation_combined(
 
     OUTPUTS:
     - result_obj (StrayLightResult), updated attributes:
-        - segment_map list(np.ndarray): one integer map per final region, labelled with
-          its group label
-        - stray_light_masks list(np.ndarray): one 255-valued uint8 mask per final region
+        - segment_map (np.ndarray[int32]): group labels of the final regions (0 = not
+          stray light)
         - segmentation_method (str): 'combined'
         - segmentation_weights, segmentation_vote_fraction: as used
         - method_label_maps (dict): per method, group labels of its detections
-        - final_label_map (np.ndarray): group labels of the final regions
+        - final_label_map (np.ndarray): group labels of the final regions (same as
+          segment_map)
     - FYI plot and FITS file in RESULTS_DIR_IMG_04
       (stray_light_segmentation_combined_<stem>.png/.fits)
     """
@@ -1736,39 +1871,37 @@ def stray_light_segmentation_combined(
     os.makedirs(RESULTS_DIR_IMG_04, exist_ok=True)
     fits_stem = os.path.splitext(os.path.basename(result_obj.file_absname))[0]
 
-    method_region_masks = {}
+    method_region_maps = {}
     for method in active_methods:
         p = _merge_method_params(method, params.get(method) or {})
         logging.info("Segmenting stray light with method=%r, params=%s", method, p)
-        foreground, region_masks = _segment_single_method(tv, psf_mask, method, p)
+        foreground, label_map = _segment_single_method(tv, psf_mask, method, p)
         segmentation_plot_file_name = os.path.join(
             RESULTS_DIR_IMG_04, f"stray_light_segmentation_{method}_{fits_stem}.png"
         )
         _plot_segmentation(
-            tv, foreground, region_masks, method, segmentation_plot_file_name
+            tv, foreground, label_map, method, segmentation_plot_file_name
         )
-        method_region_masks[method] = region_masks
+        method_region_maps[method] = label_map
 
-    combo = _combine_method_regions(
-        method_region_masks, weights, vote_fraction, psf_mask
-    )
+    combo = _combine_method_regions(method_region_maps, weights, vote_fraction, psf_mask)
+    del method_region_maps
 
     # which methods found which group, and whether it survived the vote
-    for lab in np.unique(combo["group_labels"]):
-        if lab <= 0:
-            continue
-        detected_by = [
-            m
-            for m, label_map in combo["method_label_maps"].items()
-            if np.any(label_map == lab)
-        ]
+    method_labels = {
+        m: set(np.unique(label_map[label_map > 0]).tolist())
+        for m, label_map in combo["method_label_maps"].items()
+    }
+    final_labels = set(combo["final_labels"])
+    for lab in range(1, int(combo["group_labels"].max()) + 1):
+        detected_by = [m for m, labels in method_labels.items() if lab in labels]
         logging.info(
             "Region %s: detected by %s (summed weight %g vs. threshold %g); %s",
             lab,
             detected_by,
             sum((weights[m] for m in detected_by)),
             combo["threshold"],
-            "FINAL" if int(lab) in combo["final_labels"] else "rejected",
+            "FINAL" if lab in final_labels else "rejected",
         )
     if not combo["final_labels"]:
         logging.warning(
@@ -1804,14 +1937,7 @@ def stray_light_segmentation_combined(
         ),
     )
 
-    # one integer map per final region, labelled with its group label
-    segment_map = [
-        np.where(mask_this > 0, lab, 0)
-        for lab, mask_this in zip(combo["final_labels"], combo["final_region_masks"])
-    ]
-
-    result_obj.segment_map = segment_map
-    result_obj.stray_light_masks = combo["final_region_masks"]
+    result_obj.segment_map = combo["final_label_map"]
     result_obj.segmentation_method = "combined"
     result_obj.segmentation_weights = weights
     result_obj.segmentation_vote_fraction = vote_fraction
@@ -1832,6 +1958,9 @@ def stray_light_mask_real(result_obj, observing_config):
     """
     Mask the real PSF, so we can find the stray light.
 
+    The mask is everything within psf_mask_n_lambda_over_d * lambda/D of the PSF
+    centroid, with psf_mask_n_lambda_over_d set in the observing config.
+
     INPUTS:
     - result_obj (StrayLightResult): result object
     - observing_config (ObservingConfig): observing config
@@ -1840,8 +1969,15 @@ def stray_light_mask_real(result_obj, observing_config):
     - None; updates result_obj
     """
 
-    # just make a mask over N*lambda/D for now''
-    n_lambda_over_d = 5.0
+    # mask over N*lambda/D, with N from the observing config
+    try:
+        n_lambda_over_d = float(observing_config["psf_mask_n_lambda_over_d"])
+    except KeyError as exc:
+        raise KeyError(
+            "No 'psf_mask_n_lambda_over_d' (radius of the PSF mask, in lambda/D) in "
+            "the observing config"
+        ) from exc
+    logging.info("Masking the real PSF out to %g lambda/D", n_lambda_over_d)
     # wavel = float(observing_config['filter_name']['wavelength'])
     lambda_over_d = (
         206265.0

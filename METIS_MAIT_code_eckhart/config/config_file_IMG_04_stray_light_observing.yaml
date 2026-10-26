@@ -18,7 +18,7 @@ monochromatic_observing_filters_lm:
   HCI_M: 4.95e-6
 
 # file names of actual filter curves
-# paths are pre-pended in the code with 
+# paths are pre-pended in the code with
 # PKGS_DIR = (Path(__file__).resolve().parent / "inst_pkgs").resolve()
 polychromatic_observing_filters_lm_leaf_name:
   short-L: '/METIS/filters/TC_filter_short-L.dat'
@@ -104,6 +104,11 @@ D_aperture:
 #  full: 34.6878
 #  D_obscuration: 12.8502
 # corresponding to PPS-CFO2 mask:
+
+# radius of the mask over the real PSF, in units of lambda/D (lambda: central
+# wavelength of the filter; D: D_aperture full); everything inside is excluded from
+# the stray light segmentation and the background statistics
+psf_mask_n_lambda_over_d: 5.0
 
 # mapping: analysis detector labels → pixel_scales keys
 scope_sim_to_analysis:
