@@ -42,6 +42,7 @@ import datetime
 import logging
 
 import numpy as np
+import scopesim as sim
 from scipy.ndimage import gaussian_filter
 
 from modules import sim_common
@@ -206,6 +207,10 @@ def main():
         stem, "IMG_03_logs", "IMG_03_simulation_psf_image_quality", now
     )
     logging.info("Simmed file output directory: %s", out_dir)
+    # uncomment to (re-)download the IRDB packages (overwrites them in the IRDB)
+    sim.download_packages(
+         ["METIS", "ELT", "Armazones"], save_dir=sim_common.IRDB_REL_PATH
+     )
     sim_common.setup_scopesim()
 
     observing = load_observing_config(stem)

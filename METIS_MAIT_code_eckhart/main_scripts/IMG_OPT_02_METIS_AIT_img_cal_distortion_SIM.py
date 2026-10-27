@@ -40,6 +40,7 @@ import logging
 import os
 
 import numpy as np
+import scopesim as sim
 from astropy.io import fits
 
 from modules import sim_common
@@ -190,6 +191,10 @@ def main():
     )
     log_tbd_distortion("IMG-OPT-02 SIM")
     logging.info("Simmed file output directory: %s", out_dir)
+    # uncomment to (re-)download the IRDB packages (overwrites them in the IRDB)
+    # sim.download_packages(
+    #     ["METIS", "ELT", "Armazones"], save_dir=sim_common.IRDB_REL_PATH
+    # )
     sim_common.setup_scopesim()
 
     # saturation levels (common observing config)

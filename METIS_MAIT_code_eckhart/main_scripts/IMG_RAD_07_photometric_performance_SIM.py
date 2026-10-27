@@ -68,6 +68,7 @@ import datetime
 import logging
 
 import numpy as np
+import scopesim as sim
 
 from modules import sim_common
 from modules.config_common import load_observing_config
@@ -386,6 +387,10 @@ def main():
         stem, "IMG_07_phot_logs", "IMG_07_photometric_performance", now
     )
     logging.info("Simmed file output directory: %s", out_dir)
+    # uncomment to (re-)download the IRDB packages (overwrites them in the IRDB)
+    # sim.download_packages(
+    #     ["METIS", "ELT", "Armazones"], save_dir=sim_common.IRDB_REL_PATH
+    # )
     sim_common.setup_scopesim()
 
     observing = load_observing_config(stem)

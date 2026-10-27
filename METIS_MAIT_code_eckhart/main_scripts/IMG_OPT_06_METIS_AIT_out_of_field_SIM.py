@@ -46,6 +46,7 @@ import datetime
 import logging
 
 import numpy as np
+import scopesim as sim
 from astropy.io import fits
 
 import modules.backbone_img_opt_06_out_of_field as backbone
@@ -172,6 +173,10 @@ def main():
         stem, "IMG_06_simmed_out_of_field_logs", "IMG_06_simmed_out_of_field", now
     )
     logging.info("Simmed file output directory: %s", out_dir)
+    # uncomment to (re-)download the IRDB packages (overwrites them in the IRDB)
+    # sim.download_packages(
+    #     ["METIS", "ELT", "Armazones"], save_dir=sim_common.IRDB_REL_PATH
+    # )
     sim_common.setup_scopesim()
 
     # IMG-OPT-06 observing config (fov_req_arcsec, ...) on top of IMG-OPT-04's

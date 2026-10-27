@@ -45,6 +45,7 @@ import datetime
 import logging
 
 import numpy as np
+import scopesim as sim
 from astropy.io import fits
 from scipy.ndimage import uniform_filter
 
@@ -261,6 +262,10 @@ def main():
         stem, "IMG_04_simmed_stray_light_logs", "IMG_04_simmed_stray_light", now
     )
     logging.info("Simmed file output directory: %s", out_dir)
+    # uncomment to (re-)download the IRDB packages (overwrites them in the IRDB)
+    # sim.download_packages(
+    #     ["METIS", "ELT", "Armazones"], save_dir=sim_common.IRDB_REL_PATH
+    # )
     sim_common.setup_scopesim()
 
     observing = load_observing_config(
