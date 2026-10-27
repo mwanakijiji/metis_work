@@ -24,6 +24,11 @@ digraph pipeline {
     color="#ff7f0e";
     generate_distortion_sim;
     image_distortion;
+    metis_1097_pixel_scale;
+    metis_3502_residual_distortion;
+    metis_8222_detector_offset;
+    metis_9920_scale_stability;
+    img_02_test_outcome;
   }
 
   subgraph cluster_img_opt_03_psf_quality {
@@ -116,6 +121,11 @@ digraph pipeline {
   img_03_test_outcome [label="IMG-OPT-03 pass/fail"];
   fov_calc [label="Compute FOV"];
   image_distortion [label="Measure distortion"];
+  metis_1097_pixel_scale [label="METIS-1097: pixel scale", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
+  metis_3502_residual_distortion [label="METIS-3502: residual\ndistortion after\ncalibration", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
+  metis_8222_detector_offset [label="METIS-8222: H2RG offset\nfrom optical axis", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
+  metis_9920_scale_stability [label="METIS-9920: stability of\nscale and distortion", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
+  img_02_test_outcome [label="IMG-OPT-02 pass/fail", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
   stray_light_brightness_spectrum [label="Arrange segments into\nbrightnesses as function\nof spatial scales"];
   img_04_metis_1189_1429_check [label="METIS-1189/-1429: stray\nlight vs. 0.04% of PSF\npeak"];
   img_04_metis_9522_check [label="METIS-9522: artefacts\nvs. 3-sigma background"];
@@ -144,10 +154,15 @@ digraph pipeline {
   image_distortion -> generate_psf_quality_sim [style=invis];
   generate_psf_quality_sim -> generate_stray_light_sim [style=invis];
   generate_stray_light_sim -> generate_out_of_field_sim [style=invis];
-  { rank=same; fov_calc; prepare_psf_grid; populate_result_obj_info; }
-  fov_calc -> prepare_psf_grid [style=invis];
+  { rank=same; fov_calc; metis_1097_pixel_scale; metis_3502_residual_distortion; metis_8222_detector_offset; metis_9920_scale_stability; prepare_psf_grid; populate_result_obj_info; }
+  fov_calc -> metis_1097_pixel_scale [style=invis];
+  metis_1097_pixel_scale -> metis_3502_residual_distortion [style=invis];
+  metis_3502_residual_distortion -> metis_8222_detector_offset [style=invis];
+  metis_8222_detector_offset -> metis_9920_scale_stability [style=invis];
+  metis_9920_scale_stability -> prepare_psf_grid [style=invis];
   prepare_psf_grid -> populate_result_obj_info [style=invis];
-  { rank=same; process_one_psf; centroid_2passes_oversample; }
+  { rank=same; img_02_test_outcome; process_one_psf; centroid_2passes_oversample; }
+  img_02_test_outcome -> process_one_psf [style=invis];
   process_one_psf -> centroid_2passes_oversample [style=invis];
   { rank=same; collect_strehls; stray_light_mask_real; }
   collect_strehls -> stray_light_mask_real [style=invis];
@@ -184,6 +199,14 @@ digraph pipeline {
   img_03_metis_3503_check -> img_03_test_outcome [weight=10];
   generate_fov_sim -> fov_calc [weight=10];
   generate_distortion_sim -> image_distortion [weight=10];
+  image_distortion -> metis_1097_pixel_scale [weight=10];
+  image_distortion -> metis_3502_residual_distortion [weight=10];
+  image_distortion -> metis_8222_detector_offset [weight=10];
+  image_distortion -> metis_9920_scale_stability [weight=10];
+  metis_1097_pixel_scale -> img_02_test_outcome [weight=10];
+  metis_3502_residual_distortion -> img_02_test_outcome [weight=10];
+  metis_8222_detector_offset -> img_02_test_outcome [weight=10];
+  metis_9920_scale_stability -> img_02_test_outcome [weight=10];
   stray_light_segmentation -> stray_light_brightness_spectrum [style=dashed, color="#999999", constraint=false];
   stray_light_segmentation_combined -> stray_light_brightness_spectrum [style=dashed, color="#999999", constraint=false];
   stray_light_brightness_spectrum -> img_04_metis_1189_1429_check [weight=10];

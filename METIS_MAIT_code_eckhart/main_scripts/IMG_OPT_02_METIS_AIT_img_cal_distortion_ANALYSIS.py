@@ -9,7 +9,14 @@ import datetime
 import logging
 import os
 
-from modules.backbone_img_opt_02_distortion import image_distortion
+from modules.backbone_img_opt_02_distortion import (
+    image_distortion,
+    log_test_outcome,
+    metis_1097_pixel_scale,
+    metis_3502_residual_distortion,
+    metis_8222_detector_offset,
+    metis_9920_scale_stability,
+)
 from modules.config_common import load_observing_config
 from modules.helpers import load_config_and_pipe, setup_logging
 from modules.tbd_warnings import log_tbd_distortion, stamp_all_saved_figures
@@ -88,7 +95,7 @@ def main():
     # loop over each data state
     for state in data_states:  # [0:1]: # if just for a small test
         logging.info("==================================================")
-        image_distortion(
+        centroid_results_all = image_distortion(
             state["file_name"],
             fp_mask=state["fp_mask"],
             pp_mask=state["pp_mask"],
@@ -102,6 +109,18 @@ def main():
             results_write_dir=state["results_write_dir"],
             fit_method="curve_fit",
         )
+        # requirement checks (stubs for now), then the pass/fail of the whole test
+        checks = {
+            "METIS-1097": metis_1097_pixel_scale,
+            "METIS-3502": metis_3502_residual_distortion,
+            "METIS-8222": metis_8222_detector_offset,
+            "METIS-9920": metis_9920_scale_stability,
+        }
+        verdicts = {
+            req_id: check(centroid_results_all, state["filter_name"], observing_config)
+            for req_id, check in checks.items()
+        }
+        log_test_outcome(verdicts, state["file_name"])
         log_tbd_distortion(f"IMG-OPT-02 ANALYSIS, {state['filter_name']}")
 
     log_tbd_distortion("IMG-OPT-02 ANALYSIS")

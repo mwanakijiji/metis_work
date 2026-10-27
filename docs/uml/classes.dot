@@ -1,13 +1,14 @@
 digraph "classes_METIS_MAIT" {
 rankdir=BT
 charset="utf-8"
-"modules.backbone_img_06_out_of_field.OutOfFieldResult" [color="black", fontcolor="black", label=<OutOfFieldResult>, shape="record", style="solid"];
+"modules.backbone_img_opt_06_out_of_field.OutOfFieldResult" [color="black", fontcolor="black", label=<OutOfFieldResult>, shape="record", style="solid"];
 "modules.backbone_img_03_psf_quality.PsfGrid" [color="black", fontcolor="black", label=<PsfGrid>, shape="record", style="solid"];
 "modules.psf_grid_prep.PsfGridPrep" [color="black", fontcolor="black", label=<PsfGridPrep>, shape="record", style="solid"];
+"modules.sim_common.SimContext" [color="black", fontcolor="black", label=<SimContext>, shape="record", style="solid"];
 "modules.backbone_img_03_psf_quality.SinglePsfFitResult" [color="black", fontcolor="black", label=<SinglePsfFitResult>, shape="record", style="solid"];
-"modules.backbone_img_02.SinglePsfFitResult" [color="black", fontcolor="black", label=<SinglePsfFitResult>, shape="record", style="solid"];
+"modules.backbone_img_opt_02_distortion.SinglePsfFitResult" [color="black", fontcolor="black", label=<SinglePsfFitResult>, shape="record", style="solid"];
 "modules.stray_light_common.StrayLightRegion" [color="black", fontcolor="black", label=<StrayLightRegion>, shape="record", style="solid"];
 "modules.stray_light_common.StrayLightResult" [color="black", fontcolor="black", label=<StrayLightResult>, shape="record", style="solid"];
 "modules.backbone_img_03_psf_quality.StrehlRunResult" [color="black", fontcolor="black", label=<StrehlRunResult>, shape="record", style="solid"];
-"modules.backbone_img_06_out_of_field.OutOfFieldResult" -> "modules.stray_light_common.StrayLightResult" [arrowhead="empty", arrowtail="none"];
+"modules.backbone_img_opt_06_out_of_field.OutOfFieldResult" -> "modules.stray_light_common.StrayLightResult" [arrowhead="empty", arrowtail="none"];
 }

@@ -207,9 +207,7 @@ def simulate_metis_2594(ctx, req_key, req_cfg):  # pylint: disable=too-many-loca
             frac = float(inject[f"flux_{end}"])
             target = raw_target_level(background, ceiling, frac)
             # never past the ceiling, whatever the median iteration does
-            factor = min(
-                signal_factor_for_raw_level(dark_1, signal, target), k_ceiling
-            )
+            factor = min(signal_factor_for_raw_level(dark_1, signal, target), k_ceiling)
             raw = dark_1 + factor * signal
             logging.info(
                 "%s case %s %s: %.3g of the headroom -> target raw median %.4g ADU; "

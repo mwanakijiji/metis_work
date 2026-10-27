@@ -417,18 +417,6 @@ def image_distortion(
     )
     logging.info("--------------------------------")
     logging.info("--------------------------------")
-    logging.info("PIXEL SCALE CALCULATION MACHINERY TBD")
-    logging.info("--------------------------------")
-    logging.info("--------------------------------")
-    logging.info("DISTORTION CALCULATION MACHINERY TBD")
-    logging.info("--------------------------------")
-    logging.info("--------------------------------")
-    logging.info("CENTERING CALCULATION MACHINERY TBD")
-    logging.info("--------------------------------")
-    logging.info("--------------------------------")
-    logging.info("PASS/FAIL TBD: %s", pass_fail_all)
-    logging.info("--------------------------------")
-    logging.info("--------------------------------")
 
     # pickle the results
     basename_file_name_pickle = (
@@ -445,4 +433,176 @@ def image_distortion(
         )
     logging.info("Saved centroid results to %s", abs_file_name_pickle)
 
-    # (could return centroid_results_all)
+    return centroid_results_all
+
+
+# Requirement checks: stubs until the distortion machinery is in place. Each returns a
+# verdict (PASS, FAIL or INCONCLUSIVE); for now always INCONCLUSIVE.
+
+
+@pipeline_stage(
+    name="metis_1097_pixel_scale",
+    depends_on=("image_distortion",),
+    cluster=CLUSTER_DISTORTION,
+    cluster_color=COLOR_DISTORTION,
+    planned=True,
+    label="METIS-1097: pixel scale",
+)
+def metis_1097_pixel_scale(centroid_results_all, filter_name, config_observing):
+    """
+    METIS-1097: the Imager shall provide a pixel scale of 5.47 +0.26/-0.26 mas/pix for
+    the LM-band and 6.79 +0.25/-0.50 mas/pix for the N-band.
+
+    STUB: pixel scale calculation machinery TBD.
+
+    INPUTS:
+    - centroid_results_all (dict): per-PSF centroid results from image_distortion
+    - filter_name (str): observing filter (selects the LM- or N-band limits)
+    - config_observing (dict): observing configuration
+
+    OUTPUTS:
+    - verdict (str): PASS, FAIL or INCONCLUSIVE
+    """
+    # not used yet
+    del centroid_results_all, filter_name, config_observing
+    logging.info("METIS-1097: PIXEL SCALE CALCULATION MACHINERY TBD")
+    return "INCONCLUSIVE"
+
+
+@pipeline_stage(
+    name="metis_3502_residual_distortion",
+    depends_on=("image_distortion",),
+    cluster=CLUSTER_DISTORTION,
+    cluster_color=COLOR_DISTORTION,
+    planned=True,
+    label="METIS-3502: residual distortion after calibration",
+)
+def metis_3502_residual_distortion(centroid_results_all, filter_name, config_observing):
+    """
+    METIS-3502: after calibration, the distortions introduced by METIS shall be removed
+    to better than 0.5 mas (ca. 1/10 px for the L-band imager) over the full field of
+    view.
+
+    STUB: distortion calculation machinery TBD.
+
+    INPUTS:
+    - centroid_results_all (dict): per-PSF centroid results from image_distortion
+    - filter_name (str): observing filter
+    - config_observing (dict): observing configuration
+
+    OUTPUTS:
+    - verdict (str): PASS, FAIL or INCONCLUSIVE
+    """
+    # not used yet
+    del centroid_results_all, filter_name, config_observing
+    logging.info("METIS-3502: DISTORTION CALCULATION MACHINERY TBD")
+    return "INCONCLUSIVE"
+
+
+@pipeline_stage(
+    name="metis_8222_detector_offset",
+    depends_on=("image_distortion",),
+    cluster=CLUSTER_DISTORTION,
+    cluster_color=COLOR_DISTORTION,
+    planned=True,
+    label="METIS-8222: H2RG offset from optical axis",
+)
+def metis_8222_detector_offset(centroid_results_all, filter_name, config_observing):
+    """
+    METIS-8222: the center of the H2RG chip within IMG-LM-DET shall be offset from the
+    METIS optical axis by 175 mas +/- 25 mas on-sky PtV in the 'across H2RG stripe'
+    direction (i.e., perpendicular to the orientation of the 32 stripes in the H2RG
+    detector). Applies to the LM-band detector only.
+
+    STUB: centering calculation machinery TBD.
+
+    INPUTS:
+    - centroid_results_all (dict): per-PSF centroid results from image_distortion
+    - filter_name (str): observing filter
+    - config_observing (dict): observing configuration
+
+    OUTPUTS:
+    - verdict (str): PASS, FAIL or INCONCLUSIVE
+    """
+    # not used yet
+    del centroid_results_all, filter_name, config_observing
+    logging.info("METIS-8222: CENTERING CALCULATION MACHINERY TBD")
+    return "INCONCLUSIVE"
+
+
+@pipeline_stage(
+    name="metis_9920_scale_stability",
+    depends_on=("image_distortion",),
+    cluster=CLUSTER_DISTORTION,
+    cluster_color=COLOR_DISTORTION,
+    planned=True,
+    label="METIS-9920: stability of scale and distortion",
+)
+def metis_9920_scale_stability(centroid_results_all, filter_name, config_observing):
+    """
+    METIS-9920: image scale and distortion of METIS shall be constant (for each optical
+    configuration, even after change of observing modes) to an accuracy of 1e-3 (goal:
+    1e-4) at L/M-band and 2e-3 (goal: 2e-4) at N-band with respect to the full field of
+    view.
+
+    STUB: stability calculation machinery TBD (needs measurements of the same
+    configuration before and after a change of observing mode).
+
+    INPUTS:
+    - centroid_results_all (dict): per-PSF centroid results from image_distortion
+    - filter_name (str): observing filter (selects the L/M- or N-band limit)
+    - config_observing (dict): observing configuration
+
+    OUTPUTS:
+    - verdict (str): PASS, FAIL or INCONCLUSIVE
+    """
+    # not used yet
+    del centroid_results_all, filter_name, config_observing
+    logging.info("METIS-9920: STABILITY CALCULATION MACHINERY TBD")
+    return "INCONCLUSIVE"
+
+
+@pipeline_stage(
+    name="img_02_test_outcome",
+    depends_on=(
+        "metis_1097_pixel_scale",
+        "metis_3502_residual_distortion",
+        "metis_8222_detector_offset",
+        "metis_9920_scale_stability",
+    ),
+    cluster=CLUSTER_DISTORTION,
+    cluster_color=COLOR_DISTORTION,
+    planned=True,
+    label="IMG-OPT-02 pass/fail",
+)
+def log_test_outcome(verdicts, file_name):
+    """
+    Decide and log the pass/fail of each IMG-OPT-02 requirement, and of the whole test.
+
+    Overall: PASS only if all requirements pass; FAIL if any fails; else INCONCLUSIVE.
+
+    STUB: the requirement checks are stubs, so the outcome is INCONCLUSIVE for now.
+
+    INPUTS:
+    - verdicts (dict): requirement ID (e.g. 'METIS-1097') -> verdict (PASS, FAIL or
+      INCONCLUSIVE)
+    - file_name (str): FITS file the verdicts are for
+
+    OUTPUTS:
+    - verdict_overall (str): PASS, FAIL or INCONCLUSIVE
+    """
+    logging.info("--------------------------------------------------")
+    logging.info("--------------------------------------------------")
+    logging.info("File: %s", file_name)
+    for req_id, verdict in verdicts.items():
+        logging.info("%s: %s", req_id, verdict)
+    logging.info("--------------------------------------------------")
+    if all(v == "PASS" for v in verdicts.values()):
+        verdict_overall = "PASS"
+    elif any(v == "FAIL" for v in verdicts.values()):
+        verdict_overall = "FAIL"
+    else:
+        verdict_overall = "INCONCLUSIVE"
+    logging.info("IMG 02 DISTORTION TEST: %s", verdict_overall)
+    logging.info("--------------------------------------------------")
+    return verdict_overall
