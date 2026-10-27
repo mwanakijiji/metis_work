@@ -32,6 +32,9 @@ HERE = Path(__file__).resolve().parent
 LABEL_WRAP = 24
 # 'IMG-OPT-04 Stray light' -> 4
 _TEST_NUMBER = re.compile(r"^IMG-(?:OPT|RAD)-(\d+)\b")
+# pairs of test numbers whose rows are swapped after sorting (by hand: Graphviz does
+# not stack the rows strictly in list order, so this is tuned to how the chart renders)
+ROW_SWAPS = ((4, 6),)
 
 
 def _wrap(label: str) -> str:
@@ -76,7 +79,8 @@ def _columns() -> dict[str, int]:
 def _row_order(node_cluster: dict[str, str]) -> list[str]:
     """
     Cluster ids, top to bottom: tests by number; each shared cluster right after the
-    lowest-numbered test cluster feeding into it; anything else last.
+    lowest-numbered test cluster feeding into it; anything else last; then the rows of
+    each pair of tests in ROW_SWAPS swapped.
     """
 
     def _test_number(cluster_id: str) -> int | None:
@@ -99,7 +103,14 @@ def _row_order(node_cluster: dict[str, str]) -> list[str]:
         ]
         feeders = [n for n in feeders if n is not None]
         keys[cluster_id] = (min(feeders) if feeders else 10**6, 1, meta["label"])
-    return sorted(CLUSTERS, key=lambda cluster_id: keys[cluster_id])
+    rows = sorted(CLUSTERS, key=lambda cluster_id: keys[cluster_id])
+
+    row_of_test = {_test_number(c): i for i, c in enumerate(rows) if _test_number(c)}
+    for num_a, num_b in ROW_SWAPS:
+        if num_a in row_of_test and num_b in row_of_test:
+            i, j = row_of_test[num_a], row_of_test[num_b]
+            rows[i], rows[j] = rows[j], rows[i]
+    return rows
 
 
 def build_dot() -> str:

@@ -287,6 +287,8 @@ def fov_calc(  # pylint: disable=too-many-locals,too-many-statements
     dict
         ``centroid_results_all`` keyed by dither index. Also writes a pickle
         under ``results_write_dir``.
+    dict
+        Requirement ID -> verdict (from metis_1095_fov_check), for log_test_outcome.
     """
     filter_name = run_state["filter_name"]
     fp_mask = run_state.get("fp_mask", "unknown_fp")
@@ -424,17 +426,10 @@ def fov_calc(  # pylint: disable=too-many-locals,too-many-statements
 
     detector = run_state.get("detector", "unknown")
 
-    if detector == "LM":
-        fov_min, fov_max = 10.0, 11.0
-    elif detector == "N":
-        fov_min, fov_max = 12.48, 13.97
-    else:
-        raise ValueError(f"Detector {detector} not supported")
-    pass_fail_all = bool(
-        fov_min < effective_fov_x_arcsec < fov_max
-        and fov_min < effective_fov_y_arcsec < fov_max
+    verdict, (fov_min, fov_max) = metis_1095_fov_check(
+        effective_fov_x_arcsec, effective_fov_y_arcsec, detector
     )
-    verdict = "PASS" if pass_fail_all else "FAIL"
+    pass_fail_all = verdict == "PASS"
 
     logging.info("--------------------------------")
     logging.info("--------------------------------")
@@ -501,4 +496,76 @@ def fov_calc(  # pylint: disable=too-many-locals,too-many-statements
         )
     logging.info("Saved FOV analysis results to %s", abs_file_name_pickle)
 
-    return centroid_results_all
+    return centroid_results_all, {"METIS-1095": verdict}
+
+
+@pipeline_stage(
+    name="metis_1095_fov_check",
+    depends_on=("fov_calc",),
+    cluster=CLUSTER_FOV,
+    cluster_color=COLOR_FOV,
+    label="METIS-1095: FoV",
+)
+def metis_1095_fov_check(effective_fov_x_arcsec, effective_fov_y_arcsec, detector):
+    """
+    METIS-1095: the FoV shall be 10.0 +1.0/-0.0 arcsec for the LM-arm and 13.47
+    +0.50/-0.99 arcsec for the N-arm of the IMG. Both the x and y FoV must be in range.
+
+    INPUTS:
+    - effective_fov_x_arcsec, effective_fov_y_arcsec (float): measured FoV (fov_calc)
+    - detector (str): 'LM' or 'N'
+
+    OUTPUTS:
+    - verdict (str): PASS or FAIL
+    - (fov_min, fov_max) (tuple[float, float]): the FoV range (arcsec)
+    """
+    if detector == "LM":
+        fov_min, fov_max = 10.0, 11.0
+    elif detector == "N":
+        fov_min, fov_max = 12.48, 13.97
+    else:
+        raise ValueError(f"Detector {detector} not supported")
+    passed = bool(
+        fov_min < effective_fov_x_arcsec < fov_max
+        and fov_min < effective_fov_y_arcsec < fov_max
+    )
+    return ("PASS" if passed else "FAIL"), (fov_min, fov_max)
+
+
+@pipeline_stage(
+    name="img_01_test_outcome",
+    depends_on=("metis_1095_fov_check",),
+    cluster=CLUSTER_FOV,
+    cluster_color=COLOR_FOV,
+    label="IMG-OPT-01 pass/fail",
+)
+def log_test_outcome(verdicts, run_label):
+    """
+    Decide and log the pass/fail of each IMG-OPT-01 requirement, and of the whole test.
+
+    Overall: PASS only if all requirements pass; FAIL if any fails; else INCONCLUSIVE.
+    (Only METIS-1095 for now.)
+
+    INPUTS:
+    - verdicts (dict): requirement ID (e.g. 'METIS-1095') -> verdict (PASS, FAIL or
+      INCONCLUSIVE)
+    - run_label (str): the analysis run the verdicts are for (filter, run label)
+
+    OUTPUTS:
+    - verdict_overall (str): PASS, FAIL or INCONCLUSIVE
+    """
+    logging.info("--------------------------------------------------")
+    logging.info("--------------------------------------------------")
+    logging.info("Run: %s", run_label)
+    for req_id, verdict in verdicts.items():
+        logging.info("%s: %s", req_id, verdict)
+    logging.info("--------------------------------------------------")
+    if all(v == "PASS" for v in verdicts.values()):
+        verdict_overall = "PASS"
+    elif any(v == "FAIL" for v in verdicts.values()):
+        verdict_overall = "FAIL"
+    else:
+        verdict_overall = "INCONCLUSIVE"
+    logging.info("IMG 01 FOV TEST: %s", verdict_overall)
+    logging.info("--------------------------------------------------")
+    return verdict_overall

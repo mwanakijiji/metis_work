@@ -83,10 +83,10 @@ LM_OBS_CONFIGS = [
 
 
 @pipeline_stage(
-    name="generate_distortion_sim",
+    name="sim_img_02_grid_frames",
     cluster=CLUSTER_DISTORTION,
     cluster_color=COLOR_DISTORTION,
-    label="Generate distortion sims",
+    label="SIM pinhole-grid frames (no injection)",
 )
 def generate_distortion_data(instrument, out_dir, saturation_adu):
     """
@@ -168,6 +168,13 @@ def generate_distortion_data(instrument, out_dir, saturation_adu):
     return abs_file_name_write, dit_info
 
 
+@pipeline_stage(
+    name="generate_distortion_sim",
+    depends_on=("sim_img_02_grid_frames",),
+    cluster=CLUSTER_DISTORTION,
+    cluster_color=COLOR_DISTORTION,
+    label="Generate distortion sims",
+)
 def main():
     """Simulate the IMG-OPT-02 distortion data for each observing configuration."""
 

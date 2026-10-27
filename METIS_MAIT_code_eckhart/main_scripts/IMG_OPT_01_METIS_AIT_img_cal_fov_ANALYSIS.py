@@ -7,7 +7,7 @@ Analysis of simulated images written out by IMG_OPT_01_METIS_AIT_img_cal_fov_SIM
 import datetime
 import logging
 
-from modules.backbone_img_opt_01_fov import fov_calc
+from modules.backbone_img_opt_01_fov import fov_calc, log_test_outcome
 from modules.config_common import load_observing_config
 from modules.helpers import load_config_and_pipe, setup_logging
 from modules.tbd_warnings import log_tbd_distortion, stamp_all_saved_figures
@@ -76,7 +76,11 @@ def main():
                 / 1000.0
                 * float(state.get("illuminated_pixels_x", 0)),
             )
-        fov_calc(run_state=state, stem=stem)
+        _, verdicts = fov_calc(run_state=state, stem=stem)
+        log_test_outcome(
+            verdicts,
+            f"{state.get('filter_name')} {state.get('run_label', '')}".strip(),
+        )
         # the verdict just logged is provisional
         log_tbd_distortion(
             f"IMG-OPT-01 ANALYSIS, {state.get('filter_name')} "
