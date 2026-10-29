@@ -321,6 +321,7 @@ def metis_5838_attenuation(result_obj, observing_config):
     plot_file_name = os.path.join(
         slc.results_dir_of(result_obj), f"metis_5838_{fits_stem}.png"
     )
+    os.makedirs(os.path.dirname(plot_file_name), exist_ok=True)
     fig.savefig(plot_file_name)
     logging.info("Saved plot of METIS-5838 scattered irradiance to %s", plot_file_name)
     plt.close(fig)
@@ -445,6 +446,7 @@ def metis_9522_check(result_obj, observing_config):
         slc.results_dir_of(result_obj),
         f"metis_9522_brightness_spectrum_{fits_stem}.png",
     )
+    os.makedirs(os.path.dirname(plot_file_name), exist_ok=True)
     fig.savefig(plot_file_name)
     logging.info("Saved plot of brightness spectrum to %s", plot_file_name)
     plt.close(fig)

@@ -140,18 +140,6 @@ def rows_from_data_states(manifest_rows, data_states_file, config_observing):
     return rows
 
 
-def _local_filter_paths(leaf_names):
-    """
-    Filter-curve paths in the observing config ('/METIS/filters/...') resolve inside the
-    podman container; outside it, fall back to the copy under inst_pkgs/.
-    """
-    resolved = {}
-    for name, leaf in leaf_names.items():
-        local = ROOT / "inst_pkgs" / leaf.lstrip("/")
-        resolved[name] = leaf if os.path.exists(leaf) or not local.exists() else str(local)
-    return resolved
-
-
 def cutout_around_peak(image, edge):
     """
     Square cutout of side ``edge`` (native pixels) around the brightest pixel of a lightly
@@ -200,9 +188,6 @@ def analyze_one_image(file_name, row, source_type, config_observing, out_dir):
     config_row["pinhole_diam_um"] = copy.deepcopy(config_row["pinhole_diam_um"])
     config_row["pinhole_diam_um"][band] = (
         float(row["d_ph_um"]) if source_type == "PH" else None
-    )
-    config_row["polychromatic_observing_filters_leaf_name"] = _local_filter_paths(
-        config_row["polychromatic_observing_filters_leaf_name"]
     )
 
     image, _ = load_grid_data_from_fits(file_name, hdu_index=1)

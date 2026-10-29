@@ -144,6 +144,7 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
         plot_file_name = os.path.join(
             results_dir, f"stray_light_brightness_spectrum_{fits_stem}.png"
         )
+        os.makedirs(os.path.dirname(plot_file_name), exist_ok=True)
         fig.savefig(plot_file_name)
         logging.info("Saved plot of (empty) brightness spectrum to %s", plot_file_name)
         plt.close(fig)
@@ -284,6 +285,7 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
     plot_file_name = os.path.join(
         results_dir, f"stray_light_brightness_spectrum_{fits_stem}.png"
     )
+    os.makedirs(os.path.dirname(plot_file_name), exist_ok=True)
     fig.savefig(plot_file_name)
     logging.info("Saved plot of brightness spectrum to %s", plot_file_name)
     plt.close(fig)
@@ -329,6 +331,7 @@ def stray_light_brightness_spectrum(result_obj, observing_config):
     regions_plot_file_name = os.path.join(
         results_dir, f"stray_light_regions_{fits_stem}.png"
     )
+    os.makedirs(os.path.dirname(regions_plot_file_name), exist_ok=True)
     fig.savefig(regions_plot_file_name)
     logging.info(
         "Saved plot of stray light region locations to %s", regions_plot_file_name

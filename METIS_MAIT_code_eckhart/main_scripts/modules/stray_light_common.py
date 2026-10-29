@@ -775,6 +775,7 @@ def _plot_segmentation(tv, foreground, label_map, method, plot_file_name):
     for ax in axs:
         ax.set_aspect("equal")
     fig.suptitle(f"Stray light segmentation: {method}")
+    os.makedirs(os.path.dirname(plot_file_name), exist_ok=True)
     fig.savefig(plot_file_name)
     logging.info("Saved plot of stray light segmentation to %s", plot_file_name)
     plt.close(fig)
@@ -1243,6 +1244,7 @@ def _plot_segmentation_combined(
         fontsize=10,
     )
     ax.legend(loc="upper right", fontsize=8)
+    os.makedirs(os.path.dirname(plot_file_name), exist_ok=True)
     fig.savefig(plot_file_name)
     logging.info(
         "Saved plot of combined stray light segmentation to %s", plot_file_name
@@ -1319,6 +1321,7 @@ def _write_segmentation_combined_fits(
     )
     hdus.append(final_hdu)
 
+    os.makedirs(os.path.dirname(fits_file_name), exist_ok=True)
     fits.HDUList(hdus).writeto(fits_file_name, overwrite=True)
     logging.info(
         "Saved FITS file of combined stray light segmentation to %s", fits_file_name

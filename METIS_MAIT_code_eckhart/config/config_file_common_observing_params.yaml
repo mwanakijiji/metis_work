@@ -24,25 +24,25 @@ monochromatic_observing_filters_lm:
   HCI_M: 4.95e-6
 
 # file names of actual filter curves
-# paths are pre-pended in the code with
-# PKGS_DIR = (Path(__file__).resolve().parent / "inst_pkgs").resolve()
+# paths are relative to the IRDB directory (irdb_dir in config/paths.yaml), and are
+# made absolute in backbone_img_03_psf_quality.resolve_config_for_masks
 polychromatic_observing_filters_lm_leaf_name:
-  short-L: '/METIS/filters/TC_filter_short-L.dat'
-  Lp: '/METIS/filters/TC_filter_Lp.dat'
-  L_spec: '/METIS/filters/TC_filter_L_spec.dat'
-  Mp: '/METIS/filters/TC_filter_Mp.dat'
-  M_spec: '/METIS/filters/TC_filter_M_spec.dat'
-  Br_alpha: '/METIS/filters/TC_filter_Br_alpha.dat'
-  Br_alpha_ref: '/METIS/filters/TC_filter_Br_alpha_ref.dat'
-  PAH_3.3: '/METIS/filters/TC_filter_PAH_3.3.dat'
-  PAH_3.3_ref: '/METIS/filters/TC_filter_PAH_3.3_ref.dat'
-  CO_1-0_ice: '/METIS/filters/TC_filter_CO_1-0_ice.dat'
-  CO_ref: '/METIS/filters/TC_filter_CO_ref.dat'
-  H2O-ice: '/METIS/filters/TC_filter_H2O-ice.dat'
-  IB_4.05: '/METIS/filters/TC_filter_IB_4.05.dat'
-  HCI_L_short: '/METIS/filters/TC_filter_HCI_L_short.dat'
-  HCI_L_long: '/METIS/filters/TC_filter_HCI_L_long.dat'
-  HCI_M: '/METIS/filters/TC_filter_HCI_M.dat'
+  short-L: 'METIS/filters/TC_filter_short-L.dat'
+  Lp: 'METIS/filters/TC_filter_Lp.dat'
+  L_spec: 'METIS/filters/TC_filter_L_spec.dat'
+  Mp: 'METIS/filters/TC_filter_Mp.dat'
+  M_spec: 'METIS/filters/TC_filter_M_spec.dat'
+  Br_alpha: 'METIS/filters/TC_filter_Br_alpha.dat'
+  Br_alpha_ref: 'METIS/filters/TC_filter_Br_alpha_ref.dat'
+  PAH_3.3: 'METIS/filters/TC_filter_PAH_3.3.dat'
+  PAH_3.3_ref: 'METIS/filters/TC_filter_PAH_3.3_ref.dat'
+  CO_1-0_ice: 'METIS/filters/TC_filter_CO_1-0_ice.dat'
+  CO_ref: 'METIS/filters/TC_filter_CO_ref.dat'
+  H2O-ice: 'METIS/filters/TC_filter_H2O-ice.dat'
+  IB_4.05: 'METIS/filters/TC_filter_IB_4.05.dat'
+  HCI_L_short: 'METIS/filters/TC_filter_HCI_L_short.dat'
+  HCI_L_long: 'METIS/filters/TC_filter_HCI_L_long.dat'
+  HCI_M: 'METIS/filters/TC_filter_HCI_M.dat'
 
 # N-band equivalents of the two blocks above; central wavelengths are
 # transmission-weighted means of the TC_filter_*.dat curves (same method as LM)
@@ -55,12 +55,12 @@ monochromatic_observing_filters_n:
   Ne_II: 12.739e-6
 
 polychromatic_observing_filters_n_leaf_name:
-  N1: '/METIS/filters/TC_filter_N1.dat'
-  N2: '/METIS/filters/TC_filter_N2.dat'
-  N3: '/METIS/filters/TC_filter_N3.dat'
-  PAH_8.6: '/METIS/filters/TC_filter_PAH_8.6.dat'
-  S_IV: '/METIS/filters/TC_filter_S_IV.dat'
-  Ne_II: '/METIS/filters/TC_filter_Ne_II.dat'
+  N1: 'METIS/filters/TC_filter_N1.dat'
+  N2: 'METIS/filters/TC_filter_N2.dat'
+  N3: 'METIS/filters/TC_filter_N3.dat'
+  PAH_8.6: 'METIS/filters/TC_filter_PAH_8.6.dat'
+  S_IV: 'METIS/filters/TC_filter_S_IV.dat'
+  Ne_II: 'METIS/filters/TC_filter_Ne_II.dat'
 
 # side length [native pixels] of the PSF cutout; lambda/D is ~2.5x larger in pixels in N
 cutout_edge_native:

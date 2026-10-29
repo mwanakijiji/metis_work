@@ -3,7 +3,6 @@
 import logging
 import os
 import time
-from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -513,15 +512,10 @@ def fit_annular_aperture_fixed_parameters(
     # generate a fixed model PSF (output in 1D, for vestigial reasons); note this
     # involves oversampled images
     if polychromatic:
-        filters_stem = str(
-            (Path(__file__).resolve().parent / "inst_pkgs").resolve()
-        )  # stem path of METIS packages
-        filter_file_leaf = config_observing[
-            "polychromatic_observing_filters_leaf_name"
-        ][
+        # absolute (see resolve_config_for_masks)
+        filter_file_abs = config_observing["polychromatic_observing_filters_leaf_name"][
             filter_name
-        ]  # leaf path of filter file name
-        filter_file_abs = os.path.join(filters_stem, filter_file_leaf)
+        ]
         logging.info(
             "Making a polychromatic PSF for filter file: %s",
             os.path.basename(filter_file_abs),

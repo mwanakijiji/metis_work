@@ -194,6 +194,7 @@ def process_one_psf_image_distortion(
         results_write_dir,
         f"fyi_plot_oversampled_region_around_psf_{num_coord}.png",
     )
+    os.makedirs(os.path.dirname(file_name_plot), exist_ok=True)
     plt.savefig(file_name_plot)
     logging.info("Saved %s", file_name_plot)
     plt.close()
@@ -423,6 +424,7 @@ def image_distortion(
         f"centroid_results_all_{fp_mask}_{pp_mask}_{filter_name}.pkl"
     )
     abs_file_name_pickle = os.path.join(results_write_dir, basename_file_name_pickle)
+    os.makedirs(os.path.dirname(abs_file_name_pickle), exist_ok=True)
     with open(abs_file_name_pickle, "wb") as f:
         pickle.dump(
             {

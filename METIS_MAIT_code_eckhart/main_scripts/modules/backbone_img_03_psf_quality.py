@@ -18,6 +18,7 @@ import numpy as np
 from pipeline_registry import CLUSTER_PSF, COLOR_PSF, pipeline_stage
 
 from .helpers import fit_psf_gaussian_from_native_array, load_config_and_pipe
+from .paths import irdb_dir
 from .psf_grid_prep import (
     load_grid_data_from_fits,
     oversample_1st_pass_centroid,
@@ -78,6 +79,7 @@ def _save_blinkable_cookie_fyi_plot(
     ax.set_title(title, fontsize=10)
     fig.colorbar(im, ax=ax, fraction=0.055, pad=0.02)
     # No bbox_inches="tight" — keeps identical width×height in pixels across plots.
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
     fig.savefig(out_path, dpi=_COOKIE_FYI_DPI)
     plt.close(fig)
 
@@ -103,7 +105,8 @@ def resolve_config_for_masks(
         Copy of ``config_observing`` with ``D_aperture`` taken from
         ``D_aperture_by_pupil_mask[pp_mask]`` (if listed), plus the band-neutral keys
         ``band``, ``pixel_scale_mas``, ``monochromatic_observing_filters``,
-        ``polychromatic_observing_filters_leaf_name`` and ``cutout_edge_native``.
+        ``polychromatic_observing_filters_leaf_name`` (absolute filter curve paths,
+        under the IRDB) and ``cutout_edge_native``.
     """
     config_resolved = dict(config_observing)
 
@@ -135,9 +138,13 @@ def resolve_config_for_masks(
     config_resolved["monochromatic_observing_filters"] = config_observing[
         f"monochromatic_observing_filters_{band}"
     ]
-    config_resolved["polychromatic_observing_filters_leaf_name"] = config_observing[
-        f"polychromatic_observing_filters_{band}_leaf_name"
-    ]
+    # filter curve paths in the config are relative to the IRDB; make them absolute
+    config_resolved["polychromatic_observing_filters_leaf_name"] = {
+        name: os.path.join(irdb_dir(), leaf)
+        for name, leaf in config_observing[
+            f"polychromatic_observing_filters_{band}_leaf_name"
+        ].items()
+    }
     config_resolved["cutout_edge_native"] = int(
         config_observing.get("cutout_edge_native", {}).get(band, 31)
     )

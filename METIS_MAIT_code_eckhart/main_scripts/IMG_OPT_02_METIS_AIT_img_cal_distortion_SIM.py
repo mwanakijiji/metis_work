@@ -158,6 +158,7 @@ def generate_distortion_data(instrument, out_dir, saturation_adu):
         f"IMG_OPT_02_wcu_focal_mask_bckgrnd_subted_{instrument['fp_mask']}"
         f"_pupil_mask_{instrument['pp_mask']}_filter_{instrument['obs_filter']}.fits",
     )
+    os.makedirs(os.path.dirname(abs_file_name_write), exist_ok=True)
     hdul_new.writeto(abs_file_name_write, overwrite=True)
     logging.info("Saved %s", abs_file_name_write)
     logging.info(

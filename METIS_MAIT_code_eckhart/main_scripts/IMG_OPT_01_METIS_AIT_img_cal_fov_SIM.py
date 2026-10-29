@@ -414,7 +414,7 @@ def main():
     logging.info("FYI plot directory: %s", results_dir)
     # uncomment to (re-)download the IRDB packages (overwrites them in the IRDB)
     # sim.download_packages(
-    #     ["METIS", "ELT", "Armazones"], save_dir=sim_common.IRDB_DIR
+    #   ["METIS", "ELT", "Armazones"], save_dir=sim_common.IRDB_DIR
     # )
     sim_common.setup_scopesim()
 
