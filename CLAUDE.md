@@ -13,13 +13,15 @@ most other directories in `metis_work/` (`playing_with_scopesim/`, `metis-drs-se
 
 - Everything runs inside the podman container `edps-jupyter` (Python + ScopeSim 0.11.2,
   photutils, scikit-image, OpenCV; see `METIS_MAIT_code_eckhart/requirements.txt`). The
-  host's `~/Desktop` is mounted at `/podman-share`, and scripts hard-code paths such as
-  `/podman-share/metis_work/METIS_MAIT_code_eckhart/`. The host Python lacks these
-  packages, so IDE "import could not be resolved" warnings are expected.
-- The ScopeSim IRDB (`METIS/`, `ELT/`, `Armazones/` packages) lives in `~/Desktop`
-  (= `/podman-share`); SIM scripts call `sim_common.setup_scopesim()`, i.e.
-  `sim.link_irdb("../../../")` relative to `main_scripts/`, so run them from that
-  directory.
+  host's `~/Desktop` is mounted at `/podman-share`. On the host, the conda env
+  `~/miniconda3/envs/metis` also has the packages.
+- Machine-specific paths are in `METIS_MAIT_code_eckhart/config/paths.yaml`, read by
+  `modules/paths.py`: `project_root` (the scripts' `stem = project_root()`; the one line
+  to change when switching between host and container) and `irdb_dir` (the ScopeSim IRDB,
+  `METIS/`, `ELT/`, `Armazones/` packages; default `irdb/` under the project root,
+  gitignored). SIM scripts call `sim_common.setup_scopesim()`, i.e.
+  `sim.link_irdb(sim_common.IRDB_DIR)`. Run scripts from `main_scripts/` (for the
+  `from modules...` imports).
 - The share is on iCloud: `OSError: [Errno 35] Resource deadlock avoided` means an
   evicted (dataless) file; read it on the host (e.g. `cat file > /dev/null`) to fetch it.
 - A bare `Killed` with no traceback is the container OOM killer; full-frame images are
@@ -92,7 +94,7 @@ Data flow and conventions:
   with per-file analysis options, and PSF position guesses. Data-state `file_name`s are
   relative to `METIS_MAIT_code_eckhart/`.
 - Everything a script writes goes under `METIS_MAIT_code_eckhart/` (stem
-  `/podman-share/metis_work/METIS_MAIT_code_eckhart/`, never `playing_with_scopesim/`):
+  `project_root()` from `config/paths.yaml`, never `playing_with_scopesim/`):
   simulated data in `data/IMG_OPT_<NN>_<test name>_simmed_data/` (e.g.
   `data/IMG_OPT_04_stray_light_simmed_data/`), logs in `logs/<...>_logs/`, analysis
   results (plots, FITS) in `results/IMG_OPT_<NN>_<test name>_analysis_results/` (e.g.

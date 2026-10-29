@@ -10,6 +10,7 @@ import logging
 from modules.backbone_img_opt_01_fov import fov_calc, log_test_outcome
 from modules.config_common import load_observing_config
 from modules.helpers import load_config_and_pipe, setup_logging
+from modules.paths import project_root
 from modules.tbd_warnings import log_tbd_distortion, stamp_all_saved_figures
 
 # Reqs.:
@@ -26,7 +27,7 @@ DETECTOR_KEYS = {"LM": "img_lm", "N": "img_n"}
 def main():
     """Run the IMG-OPT-01 field-of-view analysis on the simulated frames."""
 
-    stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
+    stem = project_root()
     analysis_states_config_file = (
         stem + "config/config_file_IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS.yaml"
     )

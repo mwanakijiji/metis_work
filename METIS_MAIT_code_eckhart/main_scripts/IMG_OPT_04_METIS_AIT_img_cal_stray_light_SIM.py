@@ -53,6 +53,7 @@ import modules.backbone_img_opt_04_stray_light as backbone
 from modules import sim_common
 from modules.config_common import load_observing_config
 from modules.helpers import load_config_and_pipe
+from modules.paths import project_root
 from pipeline_registry import (  # pylint: disable=import-error,wrong-import-order
     CLUSTER_STRAY,
     COLOR_STRAY,
@@ -253,7 +254,7 @@ def main():
     Generate IMG-OPT-04 stray-light simulations, one set per requirement, as set in the
     scenario config.
     """
-    stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
+    stem = project_root()
     # write simulated data here, where the ANALYSIS script reads it
     out_dir = stem + "data/IMG_OPT_04_stray_light_simmed_data/"
 
@@ -264,7 +265,7 @@ def main():
     logging.info("Simmed file output directory: %s", out_dir)
     # uncomment to (re-)download the IRDB packages (overwrites them in the IRDB)
     # sim.download_packages(
-    #     ["METIS", "ELT", "Armazones"], save_dir=sim_common.IRDB_REL_PATH
+    #     ["METIS", "ELT", "Armazones"], save_dir=sim_common.IRDB_DIR
     # )
     sim_common.setup_scopesim()
 

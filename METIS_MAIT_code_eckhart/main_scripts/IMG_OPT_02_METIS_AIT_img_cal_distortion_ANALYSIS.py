@@ -19,6 +19,7 @@ from modules.backbone_img_opt_02_distortion import (
 )
 from modules.config_common import load_observing_config
 from modules.helpers import load_config_and_pipe, setup_logging
+from modules.paths import project_root
 from modules.tbd_warnings import log_tbd_distortion, stamp_all_saved_figures
 
 # Make simulated data for the IMG-OPT-02 image distorition test
@@ -47,7 +48,7 @@ from modules.tbd_warnings import log_tbd_distortion, stamp_all_saved_figures
 def main():
     """Run the IMG-OPT-02 distortion analysis for each data state."""
 
-    stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
+    stem = project_root()
     # config file with the data states (i.e., how to analyze each PSF)
     data_states_config_file = stem + "config/config_file_IMG_02_strehl_runs.yaml"
 

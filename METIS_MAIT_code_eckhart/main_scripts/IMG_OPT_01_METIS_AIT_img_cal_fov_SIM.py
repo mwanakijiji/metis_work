@@ -42,6 +42,7 @@ from skimage.measure import block_reduce
 from modules import sim_common
 from modules.config_common import load_observing_config
 from modules.helpers import load_config_and_pipe
+from modules.paths import project_root
 from modules.tbd_warnings import add_tbd_banner, log_tbd_distortion
 from pipeline_registry import (  # pylint: disable=import-error,wrong-import-order
     CLUSTER_FOV,
@@ -399,7 +400,7 @@ def main():
     Generate IMG-OPT-01 FoV simulations, one set per requirement, as set in the
     scenario config.
     """
-    stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
+    stem = project_root()
     out_dir = stem + "data/IMG_OPT_01_fov_simmed_data/"
     # FYI plots of the simulated data go with the test's results
     results_dir = stem + "results/IMG_OPT_01_fov_analysis_results/"
@@ -413,7 +414,7 @@ def main():
     logging.info("FYI plot directory: %s", results_dir)
     # uncomment to (re-)download the IRDB packages (overwrites them in the IRDB)
     # sim.download_packages(
-    #     ["METIS", "ELT", "Armazones"], save_dir=sim_common.IRDB_REL_PATH
+    #     ["METIS", "ELT", "Armazones"], save_dir=sim_common.IRDB_DIR
     # )
     sim_common.setup_scopesim()
 

@@ -12,6 +12,7 @@ from astropy.io import fits
 import modules.backbone_img_03_psf_quality as pq
 from modules.config_common import load_observing_config
 from modules.helpers import load_config_and_pipe, setup_logging
+from modules.paths import project_root
 from modules.strehl_fcns import imaging_band_from_fp_mask
 
 
@@ -94,7 +95,7 @@ def log_injected_truth(file_name_abs):
 def main():
     """Run the IMG-OPT-03 Strehl analysis for each data state."""
 
-    stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
+    stem = project_root()
     # config file with the data states (i.e., how to analyze each PSF)
     data_states_config_file = (
         stem + "config/config_file_IMG_OPT_03_psf_quality_data_states.yaml"
@@ -135,6 +136,9 @@ def main():
         results_write_dir = merged["results_write_dir"]
         if not results_write_dir.startswith("/"):
             merged["results_write_dir"] = stem + results_write_dir
+        coords_file = merged["config_coords_guesses_file_name_abs"]
+        if not coords_file.startswith("/"):
+            merged["config_coords_guesses_file_name_abs"] = stem + coords_file
         data_states.append(merged)
 
     # loop over each data state (which likely means a single input FITS file; but that

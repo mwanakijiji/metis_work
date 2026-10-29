@@ -20,7 +20,7 @@ defaults:
   psfs_subset: 1
   # fit_method: 'curve_fit' (default) or 'amoeba' for annular aperture free-parameter fit
   fit_method: curve_fit
-  config_coords_guesses_file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/config/config_file_IMG_OPT_03_psf_quality_coords_guesses.yaml
+  config_coords_guesses_file_name_abs: config/config_file_IMG_OPT_03_psf_quality_coords_guesses.yaml
   results_write_dir: results/IMG_OPT_03_psf_quality_analysis_results/
 
 runs:
@@ -42,19 +42,19 @@ runs:
     file_name_abs: data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_METIS-1408-1409_N2_CLS-N_pass.fits
     fp_mask: pinhole_n
     pp_mask: CLS-N
-    config_coords_guesses_file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/config/config_file_IMG_OPT_03_psf_quality_coords_guesses_pinhole_n.yaml
+    config_coords_guesses_file_name_abs: config/config_file_IMG_OPT_03_psf_quality_coords_guesses_pinhole_n.yaml
 
   - filter_name: N2
     file_name_abs: data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_METIS-1408-1409_N2_CLS-N_near.fits
     fp_mask: pinhole_n
     pp_mask: CLS-N
-    config_coords_guesses_file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/config/config_file_IMG_OPT_03_psf_quality_coords_guesses_pinhole_n.yaml
+    config_coords_guesses_file_name_abs: config/config_file_IMG_OPT_03_psf_quality_coords_guesses_pinhole_n.yaml
 
   - filter_name: N2
     file_name_abs: data/IMG_OPT_03_psf_quality_simmed_data/IMG_OPT_03_METIS-1408-1409_N2_CLS-N_fail.fits
     fp_mask: pinhole_n
     pp_mask: CLS-N
-    config_coords_guesses_file_name_abs: /podman-share/metis_work/METIS_MAIT_code_eckhart/config/config_file_IMG_OPT_03_psf_quality_coords_guesses_pinhole_n.yaml
+    config_coords_guesses_file_name_abs: config/config_file_IMG_OPT_03_psf_quality_coords_guesses_pinhole_n.yaml
 
   # METIS-2864 (3.3 um, LM)
   - filter_name: PAH_3.3

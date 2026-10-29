@@ -44,12 +44,12 @@ from astropy import units as u
 from astropy.io import fits
 
 from .helpers import pipe_2_log, setup_logging
+from .paths import irdb_dir
 
 BB_TEMP = 1000 * u.K
 
-# IRDB (METIS/, ELT/, Armazones/ packages) location relative to main_scripts/, i.e.
-# ~/Desktop = /podman-share; run the SIM scripts from main_scripts/
-IRDB_REL_PATH = "../../../"
+# IRDB (METIS/, ELT/, Armazones/ packages) location, absolute; set in config/paths.yaml
+IRDB_DIR = irdb_dir()
 
 # obs_mode -> detector key used in the observing config (pixel_scales, saturation_adu)
 DETECTOR_KEYS = {"wcu_img_lm": "img_lm", "wcu_img_n": "img_n"}
@@ -71,7 +71,14 @@ def start_sim_logging(stem, log_subdir, log_stub, now):
 
 def setup_scopesim():
     """Point ScopeSim at the local IRDB and log the versions of things."""
-    sim.link_irdb(IRDB_REL_PATH)
+    logging.info("IRDB directory: %s", IRDB_DIR)
+    if not os.path.isdir(os.path.join(IRDB_DIR, "METIS")):
+        logging.warning(
+            "No METIS package in %s; download the IRDB packages by uncommenting the "
+            "sim.download_packages line in the SIM script's main()",
+            IRDB_DIR,
+        )
+    sim.link_irdb(IRDB_DIR)
     # keep commented out: it re-extracts the packages over the IRDB on every run
     # sim.download_packages(["METIS", "ELT", "Armazones"])
     pipe_2_log(sim.bug_report, msg="ScopeSim bug report")

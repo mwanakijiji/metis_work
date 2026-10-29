@@ -13,6 +13,7 @@ import modules.backbone_img_opt_06_out_of_field as oof
 import modules.stray_light_common as slc
 from modules.config_common import load_observing_config
 from modules.helpers import load_config_and_pipe, setup_logging
+from modules.paths import project_root
 from modules.psf_grid_prep import load_fits_data
 
 # Analyze data for the IMG-OPT-06 out-of-field stray light test
@@ -55,7 +56,7 @@ from modules.psf_grid_prep import load_fits_data
 def main():
     """Run the IMG-OPT-06 out-of-field stray light analysis for each data state."""
 
-    stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
+    stem = project_root()
     # config file with the data states, incl. file names
     data_states_config_file = (
         stem + "config/config_file_IMG_OPT_06_out_of_field_data_states.yaml"

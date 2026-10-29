@@ -45,6 +45,7 @@ from astropy.io import fits
 
 from modules import sim_common
 from modules.config_common import load_observing_config
+from modules.paths import project_root
 from modules.tbd_warnings import log_tbd_distortion
 from pipeline_registry import (  # pylint: disable=import-error,wrong-import-order
     CLUSTER_DISTORTION,
@@ -179,7 +180,7 @@ def generate_distortion_data(instrument, out_dir, saturation_adu):
 def main():
     """Simulate the IMG-OPT-02 distortion data for each observing configuration."""
 
-    stem = "/podman-share/metis_work/METIS_MAIT_code_eckhart/"
+    stem = project_root()
     # write simulated data here, where the ANALYSIS reads it
     # (config/config_file_IMG_02_strehl_runs.yaml)
     out_dir = stem + "data/IMG_OPT_02_distortion_simmed_data/"
@@ -193,7 +194,7 @@ def main():
     logging.info("Simmed file output directory: %s", out_dir)
     # uncomment to (re-)download the IRDB packages (overwrites them in the IRDB)
     # sim.download_packages(
-    #     ["METIS", "ELT", "Armazones"], save_dir=sim_common.IRDB_REL_PATH
+    #     ["METIS", "ELT", "Armazones"], save_dir=sim_common.IRDB_DIR
     # )
     sim_common.setup_scopesim()
 
