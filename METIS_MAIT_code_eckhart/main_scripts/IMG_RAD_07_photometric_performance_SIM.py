@@ -46,7 +46,7 @@ Structure: one function per requirement (simulate_metis_NNNN), driven by the sce
 config/config_file_IMG_RAD_07_phot_performance_SIM.yaml (limits and injected values per
 case) and run by modules.sim_common.run_scenario. Each function writes at least one case
 that clearly passes and one that clearly fails, named
-IMG_RAD_07_<requirement>_<instrument>_<case>[_...].fits (instruments: HCI_L_short on
+IMG_RAD_07_<requirement>_<instrument>_<case>[_...].fits (instruments: Br_alpha on
 the LM detector, N2 on the N detector), with the requirement and the
 injected truth in the primary header:
   REQ_ID    requirement ID, e.g. 'METIS-2594'
@@ -62,7 +62,7 @@ The injection is applied to the ScopeSim signal (flat - dark):
 raw = flat + (factor - 1) * (flat - dark_1), and the written BACKGROUND is an
 independent dark (dark_2), so BCKGD_SUBTED = raw - dark_2 has realistic noise. Images
 are written as float32. All raw readouts peak at <= sim_common.MAX_RAW_FRAC of
-saturation: each base set-up has an ND filter (LM: ND_OD3, N: ND_OD1) and the
+saturation: each base set-up has an ND filter (LM: ND_OD2, N: ND_OD1) and the
 detector's minimum DIT, the DIT is
 checked by sim_common.run_scenario, METIS-2594 levels are capped below that, and the
 METIS-3300 flux steps (fixed BB aperture) are made with ND filters and DITs whose

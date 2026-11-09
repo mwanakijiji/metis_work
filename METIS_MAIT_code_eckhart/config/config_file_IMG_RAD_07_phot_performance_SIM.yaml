@@ -21,13 +21,13 @@
 # the full-aperture flat below saturation at the minimum DIT (!DET.mindit). The DIT is
 # shortened by the SIM only if the raw flat peaks > 0.8 sat.
 instruments:
-  HCI_L_short: # LM (HAWAII-2RG, fast mode)
+  Br_alpha: # LM (HAWAII-2RG, fast mode)
     fp_mask: open
     pp_mask: SPM-LM
     psf_kernel: SPM-LM
-    obs_filter: HCI_L_short
-    # without ND, the flat is ~80x full well at mindit; ND_OD3: raw peak ~0.09 sat
-    nd_filter: ND_OD3
+    obs_filter: Br_alpha
+    # without ND, the flat is ~13x full well at mindit; ND_OD2: raw peak ~0.13 sat
+    nd_filter: ND_OD2
     obs_mode: wcu_img_lm
     dit: 0.04 # s; mindit of the fast mode
     ndit: 1
@@ -102,7 +102,7 @@ requirements:
     # linearly, E_k = E_max * k / n_steps, with E_max putting the raw peak at
     # 0.8 sat / (1 + peak_margin). Per step, the least attenuating ND of nd_filters
     # with DIT = E_k / T_ND >= mindit is used (any ND is safe for saturation, as the
-    # raw peak scales with E; LM ends up on OD3/OD4, N on OD1/OD2). peak_margin covers
+    # raw peak scales with E; LM ends up on OD2/OD3, N on OD1/OD2). peak_margin covers
     # the injected flux error and pattern change (fail case: 1.01 x 1.01) and the
     # detector dark current, which the ND does not attenuate (N: ~500 ADU/s).
     n_steps: 15
