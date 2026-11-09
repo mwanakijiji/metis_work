@@ -369,7 +369,7 @@ SIMULATORS = {
     depends_on=("simulate_metis_2594", "simulate_metis_2883", "simulate_metis_3300"),
     cluster=CLUSTER_PHOT,
     cluster_color=COLOR_PHOT,
-    label="Generate IMG-RAD-07 SIM data",
+    label="Generate photometric-performance sims",
 )
 def main():
     """

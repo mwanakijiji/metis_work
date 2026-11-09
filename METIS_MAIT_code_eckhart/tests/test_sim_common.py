@@ -20,6 +20,7 @@ import IMG_OPT_01_METIS_AIT_img_cal_fov_SIM as sim01  # noqa: E402
 import IMG_OPT_03_METIS_AIT_img_cal_psf_quality_SIM as sim03  # noqa: E402
 import IMG_OPT_04_METIS_AIT_img_stray_light_SIM as sim04  # noqa: E402
 import IMG_OPT_06_METIS_AIT_out_of_field_SIM as sim06  # noqa: E402
+import IMG_OPT_07_pupil_imaging_SIM as sim_opt07  # noqa: E402
 import IMG_RAD_07_photometric_performance_SIM as sim07  # noqa: E402
 import IMG_RAD_09_nominal_background_behavior_SIM as sim09  # noqa: E402
 from modules import sim_common  # noqa: E402
@@ -127,6 +128,7 @@ def test_scenario_configs_are_consistent():
         "config_file_IMG_OPT_03_SIM.yaml": sim03.SIMULATORS,
         "config_file_IMG_OPT_04_stray_light_SIM.yaml": sim04.SIMULATORS,
         "config_file_IMG_OPT_06_outoffield_stray_light_SIM.yaml": sim06.SIMULATORS,
+        "config_file_IMG_OPT_07_pupil_imaging_SIM.yaml": sim_opt07.SIMULATORS,
         "config_file_IMG_RAD_07_phot_performance_SIM.yaml": sim07.SIMULATORS,
         "config_file_IMG_RAD_09_nominal_background_SIM.yaml": sim09.SIMULATORS,
     }

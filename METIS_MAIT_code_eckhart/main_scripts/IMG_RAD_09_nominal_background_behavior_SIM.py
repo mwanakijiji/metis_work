@@ -252,7 +252,7 @@ def sky_context(name, instrument, scenario, observing, run):  # pylint: disable=
     depends_on=("simulate_rad_09_sensitivity",),
     cluster=CLUSTER_NOMBKG,
     cluster_color=COLOR_NOMBKG,
-    label="Generate IMG-RAD-09 SIM data",
+    label="Generate on-sky background sims",
 )
 def main():
     """
