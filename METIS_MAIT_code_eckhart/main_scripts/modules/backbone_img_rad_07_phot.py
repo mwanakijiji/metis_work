@@ -24,9 +24,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy.io import fits
 from pipeline_registry import CLUSTER_PHOT, COLOR_PHOT, pipeline_stage
-from scipy import ndimage
 
 from . import analysis_common
+from .analysis_common import field_mask
 from .psf_grid_prep import load_fits_data
 
 REQUIREMENTS = ("METIS-2594", "METIS-2883", "METIS-3300")  # METIS-2594: stub
@@ -58,18 +58,6 @@ class PhotRunResult:  # pylint: disable=too-many-instance-attributes
 
 
 # ---------------------------------------------------------------- pure helpers
-
-
-def field_mask(frame, frac=0.5, erosion_px=4):
-    """
-    Illuminated field: pixels above frac x the median of the frame (drops the
-    reference-pixel border and anything unilluminated), eroded by erosion_px to avoid
-    the edge (inter-pixel capacitance leaks into the border).
-    """
-    mask = frame > frac * np.median(frame)
-    if erosion_px > 0:
-        mask = ndimage.binary_erosion(mask, iterations=int(erosion_px))
-    return mask
 
 
 def block_stats(frame, mask, block_px, min_fill=0.5):

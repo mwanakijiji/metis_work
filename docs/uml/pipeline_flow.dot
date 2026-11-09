@@ -109,6 +109,18 @@ digraph pipeline {
     img_rad_07_log_test_outcome;
   }
 
+  subgraph cluster_img_rad_09_nominal_background_behaviour {
+    label="IMG-RAD-09 Nominal background behaviour";
+    labeljust=l;
+    style="dashed";
+    color="#e377c2";
+    simulate_rad_09_sensitivity;
+    generate_nominal_background_sim;
+    img_rad_09_sens_10000s_check;
+    img_rad_09_fyi_plots;
+    img_rad_09_test_outcome;
+  }
+
   sim_img_01_metis_1095 [label="SIM METIS-1095: FoV", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
   generate_fov_sim [label="Generate FOV sims", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
   sim_img_02_grid_frames [label="SIM pinhole-grid frames\n(no injection)", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
@@ -124,6 +136,8 @@ digraph pipeline {
   simulate_metis_2883 [label="SIM METIS-2883: flat\nhomogeneity"];
   simulate_metis_3300 [label="SIM METIS-3300: 15\nND+DIT flux steps"];
   generate_phot_performance_sim [label="Generate IMG-RAD-07 SIM\ndata"];
+  simulate_rad_09_sensitivity [label="SIM 10000 s on-sky\nbackground: point-source\nnoise"];
+  generate_nominal_background_sim [label="Generate IMG-RAD-09 SIM\ndata"];
   prepare_psf_grid [label="Load frame, 1st-pass\ncentroids"];
   process_one_psf [label="Fit one PSF"];
   collect_strehls [label="Collect Strehl over FOV"];
@@ -154,6 +168,9 @@ digraph pipeline {
   img_rad_07_metis_3300_check [label="METIS-3300: 15 flux\nsteps, flux and pattern"];
   img_rad_07_fyi_plots [label="FYI plots", style="rounded,dashed,filled"];
   img_rad_07_log_test_outcome [label="IMG-RAD-07 pass/fail"];
+  img_rad_09_sens_10000s_check [label="Point-source sensitivity\nin 10000 s: noise vs.\nlimit"];
+  img_rad_09_fyi_plots [label="FYI plots", style="rounded,dashed,filled"];
+  img_rad_09_test_outcome [label="IMG-RAD-09 pass/fail"];
   populate_result_obj_info [label="Populate result object"];
   centroid_2passes_oversample [label="Centroid PSFs"];
   stray_light_mask_real [label="Mask the real PSF"];
@@ -163,7 +180,7 @@ digraph pipeline {
   img_04_fyi_plots [label="FYI plots", style="rounded,dashed,filled"];
   img_06_fyi_plots [label="FYI plots", style="rounded,dashed,filled"];
 
-  { rank=same; sim_img_01_metis_1095; sim_img_02_grid_frames; sim_img_03_strehl_cases; sim_img_06_metis_5838; sim_img_04_metis_1189_1429; sim_img_04_metis_9522; simulate_metis_2594; simulate_metis_2883; simulate_metis_3300; }
+  { rank=same; sim_img_01_metis_1095; sim_img_02_grid_frames; sim_img_03_strehl_cases; sim_img_06_metis_5838; sim_img_04_metis_1189_1429; sim_img_04_metis_9522; simulate_metis_2594; simulate_metis_2883; simulate_metis_3300; simulate_rad_09_sensitivity; }
   sim_img_01_metis_1095 -> sim_img_02_grid_frames [style=invis];
   sim_img_02_grid_frames -> sim_img_03_strehl_cases [style=invis];
   sim_img_03_strehl_cases -> sim_img_06_metis_5838 [style=invis];
@@ -172,20 +189,23 @@ digraph pipeline {
   sim_img_04_metis_9522 -> simulate_metis_2594 [style=invis];
   simulate_metis_2594 -> simulate_metis_2883 [style=invis];
   simulate_metis_2883 -> simulate_metis_3300 [style=invis];
-  { rank=same; generate_fov_sim; generate_distortion_sim; generate_psf_quality_sim; generate_out_of_field_sim; generate_stray_light_sim; generate_phot_performance_sim; }
+  simulate_metis_3300 -> simulate_rad_09_sensitivity [style=invis];
+  { rank=same; generate_fov_sim; generate_distortion_sim; generate_psf_quality_sim; generate_out_of_field_sim; generate_stray_light_sim; generate_phot_performance_sim; generate_nominal_background_sim; }
   generate_fov_sim -> generate_distortion_sim [style=invis];
   generate_distortion_sim -> generate_psf_quality_sim [style=invis];
   generate_psf_quality_sim -> generate_out_of_field_sim [style=invis];
   generate_out_of_field_sim -> generate_stray_light_sim [style=invis];
   generate_stray_light_sim -> generate_phot_performance_sim [style=invis];
-  { rank=same; fov_calc; image_distortion; prepare_psf_grid; populate_result_obj_info; img_rad_07_metis_2594_check; img_rad_07_metis_2883_check; img_rad_07_metis_3300_check; }
+  generate_phot_performance_sim -> generate_nominal_background_sim [style=invis];
+  { rank=same; fov_calc; image_distortion; prepare_psf_grid; populate_result_obj_info; img_rad_07_metis_2594_check; img_rad_07_metis_2883_check; img_rad_07_metis_3300_check; img_rad_09_sens_10000s_check; }
   fov_calc -> image_distortion [style=invis];
   image_distortion -> prepare_psf_grid [style=invis];
   prepare_psf_grid -> populate_result_obj_info [style=invis];
   populate_result_obj_info -> img_rad_07_metis_2594_check [style=invis];
   img_rad_07_metis_2594_check -> img_rad_07_metis_2883_check [style=invis];
   img_rad_07_metis_2883_check -> img_rad_07_metis_3300_check [style=invis];
-  { rank=same; img_01_fyi_plots; metis_1095_fov_check; img_02_fyi_plots; metis_1097_pixel_scale; metis_3502_residual_distortion; metis_8222_detector_offset; metis_9920_scale_stability; process_one_psf; centroid_2passes_oversample; img_rad_07_fyi_plots; img_rad_07_log_test_outcome; }
+  img_rad_07_metis_3300_check -> img_rad_09_sens_10000s_check [style=invis];
+  { rank=same; img_01_fyi_plots; metis_1095_fov_check; img_02_fyi_plots; metis_1097_pixel_scale; metis_3502_residual_distortion; metis_8222_detector_offset; metis_9920_scale_stability; process_one_psf; centroid_2passes_oversample; img_rad_07_fyi_plots; img_rad_07_log_test_outcome; img_rad_09_fyi_plots; img_rad_09_test_outcome; }
   img_01_fyi_plots -> metis_1095_fov_check [style=invis];
   metis_1095_fov_check -> img_02_fyi_plots [style=invis];
   img_02_fyi_plots -> metis_1097_pixel_scale [style=invis];
@@ -196,6 +216,8 @@ digraph pipeline {
   process_one_psf -> centroid_2passes_oversample [style=invis];
   centroid_2passes_oversample -> img_rad_07_fyi_plots [style=invis];
   img_rad_07_fyi_plots -> img_rad_07_log_test_outcome [style=invis];
+  img_rad_07_log_test_outcome -> img_rad_09_fyi_plots [style=invis];
+  img_rad_09_fyi_plots -> img_rad_09_test_outcome [style=invis];
   { rank=same; img_01_test_outcome; img_02_test_outcome; collect_strehls; stray_light_mask_real; }
   img_01_test_outcome -> img_02_test_outcome [style=invis];
   img_02_test_outcome -> collect_strehls [style=invis];
@@ -226,6 +248,7 @@ digraph pipeline {
   simulate_metis_2594 -> generate_phot_performance_sim [weight=10];
   simulate_metis_2883 -> generate_phot_performance_sim [weight=10];
   simulate_metis_3300 -> generate_phot_performance_sim [weight=10];
+  simulate_rad_09_sensitivity -> generate_nominal_background_sim [weight=10];
   generate_psf_quality_sim -> prepare_psf_grid [weight=10];
   prepare_psf_grid -> process_one_psf [weight=10];
   process_one_psf -> collect_strehls [weight=10];
@@ -268,6 +291,9 @@ digraph pipeline {
   img_rad_07_metis_2594_check -> img_rad_07_log_test_outcome [weight=10];
   img_rad_07_metis_2883_check -> img_rad_07_log_test_outcome [weight=10];
   img_rad_07_metis_3300_check -> img_rad_07_log_test_outcome [weight=10];
+  generate_nominal_background_sim -> img_rad_09_sens_10000s_check [weight=10];
+  img_rad_09_sens_10000s_check -> img_rad_09_fyi_plots [weight=10];
+  img_rad_09_sens_10000s_check -> img_rad_09_test_outcome [weight=10];
   generate_stray_light_sim -> populate_result_obj_info [color="#999999", constraint=false];
   generate_out_of_field_sim -> populate_result_obj_info [color="#999999", constraint=false];
   populate_result_obj_info -> centroid_2passes_oversample [weight=10];

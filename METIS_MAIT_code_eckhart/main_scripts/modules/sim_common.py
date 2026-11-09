@@ -52,7 +52,12 @@ BB_TEMP = 1000 * u.K
 IRDB_DIR = irdb_dir()
 
 # obs_mode -> detector key used in the observing config (pixel_scales, saturation_adu)
-DETECTOR_KEYS = {"wcu_img_lm": "img_lm", "wcu_img_n": "img_n"}
+DETECTOR_KEYS = {
+    "wcu_img_lm": "img_lm",
+    "wcu_img_n": "img_n",
+    "img_lm": "img_lm",  # on sky
+    "img_n": "img_n",  # on sky
+}
 
 # simulated raw readouts must peak at <= this fraction of saturation; DITs are tuned to
 # aim at TARGET_RAW_FRAC, which leaves room for noise and for injected signal
@@ -85,7 +90,7 @@ def setup_scopesim():
 
 
 def detector_key(obs_mode):
-    """Detector key ('img_lm' or 'img_n') of a WCU imaging obs_mode."""
+    """Detector key ('img_lm' or 'img_n') of a WCU or on-sky imaging obs_mode."""
     if obs_mode not in DETECTOR_KEYS:
         raise ValueError(f"No detector key for obs_mode {obs_mode!r}")
     return DETECTOR_KEYS[obs_mode]
@@ -343,6 +348,140 @@ def nd_transmission(metis, name):
 def detector_mindit(metis):
     """Minimum DIT (s) of the detector readout mode (!DET.mindit)."""
     return float(metis.cmds["!DET.mindit"])
+
+
+# ---------------------------------------------------------------- on-sky set-ups
+
+
+def pupil_mask_transmission(pp_mask):
+    """
+    Transmission of pupil mask pp_mask, from the pupil-mask table of the IRDB
+    (METIS/METIS_WCU.yaml, effect 'pupil_masks'), which the on-sky modes do not load.
+    """
+    with open(
+        os.path.join(IRDB_DIR, "METIS", "METIS_WCU.yaml"), encoding="utf-8"
+    ) as file:
+        for doc in yaml.safe_load_all(file):
+            for effect in (doc or {}).get("effects", []):
+                if effect.get("name") == "pupil_masks":
+                    masks = effect["kwargs"]["pupil_masks"]
+                    table = dict(zip(masks["names"], masks["transmissions"]))
+                    if pp_mask not in table:
+                        raise ValueError(
+                            f"Pupil mask {pp_mask} not in the IRDB table: "
+                            f"{sorted(table)}"
+                        )
+                    return float(table[pp_mask])
+    raise ValueError("No pupil_masks effect in METIS_WCU.yaml")
+
+
+def build_sky_optical_train(instrument):
+    """
+    ScopeSim OpticalTrain for an on-sky set-up (obs_mode 'img_lm' / 'img_n': Armazones
+    atmosphere, ELT and METIS, no WCU), observing an empty sky, so a readout is the sky
+    + telescope + instrument background. The pupil mask pp_mask sets the PSF kernel
+    (METIS_psfs/PSF_<pp_mask>.fits, as psf_name does in the WCU modes) and the
+    cold-stop transmission (!OBS.pupil_transmission, from pupil_mask_transmission).
+    The on-sky modes have no focal-plane mask element (fp_mask is a header label).
+    IPC on or off as configured. Sets instrument['psf_kernel'] to pp_mask (headers).
+    """
+    pp_mask = instrument["pp_mask"]
+    transmission = pupil_mask_transmission(pp_mask)
+    # (UserCommands consumes the properties dict)
+    properties = {
+        "!OBS.filter_name": instrument["obs_filter"],
+        "!OBS.pupil_transmission": transmission,
+    }
+    if instrument.get("nd_filter") is not None:
+        properties["!OBS.nd_filter_name"] = instrument["nd_filter"]
+    cmd = sim.UserCommands(
+        use_instrument="METIS",
+        set_modes=[instrument["obs_mode"]],
+        properties=properties,
+    )
+    metis = sim.OpticalTrain(cmd)
+    metis["psf"].update(pupil_mask=pp_mask)
+    instrument["psf_kernel"] = pp_mask
+    logging.info(
+        "Pupil mask %s: PSF kernel PSF_%s.fits, cold-stop transmission %.4f "
+        "(optical train: %s)",
+        pp_mask,
+        pp_mask,
+        transmission,
+        metis.cmds.get("!OBS.pupil_transmission"),
+    )
+    if not instrument.get("intrapixel_capacitance", True):
+        metis["ipc"].include = False
+        logging.info("Turning off inter-pixel capacitance")
+    if metis.cmds.get("!OBS.filter_name") != instrument["obs_filter"]:
+        logging.error(
+            "! ------- OBS filter %s does not match user input %s",
+            metis.cmds.get("!OBS.filter_name"),
+            instrument["obs_filter"],
+        )
+        sys.exit(1)
+    metis.observe(sim.source.source_templates.empty_sky())
+    logging.info(
+        "On-sky optical train: mode %s, filter %s, empty sky observed",
+        instrument["obs_mode"],
+        instrument["obs_filter"],
+    )
+    return metis
+
+
+def readout_sky(metis, dit, ndit):
+    """
+    One readout of the observed (empty) sky: ScopeSim integrates DIT x NDIT and returns
+    the average per DIT (ExposureOutput mode 'average'), with shot and read noise of the
+    whole integration.
+
+    OUTPUTS:
+    - np.ndarray: frame (ADU per DIT)
+    - astropy header: primary header
+    """
+    hdul = metis.readout(dit=float(dit), ndit=int(ndit))[0]
+    frame = hdul[1].data.astype(float)
+    logging.info(
+        "Sky readout: DIT %.4g s, NDIT %s (%.6g s): median %.6g, max %.6g ADU/DIT",
+        dit,
+        ndit,
+        dit * ndit,
+        float(np.median(frame)),
+        float(np.max(frame)),
+    )
+    return frame, hdul[0].header
+
+
+def sky_dit(metis, saturation_adu, fill_frac=0.5, max_frac=MAX_RAW_FRAC):
+    """
+    DIT for on-sky readouts: the background is linear in the DIT, so from a single
+    readout at the minimum DIT, DIT = mindit x fill_frac x saturation / peak; never
+    below mindit. Raises ValueError if the raw peak at that DIT would exceed max_frac of
+    saturation (background too bright even at mindit).
+
+    OUTPUTS:
+    - float: DIT (s)
+    - float: expected raw peak / saturation at that DIT
+    """
+    mindit = detector_mindit(metis)
+    probe, _ = readout_sky(metis, mindit, 1)
+    peak = float(np.max(probe))
+    dit = max(mindit, mindit * fill_frac * saturation_adu / peak)
+    peak_frac = peak * dit / mindit / saturation_adu
+    if peak_frac > max_frac:
+        raise ValueError(
+            f"Sky background peaks at {peak_frac:.3f} of saturation at the minimum "
+            f"DIT {mindit} s (> {max_frac}): use a narrower filter or an ND filter"
+        )
+    logging.info(
+        "Sky DIT: probe peak %.6g ADU at mindit %.3g s -> DIT %.4g s (raw peak %.3f of "
+        "saturation)",
+        peak,
+        mindit,
+        dit,
+        peak_frac,
+    )
+    return dit, peak_frac
 
 
 def take_darks(metis, instrument):

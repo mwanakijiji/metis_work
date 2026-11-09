@@ -12,9 +12,8 @@ most other directories in `metis_work/` (`playing_with_scopesim/`, `metis-drs-se
 ## Environment
 
 - Everything runs inside the podman container `edps-jupyter` (Python + ScopeSim 0.11.2,
-  photutils, scikit-image, OpenCV; see `METIS_MAIT_code_eckhart/requirements.txt`). The
-  host's `~/Desktop` is mounted at `/podman-share`. On the host, the conda env
-  `~/miniconda3/envs/metis` also has the packages.
+  photutils, scikit-image, OpenCV; see `METIS_MAIT_code_eckhart/requirements.txt`). On
+  the host, the conda env `~/miniconda3/envs/metis` also has the packages.
 - Machine-specific paths are in `METIS_MAIT_code_eckhart/config/paths.yaml`, read by
   `modules/paths.py`: `project_root` (the scripts' `stem = project_root()`; the one line
   to change when switching between host and container) and `irdb_dir` (the ScopeSim IRDB,
@@ -22,7 +21,7 @@ most other directories in `metis_work/` (`playing_with_scopesim/`, `metis-drs-se
   gitignored). SIM scripts call `sim_common.setup_scopesim()`, i.e.
   `sim.link_irdb(sim_common.IRDB_DIR)`. Run scripts from `main_scripts/` (for the
   `from modules...` imports).
-- The share is on iCloud: `OSError: [Errno 35] Resource deadlock avoided` means an
+- The host's `~/Desktop` (shared into the container) is on iCloud: `OSError: [Errno 35] Resource deadlock avoided` means an
   evicted (dataless) file; read it on the host (e.g. `cat file > /dev/null`) to fetch it.
 - A bare `Killed` with no traceback is the container OOM killer; full-frame images are
   2048x2048, so avoid one full-frame array per detected object.
@@ -30,7 +29,7 @@ most other directories in `metis_work/` (`playing_with_scopesim/`, `metis-drs-se
 ## Commands (run in the container)
 
 ```bash
-cd /podman-share/metis_work/METIS_MAIT_code_eckhart
+cd METIS_MAIT_code_eckhart   # from metis_work/
 
 # tests (each test file puts main_scripts/ and misc/ on sys.path itself)
 pytest tests/
@@ -133,11 +132,22 @@ go in a shared cluster (e.g. `CLUSTER_STRAY_SHARED` in `stray_light_common.py`) 
 so avoid `/` in them.
 
 ### External Core Context (Read-Only)
-For ScopeSim commands, always reference the architectural and structural conventions found here:
-@/podman-share/metis_work/ScopeSim
+The ScopeSim source is cloned outside this repo at `~/Documents/git.repos/ScopeSim/`
+(added as an additional directory in `.claude/settings.local.json`, with writes denied).
+For ScopeSim commands, consult its conventions there instead of guessing:
+- `scopesim/optics/` (`OpticalTrain`, FOVs, image planes), `scopesim/effects/` (effect
+  classes: PSFs, filters, masks, apertures, electronic/detector effects),
+  `scopesim/detector/`, `scopesim/source/`, `scopesim/commands/` (`UserCommands`, `!`
+  bang-string config), `scopesim/defaults.yaml`, `docs/`.
+- Instrument configs (METIS modes, WCU, filter curves) are in the IRDB (`irdb_dir`),
+  not in ScopeSim itself.
+- The clone may be a newer version than the one installed in the container (0.11.2);
+  check `git -C ~/Documents/git.repos/ScopeSim log` / tags when behaviour differs.
+
+@../ScopeSim/README.md
 
 ### Critical safety rules:
-- The files imported via `@/podman-share/metis_work/ScopeSim` are the raw files of the ScopeSim package
+- `~/Documents/git.repos/ScopeSim/` holds the raw files of the ScopeSim package
 - You have READ-ONLY access to this directory. Use these files only for reference when setting configurations of the simulated telescope or detector, or for consulting supporting information like filter files.
 - NEVER attempt to modify, create, write, or refactor any files located within this external path.
 - All code changes must strictly be written inside the primary project root directory.

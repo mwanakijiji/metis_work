@@ -21,8 +21,10 @@ import IMG_OPT_03_METIS_AIT_img_cal_psf_quality_SIM as sim03  # noqa: E402
 import IMG_OPT_04_METIS_AIT_img_stray_light_SIM as sim04  # noqa: E402
 import IMG_OPT_06_METIS_AIT_out_of_field_SIM as sim06  # noqa: E402
 import IMG_RAD_07_photometric_performance_SIM as sim07  # noqa: E402
+import IMG_RAD_09_nominal_background_behavior_SIM as sim09  # noqa: E402
 from modules import sim_common  # noqa: E402
 from modules.config_common import load_observing_config  # noqa: E402
+from modules import backbone_img_rad_09_nom as nom  # noqa: E402
 
 LIMIT_LE = {"x": {"value": 1.0, "pass_if": "<="}}
 LIMIT_GE = {"x": {"value": 1.0, "pass_if": ">="}}
@@ -126,6 +128,7 @@ def test_scenario_configs_are_consistent():
         "config_file_IMG_OPT_04_stray_light_SIM.yaml": sim04.SIMULATORS,
         "config_file_IMG_OPT_06_outoffield_stray_light_SIM.yaml": sim06.SIMULATORS,
         "config_file_IMG_RAD_07_phot_performance_SIM.yaml": sim07.SIMULATORS,
+        "config_file_IMG_RAD_09_nominal_background_SIM.yaml": sim09.SIMULATORS,
     }
     for file_name, simulators in scenarios.items():
         with open(_ROOT / "config" / file_name, encoding="utf-8") as file:
@@ -273,3 +276,38 @@ def test_metis_3300_steps_legal_and_unsaturated():
         peaks.append(peak_per_exposure * exposure * 1.01 * 1.01)  # fail-case injection
     assert max(peaks) <= max_raw
     assert np.allclose(np.diff(peaks), peaks[0])  # smooth (linear) progression
+
+
+# IMG-RAD-09: point-source noise of the on-sky background (aperture sums)
+
+
+def test_aperture_radius_px():
+    # lambda/D for 3.82 um on 39.146 m is ~20.1 mas, i.e. ~3.68 px at 5.47 mas/px
+    radius = nom.aperture_radius_px(3.82e-6, 39.146, 5.47, 1.0)
+    assert radius == pytest.approx(3.68, abs=0.01)
+
+
+def test_aperture_noise_of_white_noise():
+    # the sum of N independent pixels of sigma s has noise s * sqrt(N)
+    rng = np.random.default_rng(1)
+    frame = rng.normal(0.0, 2.0, (600, 600))
+    mask = np.ones(frame.shape, bool)
+    _, n_pix = nom.aperture_sums(frame, mask, 4.0, 12.0)
+    noise, n_ap = nom.aperture_noise(frame, mask, 4.0, 12.0)
+    assert n_ap > 1000
+    assert noise == pytest.approx(2.0 * np.sqrt(n_pix), rel=0.05)
+
+
+def test_rad_09_injection_scales_noise_to_injected_level():
+    # as the SIM: raw = B + factor x (A - B) with factor = injected / natural, so the
+    # aperture noise of raw - B (in flux units) is the injected level
+    rng = np.random.default_rng(2)
+    a = 1000.0 + rng.normal(0.0, 3.0, (400, 400))
+    b = 1000.0 + rng.normal(0.0, 3.0, (400, 400))
+    mask = np.ones(a.shape, bool)
+    dit, calib = 0.3, 2.0
+    natural = nom.noise_to_flux(nom.aperture_noise(a - b, mask, 3.7, 11.0)[0], dit, calib)
+    injected = 1.7 * natural
+    raw = b + injected / natural * (a - b)
+    measured = nom.noise_to_flux(nom.aperture_noise(raw - b, mask, 3.7, 11.0)[0], dit, calib)
+    assert measured == pytest.approx(injected, rel=1e-9)

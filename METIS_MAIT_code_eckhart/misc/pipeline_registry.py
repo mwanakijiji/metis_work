@@ -20,12 +20,14 @@ CLUSTER_PSF = "IMG-OPT-03 PSF quality"
 CLUSTER_STRAY = "IMG-OPT-04 Stray light"
 CLUSTER_OOF = "IMG-OPT-06 Out-of-field stray light"
 CLUSTER_PHOT = "IMG-RAD-07 Photometric performance"
+CLUSTER_NOMBKG = "IMG-RAD-09 Nominal background behaviour"
 COLOR_FOV = "#1f77b4"
 COLOR_DISTORTION = "#ff7f0e"
 COLOR_PSF = "#2ca02c"
 COLOR_STRAY = "#d62728"
 COLOR_OOF = "#8c564b"
 COLOR_PHOT = "#9467bd"
+COLOR_NOMBKG = "#e377c2"
 
 
 @dataclass(frozen=True)
