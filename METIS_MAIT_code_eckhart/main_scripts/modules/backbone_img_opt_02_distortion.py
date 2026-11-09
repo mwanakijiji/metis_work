@@ -235,6 +235,7 @@ def process_one_psf_image_distortion(
     depends_on=("generate_distortion_sim",),
     cluster=CLUSTER_DISTORTION,
     cluster_color=COLOR_DISTORTION,
+    planned=True,  # stub until the distortion map is better known
     label="Measure distortion",
 )
 def image_distortion(
@@ -447,6 +448,7 @@ def image_distortion(
     depends_on=("image_distortion",),
     cluster=CLUSTER_DISTORTION,
     cluster_color=COLOR_DISTORTION,
+    planned=True,  # stub until the distortion map is better known
     label="METIS-1097: pixel scale",
 )
 def metis_1097_pixel_scale(centroid_results_all, filter_name, config_observing):
@@ -475,6 +477,7 @@ def metis_1097_pixel_scale(centroid_results_all, filter_name, config_observing):
     depends_on=("image_distortion",),
     cluster=CLUSTER_DISTORTION,
     cluster_color=COLOR_DISTORTION,
+    planned=True,  # stub until the distortion map is better known
     label="METIS-3502: residual distortion after calibration",
 )
 def metis_3502_residual_distortion(centroid_results_all, filter_name, config_observing):
@@ -504,6 +507,7 @@ def metis_3502_residual_distortion(centroid_results_all, filter_name, config_obs
     depends_on=("image_distortion",),
     cluster=CLUSTER_DISTORTION,
     cluster_color=COLOR_DISTORTION,
+    planned=True,  # stub until the distortion map is better known
     label="METIS-8222: H2RG offset from optical axis",
 )
 def metis_8222_detector_offset(centroid_results_all, filter_name, config_observing):
@@ -534,6 +538,7 @@ def metis_8222_detector_offset(centroid_results_all, filter_name, config_observi
     depends_on=("image_distortion",),
     cluster=CLUSTER_DISTORTION,
     cluster_color=COLOR_DISTORTION,
+    planned=True,  # stub until the distortion map is better known
     label="METIS-9920: stability of scale and distortion",
 )
 def metis_9920_scale_stability(centroid_results_all, filter_name, config_observing):
@@ -570,6 +575,7 @@ def metis_9920_scale_stability(centroid_results_all, filter_name, config_observi
     ),
     cluster=CLUSTER_DISTORTION,
     cluster_color=COLOR_DISTORTION,
+    planned=True,  # stub until the distortion map is better known
     label="IMG-OPT-02 pass/fail",
 )
 def log_test_outcome(verdicts, file_name):

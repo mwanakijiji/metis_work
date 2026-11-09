@@ -13,13 +13,15 @@ _MISC = Path(__file__).resolve().parents[2] / "METIS_MAIT_code_eckhart" / "misc"
 if str(_MISC) not in sys.path:
     sys.path.insert(0, str(_MISC))
 
-from pipeline_registry import graph_from_registry  # noqa: E402
+from pipeline_registry import fyi_stage_ids, graph_from_registry  # noqa: E402
 
 NODES, EDGES, CLUSTERS, PLANNED_STAGES, STAGES = graph_from_registry()
+FYI_STAGES = fyi_stage_ids()
 
 __all__ = [
     "CLUSTERS",
     "EDGES",
+    "FYI_STAGES",
     "NODES",
     "PLANNED_STAGES",
     "STAGES",

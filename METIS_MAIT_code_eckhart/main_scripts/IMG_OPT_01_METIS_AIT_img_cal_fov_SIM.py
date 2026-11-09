@@ -260,6 +260,7 @@ def fyi_plot_dither_geometry(
     name="sim_img_01_metis_1095",
     cluster=CLUSTER_FOV,
     cluster_color=COLOR_FOV,
+    planned=True,  # stub until the distortion map is better known
     label="SIM METIS-1095: FoV",
 )
 def simulate_metis_1095(ctx, req_key, req_cfg):  # pylint: disable=too-many-locals
@@ -393,6 +394,7 @@ SIMULATORS = {
     depends_on=("sim_img_01_metis_1095",),
     cluster=CLUSTER_FOV,
     cluster_color=COLOR_FOV,
+    planned=True,  # stub until the distortion map is better known
     label="Generate FOV sims",
 )
 def main():

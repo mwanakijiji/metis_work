@@ -191,6 +191,17 @@ def fyi_plot_dithers(  # pylint: disable=too-many-arguments,too-many-locals
     return file_name
 
 
+# one box for the FYI plots of IMG-OPT-01 (fyi_plot_dithers and fyi_plot_fov, both
+# called from fov_calc)
+@pipeline_stage(
+    name="img_01_fyi_plots",
+    depends_on=("fov_calc",),
+    cluster=CLUSTER_FOV,
+    cluster_color=COLOR_FOV,
+    planned=True,  # stub until the distortion map is better known
+    fyi=True,  # not needed for the pass/fail
+    label="FYI plots",
+)
 def fyi_plot_fov(  # pylint: disable=too-many-arguments
     results_dir,
     plot_stem,
@@ -254,6 +265,7 @@ def fyi_plot_fov(  # pylint: disable=too-many-arguments
     depends_on=("generate_fov_sim",),
     cluster=CLUSTER_FOV,
     cluster_color=COLOR_FOV,
+    planned=True,  # stub until the distortion map is better known
     label="Compute FOV",
 )
 def fov_calc(  # pylint: disable=too-many-locals,too-many-statements
@@ -506,6 +518,7 @@ def fov_calc(  # pylint: disable=too-many-locals,too-many-statements
     depends_on=("fov_calc",),
     cluster=CLUSTER_FOV,
     cluster_color=COLOR_FOV,
+    planned=True,  # stub until the distortion map is better known
     label="METIS-1095: FoV",
 )
 def metis_1095_fov_check(effective_fov_x_arcsec, effective_fov_y_arcsec, detector):
@@ -539,6 +552,7 @@ def metis_1095_fov_check(effective_fov_x_arcsec, effective_fov_y_arcsec, detecto
     depends_on=("metis_1095_fov_check",),
     cluster=CLUSTER_FOV,
     cluster_color=COLOR_FOV,
+    planned=True,  # stub until the distortion map is better known
     label="IMG-OPT-01 pass/fail",
 )
 def log_test_outcome(verdicts, run_label):

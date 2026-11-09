@@ -149,12 +149,6 @@ def simulate_strehl(ctx, req_key, req_cfg):
     return written
 
 
-@pipeline_stage(
-    name="sim_img_03_reference_frames",
-    cluster=CLUSTER_PSF,
-    cluster_color=COLOR_PSF,
-    label="SIM Table 4-1 reference frames (no injection)",
-)
 def write_reference_frame(ctx, req_key, req_cfg):
     """
     The unmodified illuminated ScopeSim frame (no requirement, nothing injected), as
@@ -190,7 +184,7 @@ SIMULATORS = {
 
 @pipeline_stage(
     name="generate_psf_quality_sim",
-    depends_on=("sim_img_03_strehl_cases", "sim_img_03_reference_frames"),
+    depends_on=("sim_img_03_strehl_cases",),
     cluster=CLUSTER_PSF,
     cluster_color=COLOR_PSF,
     label="Generate PSF-quality sims",

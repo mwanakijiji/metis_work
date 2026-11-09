@@ -88,6 +88,7 @@ LM_OBS_CONFIGS = [
     name="sim_img_02_grid_frames",
     cluster=CLUSTER_DISTORTION,
     cluster_color=COLOR_DISTORTION,
+    planned=True,  # stub until the distortion map is better known
     label="SIM pinhole-grid frames (no injection)",
 )
 def generate_distortion_data(instrument, out_dir, saturation_adu):
@@ -176,6 +177,7 @@ def generate_distortion_data(instrument, out_dir, saturation_adu):
     depends_on=("sim_img_02_grid_frames",),
     cluster=CLUSTER_DISTORTION,
     cluster_color=COLOR_DISTORTION,
+    planned=True,  # stub until the distortion map is better known
     label="Generate distortion sims",
 )
 def main():

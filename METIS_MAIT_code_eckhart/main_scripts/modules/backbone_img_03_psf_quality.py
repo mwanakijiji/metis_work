@@ -604,7 +604,8 @@ def collect_strehls(psf_grid, fit_results):
     depends_on=("collect_strehls",),
     cluster=CLUSTER_PSF,
     cluster_color=COLOR_PSF,
-    label="Plot Strehl over FOV",
+    fyi=True,  # not needed for the pass/fail
+    label="FYI plots",
 )
 def plot_strehl_fov(run_result, grid_data, results_write_dir):
     """

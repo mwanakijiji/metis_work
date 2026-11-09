@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 # Cluster metadata shared by decorators and fallback registrations.
-CLUSTER_FOV = "IMG-OPT-01 FOV"
-CLUSTER_DISTORTION = "IMG-OPT-02 Distortion"
+CLUSTER_FOV = "IMG-OPT-01 FOV (need distortion info)"
+CLUSTER_DISTORTION = "IMG-OPT-02 Distortion (need distortion info)"
 CLUSTER_PSF = "IMG-OPT-03 PSF quality"
 CLUSTER_STRAY = "IMG-OPT-04 Stray light"
 CLUSTER_OOF = "IMG-OPT-06 Out-of-field stray light"
@@ -39,6 +39,7 @@ class StageSpec:
     cluster_color: Optional[str] = None
     planned: bool = False
     qualname: Optional[str] = None
+    fyi: bool = False
 
 
 _REGISTRY: Dict[str, StageSpec] = {}
@@ -53,11 +54,14 @@ def pipeline_stage(
     cluster_color: Optional[str] = None,
     planned: bool = False,
     label: Optional[str] = None,
+    fyi: bool = False,
 ):
     """
     Register a callable as a pipeline stage for docs / discovery.
 
-    ``depends_on`` lists immediate predecessor stage ids (DAG parents).
+    ``depends_on`` lists immediate predecessor stage ids (DAG parents). ``planned``
+    marks a stub (drawn dashed and grey), ``fyi`` an output not needed for the
+    pass/fail, e.g. FYI plots (drawn with a dashed outline).
     """
 
     def decorator(fn):
@@ -70,6 +74,7 @@ def pipeline_stage(
             planned=planned,
             label=label or stage_id,
             qualname=getattr(fn, "__qualname__", stage_id),
+            fyi=fyi,
         )
         return fn
 
@@ -85,6 +90,7 @@ def register_stage(
     label: Optional[str] = None,
     planned: bool = False,
     qualname: Optional[str] = None,
+    fyi: bool = False,
 ) -> None:
     """Register a stage by id (implemented or planned)."""
     _REGISTRY[stage_id] = StageSpec(
@@ -95,6 +101,7 @@ def register_stage(
         cluster_color=cluster_color,
         planned=planned,
         qualname=qualname,
+        fyi=fyi,
     )
 
 
@@ -134,7 +141,59 @@ def _register_planned_defaults() -> None:
     # none at the moment; add with register_planned_stage(...) if needed
 
 
-_DECORATOR_KWARGS = ("name", "depends_on", "cluster", "cluster_color", "planned", "label")
+def _register_fyi_defaults() -> None:
+    """
+    FYI-plot boxes (one per test) for tests that make their plots inside a stage that
+    also computes, not in a plotting function of their own (those are decorated with
+    ``fyi=True`` instead): each box hangs off the stage(s) that write the plots.
+    """
+    fyi_boxes = (
+        # IMG-OPT-02: per-PSF plots in process_one_psf_image_distortion
+        (
+            "img_02_fyi_plots",
+            ("image_distortion",),
+            CLUSTER_DISTORTION,
+            COLOR_DISTORTION,
+            True,
+        ),
+        # IMG-OPT-04: brightness-spectrum plots in stray_light_brightness_spectrum
+        (
+            "img_04_fyi_plots",
+            ("stray_light_brightness_spectrum",),
+            CLUSTER_STRAY,
+            COLOR_STRAY,
+            False,
+        ),
+        # IMG-OPT-06: plots in metis_5838_attenuation and metis_9522_check
+        (
+            "img_06_fyi_plots",
+            ("metis_5838_attenuation", "metis_9522_check"),
+            CLUSTER_OOF,
+            COLOR_OOF,
+            False,
+        ),
+    )
+    for stage_id, depends_on, cluster, color, planned in fyi_boxes:
+        register_stage(
+            stage_id,
+            depends_on=depends_on,
+            cluster=cluster,
+            cluster_color=color,
+            label="FYI plots",
+            planned=planned,
+            fyi=True,
+        )
+
+
+_DECORATOR_KWARGS = (
+    "name",
+    "depends_on",
+    "cluster",
+    "cluster_color",
+    "planned",
+    "label",
+    "fyi",
+)
 
 
 def _literal(node: ast.expr, constants: Dict[str, object]):
@@ -204,6 +263,7 @@ def _register_from_source() -> None:
                 label=kw.get("label") or stage_id,
                 planned=kw.get("planned", False),
                 qualname=kw["qualname"],
+                fyi=kw.get("fyi", False),
             )
 
 
@@ -213,6 +273,7 @@ def ensure_stages_registered() -> Dict[str, StageSpec]:
     if not _IMPORTS_DONE:
         _register_from_source()
         _register_planned_defaults()
+        _register_fyi_defaults()
         _IMPORTS_DONE = True
     return get_registry()
 
@@ -265,3 +326,8 @@ def graph_from_registry() -> Tuple[
     planned = frozenset(s.id for s in registry.values() if s.planned)
     stages = list(nodes.values())
     return nodes, edges, clusters, planned, stages
+
+
+def fyi_stage_ids() -> frozenset:
+    """Ids of the stages marked fyi (outputs not needed for the pass/fail)."""
+    return frozenset(s.id for s in ensure_stages_registered().values() if s.fyi)

@@ -139,6 +139,7 @@ def choose_nd_and_dit(exposure, nd_transmissions, mindit):
     name="simulate_metis_2594",
     cluster=CLUSTER_PHOT,
     cluster_color=COLOR_PHOT,
+    planned=True,  # stub: drawn dashed in the pipeline flow diagram
     label="SIM METIS-2594: calibration flux range (stub)",
 )
 def simulate_metis_2594(ctx, req_key, req_cfg):

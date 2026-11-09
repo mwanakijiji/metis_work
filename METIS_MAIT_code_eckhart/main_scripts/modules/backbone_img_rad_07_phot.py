@@ -29,7 +29,7 @@ from scipy import ndimage
 from . import analysis_common
 from .psf_grid_prep import load_fits_data
 
-REQUIREMENTS = ("METIS-2883", "METIS-3300")
+REQUIREMENTS = ("METIS-2594", "METIS-2883", "METIS-3300")  # METIS-2594: stub
 
 
 @dataclass
@@ -155,13 +155,6 @@ def pattern_changes(block_means, block_sigmas):
 # ---------------------------------------------------------------- stages
 
 
-@pipeline_stage(
-    name="img_rad_07_populate_run",
-    depends_on=("generate_phot_performance_sim",),
-    cluster=CLUSTER_PHOT,
-    cluster_color=COLOR_PHOT,
-    label="Populate run (files, headers, limits)",
-)
 def populate_run(state, observing):
     """
     Set up one run from a data state: its files (file_name_abs, or the
@@ -188,7 +181,7 @@ def populate_run(state, observing):
 
     req_id = state["req_id"]
     cfg = observing["img_rad_07"]
-    limits = dict(cfg["limits"][req_id])
+    limits = dict(cfg["limits"].get(req_id) or {})
     run_name = (
         state.get("run_name") or f"{req_id}_{state['instrument']}_{state['case']}"
     )
@@ -216,13 +209,6 @@ def populate_run(state, observing):
     )
 
 
-@pipeline_stage(
-    name="img_rad_07_reduce_flats",
-    depends_on=("img_rad_07_populate_run",),
-    cluster=CLUSTER_PHOT,
-    cluster_color=COLOR_PHOT,
-    label="Field mask, fluxes and block maps",
-)
 def reduce_flats(result):
     """
     Reduce the run's flats (BCKGD_SUBTED) one at a time: the field mask from the
@@ -259,8 +245,30 @@ def reduce_flats(result):
 
 
 @pipeline_stage(
+    name="img_rad_07_metis_2594_check",
+    depends_on=("generate_phot_performance_sim",),
+    cluster=CLUSTER_PHOT,
+    cluster_color=COLOR_PHOT,
+    planned=True,  # stub: drawn dashed in the pipeline flow diagram
+    label="METIS-2594: calibration flux range (stub)",
+)
+def metis_2594_check(result):
+    """
+    Stub for METIS-2594 (METIS internal calibration shall provide a range of flux
+    levels matching that encountered in scientific operation as defined in
+    METIS-3137): not evaluated yet (its SIM is a stub and writes no data).
+
+    OUTPUTS:
+    - PhotRunResult, with verdicts['METIS-2594'] = 'NOT EVALUATED'
+    """
+    result.verdicts["METIS-2594"] = "NOT EVALUATED"
+    logging.info("METIS-2594 (calibration flux range): stub, NOT EVALUATED")
+    return result
+
+
+@pipeline_stage(
     name="img_rad_07_metis_2883_check",
-    depends_on=("img_rad_07_reduce_flats",),
+    depends_on=("generate_phot_performance_sim",),
     cluster=CLUSTER_PHOT,
     cluster_color=COLOR_PHOT,
     label="METIS-2883: flat homogeneity",
@@ -293,7 +301,7 @@ def metis_2883_check(result):
 
 @pipeline_stage(
     name="img_rad_07_metis_3300_check",
-    depends_on=("img_rad_07_reduce_flats",),
+    depends_on=("generate_phot_performance_sim",),
     cluster=CLUSTER_PHOT,
     cluster_color=COLOR_PHOT,
     label="METIS-3300: 15 flux steps, flux and pattern",
@@ -378,10 +386,11 @@ def metis_3300_check(result):
 
 
 @pipeline_stage(
-    name="img_rad_07_plots",
+    name="img_rad_07_fyi_plots",
     depends_on=("img_rad_07_metis_2883_check", "img_rad_07_metis_3300_check"),
     cluster=CLUSTER_PHOT,
     cluster_color=COLOR_PHOT,
+    fyi=True,  # not needed for the pass/fail
     label="FYI plots",
 )
 def plot_run(result):
@@ -452,10 +461,14 @@ def _plot_map(rel_map, title, file_name):
 
 @pipeline_stage(
     name="img_rad_07_log_test_outcome",
-    depends_on=("img_rad_07_plots",),
+    depends_on=(
+        "img_rad_07_metis_2594_check",
+        "img_rad_07_metis_2883_check",
+        "img_rad_07_metis_3300_check",
+    ),
     cluster=CLUSTER_PHOT,
     cluster_color=COLOR_PHOT,
-    label="Log outcome",
+    label="IMG-RAD-07 pass/fail",
 )
 def log_test_outcome(result):
     """

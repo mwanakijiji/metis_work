@@ -33,6 +33,7 @@ from modules.helpers import setup_logging
 from modules.paths import project_root
 
 CHECKS = {
+    "METIS-2594": phot.metis_2594_check,  # stub (no SIM data yet)
     "METIS-2883": phot.metis_2883_check,
     "METIS-3300": phot.metis_3300_check,
 }

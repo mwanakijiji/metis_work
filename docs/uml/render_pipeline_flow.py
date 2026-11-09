@@ -12,8 +12,11 @@ Layout (rankdir=LR, so a rank is a column):
   enforced by invisible edges between the stages of consecutive rows in each column;
   a shared cluster (label not 'IMG-OPT-NN ...' / 'IMG-RAD-NN ...', e.g. the
   stray-light common stages) gets its own row right after the first test feeding it;
-- arrows within a test are heavy (straight rows); arrows between clusters (e.g. into
-  and out of shared machinery) are dashed, grey and do not constrain the layout.
+- arrows are solid; within a test they are heavy (straight rows); between clusters
+  (e.g. into and out of shared machinery) they are grey and do not constrain the
+  layout;
+- boxes: stubs (planned) are dashed and grey; FYI outputs not needed for the
+  pass/fail (fyi, e.g. FYI plots) have a dashed outline.
 """
 
 from __future__ import annotations
@@ -24,7 +27,7 @@ import sys
 import textwrap
 from pathlib import Path
 
-from pipeline_stages import CLUSTERS, EDGES, NODES, PLANNED_STAGES
+from pipeline_stages import CLUSTERS, EDGES, FYI_STAGES, NODES, PLANNED_STAGES
 
 HERE = Path(__file__).resolve().parent
 
@@ -153,6 +156,10 @@ def build_dot() -> str:
                 f'  {node_id} [label="{_wrap(label)}", style="rounded,dashed,filled", '
                 f'fillcolor="#f0f0f0", fontcolor="#666666"];'
             )
+        elif node_id in FYI_STAGES:
+            lines.append(
+                f'  {node_id} [label="{_wrap(label)}", style="rounded,dashed,filled"];'
+            )
         else:
             lines.append(f'  {node_id} [label="{_wrap(label)}"];')
     lines.append("")
@@ -172,15 +179,13 @@ def build_dot() -> str:
             lines.append(f"  {upper} -> {lower} [style=invis];")
     lines.append("")
 
-    # real edges: heavy within a cluster (straight rows); between clusters dashed,
+    # real edges, all solid: heavy within a cluster (straight rows); between clusters
     # grey and not constraining the layout (avoids spaghetti)
     for src, dst in EDGES:
         if node_cluster.get(src) == node_cluster.get(dst):
             lines.append(f"  {src} -> {dst} [weight=10];")
         else:
-            lines.append(
-                f'  {src} -> {dst} [style=dashed, color="#999999", constraint=false];'
-            )
+            lines.append(f'  {src} -> {dst} [color="#999999", constraint=false];')
     lines.append("}")
     return "\n".join(lines) + "\n"
 
