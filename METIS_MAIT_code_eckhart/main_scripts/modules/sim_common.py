@@ -321,6 +321,30 @@ def readout_frame(metis, bb_aperture, instrument):
     return hdul[1].data.astype(float), hdul[0].header
 
 
+def set_nd_filter(metis, name):
+    """Put ND filter `name` (one of the ND wheel's, e.g. 'ND_OD3') in the beam."""
+    metis["nd_filter_wheel"].change_filter(name)
+    logging.info("ND filter: %s", name)
+
+
+def nd_transmission(metis, name):
+    """
+    Transmission of ND filter `name` of the ND wheel: the plateau of its (grey) curve.
+
+    Raises ValueError if the curve is not grey (nonzero values differing by > 1%).
+    """
+    trans = np.asarray(metis["nd_filter_wheel"].filters[name].table["transmission"])
+    plateau = trans[trans > 0]
+    if plateau.size == 0 or np.max(plateau) > 1.01 * np.min(plateau):
+        raise ValueError(f"ND filter {name} is not grey: transmissions {plateau}")
+    return float(np.median(plateau))
+
+
+def detector_mindit(metis):
+    """Minimum DIT (s) of the detector readout mode (!DET.mindit)."""
+    return float(metis.cmds["!DET.mindit"])
+
+
 def take_darks(metis, instrument):
     """
     Two independent darks (black-body aperture closed): dark_1 to extract the signal

@@ -18,8 +18,9 @@ for _p in (_ROOT / "main_scripts", _ROOT / "misc"):
 
 import IMG_OPT_01_METIS_AIT_img_cal_fov_SIM as sim01  # noqa: E402
 import IMG_OPT_03_METIS_AIT_img_cal_psf_quality_SIM as sim03  # noqa: E402
-import IMG_OPT_04_METIS_AIT_img_cal_stray_light_SIM as sim04  # noqa: E402
+import IMG_OPT_04_METIS_AIT_img_stray_light_SIM as sim04  # noqa: E402
 import IMG_OPT_06_METIS_AIT_out_of_field_SIM as sim06  # noqa: E402
+import IMG_RAD_07_photometric_performance_SIM as sim07  # noqa: E402
 from modules import sim_common  # noqa: E402
 from modules.config_common import load_observing_config  # noqa: E402
 
@@ -124,7 +125,7 @@ def test_scenario_configs_are_consistent():
         "config_file_IMG_OPT_03_SIM.yaml": sim03.SIMULATORS,
         "config_file_IMG_OPT_04_stray_light_SIM.yaml": sim04.SIMULATORS,
         "config_file_IMG_OPT_06_outoffield_stray_light_SIM.yaml": sim06.SIMULATORS,
-        "config_file_IMG_RAD_07_phot_performance_SIM.yaml": None,
+        "config_file_IMG_RAD_07_phot_performance_SIM.yaml": sim07.SIMULATORS,
     }
     for file_name, simulators in scenarios.items():
         with open(_ROOT / "config" / file_name, encoding="utf-8") as file:
@@ -219,3 +220,56 @@ def test_artefact_image_amplitudes_and_flux():
     image = sim04.artefact_image(labels, [2.0, 5.0])
     assert image[15, 15] == pytest.approx(2.0)  # interior keeps the amplitude
     assert np.sum(image) == pytest.approx(2.0 * 100 + 5.0 * 40)  # flux conserved
+
+
+# IMG-RAD-07 METIS-3300: flux steps from ND filters x DIT (fixed BB aperture)
+ND_TRANS = {"ND_OD3": 1e-3, "ND_OD4": 1e-4, "ND_OD5": 1e-5}
+MINDIT = 0.04
+
+
+def test_exposure_steps_are_linear():
+    steps = sim07.exposure_steps(3.0, 15)
+    assert len(steps) == 15 and steps[-1] == pytest.approx(3.0)
+    assert np.allclose(np.diff(steps), 3.0 / 15)
+
+
+def test_max_exposure_puts_peak_at_limit():
+    # probe: peak 2305 ADU at T 1e-3, DIT 0.04 s
+    peak_per_exposure = 2305.0 / (1e-3 * 0.04)
+    e_max = sim07.max_exposure(2305.0, 1e-3, 0.04, 20000.0, 0.03)
+    assert peak_per_exposure * e_max == pytest.approx(20000.0 / 1.03)
+    with pytest.raises(ValueError):
+        sim07.max_exposure(0.0, 1e-3, 0.04, 20000.0, 0.03)
+
+
+def test_choose_nd_and_dit():
+    # long enough with the least attenuating ND
+    assert sim07.choose_nd_and_dit(1e-4, ND_TRANS, MINDIT) == (
+        "ND_OD3",
+        pytest.approx(0.1),
+    )
+    # OD3 would need DIT 0.02 s < mindit -> OD4 at 0.2 s
+    assert sim07.choose_nd_and_dit(2e-5, ND_TRANS, MINDIT) == (
+        "ND_OD4",
+        pytest.approx(0.2),
+    )
+    # too short even with OD5
+    with pytest.raises(ValueError):
+        sim07.choose_nd_and_dit(1e-7, ND_TRANS, MINDIT)
+
+
+def test_metis_3300_steps_legal_and_unsaturated():
+    # measured: BB open, ND_OD3, DIT 0.04 s -> raw peak ~2305 ADU; saturation 25000
+    saturation = 25000.0
+    peak_probe, t_probe, dit_probe = 2305.0, 1e-3, 0.04
+    max_raw = sim_common.MAX_RAW_FRAC * saturation
+    e_max = sim07.max_exposure(peak_probe, t_probe, dit_probe, max_raw, 0.03)
+    peak_per_exposure = peak_probe / (t_probe * dit_probe)
+    peaks = []
+    for exposure in sim07.exposure_steps(e_max, 15):
+        name, dit = sim07.choose_nd_and_dit(exposure, ND_TRANS, MINDIT)
+        assert dit >= MINDIT
+        assert ND_TRANS[name] * dit == pytest.approx(exposure)
+        peaks.append(peak_per_exposure * exposure * 1.01 * 1.01)  # fail-case injection
+    assert max(peaks) <= max_raw
+    assert np.allclose(np.diff(peaks), peaks[0])  # smooth (linear) progression

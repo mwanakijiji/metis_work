@@ -1,7 +1,8 @@
 # Scenario for IMG_RAD_07_photometric_performance_SIM.py: one entry per requirement.
 #
 # For each requirement with simulate: true, the SIM writes one FITS file (or one per
-# flux level/step) per case, named IMG_RAD_07_<requirement>_<filter>_<case>[_...].fits,
+# flux level/step) per case and instrument, named
+# IMG_RAD_07_<requirement>_<instrument>_<case>[_...].fits,
 # with the requirement and the injected truth in the primary header (REQ_ID, REQ_LIM,
 # INJ_VAL, EXPECTED, SIMVER, ...).
 #
@@ -15,17 +16,34 @@
 #   clearly on either side of the limit; other cases (e.g. 'near') are optional.
 # (format and options: see modules/sim_common.py)
 
-# WCU / instrument set-up for the flat fields (WCU FP mask 'open' = flat illumination)
-instrument:
-  fp_mask: open
-  pp_mask: SPM-LM
-  psf_kernel: SPM-LM
-  obs_filter: HCI_L_short
-  nd_filter: null
-  obs_mode: wcu_img_lm
-  dit: 0.02 # s; starting value, shortened by the SIM if the raw flat peaks > 0.8 sat
-  ndit: 1
-  intrapixel_capacitance: true
+# WCU / instrument set-ups for the flat fields (WCU FP mask 'open' = flat
+# illumination), one per detector; the BB aperture stays at 1.0 and an ND filter keeps
+# the full-aperture flat below saturation at the minimum DIT (!DET.mindit). The DIT is
+# shortened by the SIM only if the raw flat peaks > 0.8 sat.
+instruments:
+  HCI_L_short: # LM (HAWAII-2RG, fast mode)
+    fp_mask: open
+    pp_mask: SPM-LM
+    psf_kernel: SPM-LM
+    obs_filter: HCI_L_short
+    # without ND, the flat is ~80x full well at mindit; ND_OD3: raw peak ~0.09 sat
+    nd_filter: ND_OD3
+    obs_mode: wcu_img_lm
+    dit: 0.04 # s; mindit of the fast mode
+    ndit: 1
+    intrapixel_capacitance: true
+  N2: # N (GeoSnap, high-capacity mode)
+    fp_mask: open
+    pp_mask: SPM-N
+    psf_kernel: SPM-N
+    obs_filter: N2
+    # without ND, the WCU background alone saturates at mindit; ND_OD1: dark ~0.24,
+    # raw peak ~0.51 sat
+    nd_filter: ND_OD1
+    obs_mode: wcu_img_n
+    dit: 0.011 # s; mindit of the high-capacity mode
+    ndit: 1
+    intrapixel_capacitance: true
 
 requirements:
 
@@ -80,10 +98,17 @@ requirements:
       The level of flux of the flat field shall be tunable to 15 discrete values and
       shall be known at each step to 0.3%. The resulting spatial illumination pattern
       shall remain constant across the field within 0.5% (0.3% as goal) after tuning.
-    # flux steps: WCU black-body aperture, evenly spaced
+    # Flux steps: the BB aperture is fixed; the exposure E = T_ND x DIT is stepped
+    # linearly, E_k = E_max * k / n_steps, with E_max putting the raw peak at
+    # 0.8 sat / (1 + peak_margin). Per step, the least attenuating ND of nd_filters
+    # with DIT = E_k / T_ND >= mindit is used (any ND is safe for saturation, as the
+    # raw peak scales with E; LM ends up on OD3/OD4, N on OD1/OD2). peak_margin covers
+    # the injected flux error and pattern change (fail case: 1.01 x 1.01) and the
+    # detector dark current, which the ND does not attenuate (N: ~500 ADU/s).
     n_steps: 15
-    bb_aperture_min: 0.0667
-    bb_aperture_max: 1.0
+    bb_aperture: 1.0
+    nd_filters: [ND_OD1, ND_OD2, ND_OD3, ND_OD4] # in both the LM and N ND wheels
+    peak_margin: 0.03
     limit:
       flux_error:
         value: 0.003
