@@ -1,0 +1,36 @@
+# IMG-RAD-07 photometric performance: analysis runs (data states)
+# Paths are relative to the project stem (METIS_MAIT_code_eckhart/), or absolute.
+# Each run inherits defaults; override only what differs.
+#
+# Files as written by IMG_RAD_07_photometric_performance_SIM.py
+# (config/config_file_IMG_RAD_07_phot_performance_SIM.yaml), with the injected truth
+# (REQ_ID, EXPECTED, INJ_VALn, ...) in the primary header:
+# - METIS-2883: IMG_RAD_07_METIS-2883_<instrument>_<case>.fits (file_name_abs)
+# - METIS-3300: IMG_RAD_07_METIS-3300_<instrument>_<case>_stepNN.fits, all steps of
+#   one case together (file_name_pattern, a glob)
+# METIS-2594 is not analysed (its SIM is a stub).
+
+defaults:
+  results_write_dir: results/IMG_RAD_07_photometric_performance_analysis_results/
+
+runs:
+  - {req_id: METIS-2883, instrument: Br_alpha, case: pass,
+     file_name_abs: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-2883_Br_alpha_pass.fits}
+  - {req_id: METIS-2883, instrument: Br_alpha, case: near,
+     file_name_abs: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-2883_Br_alpha_near.fits}
+  - {req_id: METIS-2883, instrument: Br_alpha, case: fail,
+     file_name_abs: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-2883_Br_alpha_fail.fits}
+  - {req_id: METIS-2883, instrument: N2, case: pass,
+     file_name_abs: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-2883_N2_pass.fits}
+  - {req_id: METIS-2883, instrument: N2, case: near,
+     file_name_abs: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-2883_N2_near.fits}
+  - {req_id: METIS-2883, instrument: N2, case: fail,
+     file_name_abs: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-2883_N2_fail.fits}
+  - {req_id: METIS-3300, instrument: Br_alpha, case: pass,
+     file_name_pattern: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-3300_Br_alpha_pass_step*.fits}
+  - {req_id: METIS-3300, instrument: Br_alpha, case: fail,
+     file_name_pattern: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-3300_Br_alpha_fail_step*.fits}
+  - {req_id: METIS-3300, instrument: N2, case: pass,
+     file_name_pattern: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-3300_N2_pass_step*.fits}
+  - {req_id: METIS-3300, instrument: N2, case: fail,
+     file_name_pattern: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-3300_N2_fail_step*.fits}

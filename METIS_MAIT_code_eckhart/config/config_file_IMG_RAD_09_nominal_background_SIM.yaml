@@ -1,0 +1,67 @@
+# Scenario for IMG_RAD_09_nominal_background_behavior_SIM.py: one entry per requirement.
+# Format and options: see modules/sim_common.py and
+# config_file_IMG_RAD_07_phot_performance_SIM.yaml.
+# Files: data/IMG_RAD_09_nominal_background_simmed_data/
+#   IMG_RAD_09_<requirement>_<instrument>_<case>.fits
+
+# On-sky set-ups (obs_mode img_lm / img_n: Armazones sky, ELT, METIS; no WCU), observing
+# an empty sky, so every readout is background (sky + telescope + instrument).
+# - fp_mask: open (ScopeSim's on-sky imaging modes have no focal-plane mask element)
+# - pp_mask: the cold-stop pupil mask; the PSF kernel follows from it
+#   (METIS_psfs/PSF_<pp_mask>.fits, as in the WCU modes; the SPM kernels include the
+#   ELT spiders) and the cold-stop transmission (!OBS.pupil_transmission) is the mask's
+#   transmission in the IRDB pupil-mask table (sim_common.build_sky_optical_train)
+# - dit / ndit: set by the SIM (sim_common.sky_dit: dit_fill_frac of saturation, >= the
+#   detector's minimum DIT; NDIT from total_exptime_s)
+instruments:
+  Lp: # LM (HAWAII-2RG, fast mode)
+    fp_mask: open
+    pp_mask: SPM-LM
+    obs_filter: Lp
+    nd_filter: null
+    obs_mode: img_lm
+    dit: auto
+    ndit: auto
+    intrapixel_capacitance: true
+  N2: # N (GeoSnap, high-capacity mode)
+    fp_mask: open
+    pp_mask: SPM-N
+    obs_filter: N2
+    nd_filter: null
+    obs_mode: img_n
+    dit: auto
+    ndit: auto
+    intrapixel_capacitance: true
+
+# integration: total_exptime_s per frame (raw frame and background frame each), as
+# n_exposures readouts of NDIT x DIT, averaged (ScopeSim integrates NDIT x DIT in one
+# readout, so 1 is enough; more splits the integration, e.g. into nod cycles)
+total_exptime_s: 10000
+n_exposures: 1
+dit_fill_frac: 0.5
+
+requirements:
+
+  SENS-10000S:
+    simulate: true
+    req_id: IMG-RAD-09 sensitivity (ID TBD)
+    description: >-
+      Verify sensititity requirement on point source in a 10000 second exposure.
+    limit_is_placeholder: true
+    # 1-sigma point-source noise (aperture sums, backbone_img_rad_09_nom) of the
+    # background-subtracted 10000 s frame, in absolute flux units (PLACEHOLDER: ADU/s
+    # until the counts-to-flux calibration in
+    # config_file_IMG_RAD_09_nominal_background_observing.yaml is known). The SIM
+    # scales the noise of (raw - background) to the injected level.
+    # Placeholder values are set around the natural noise of the first SIM run (with
+    # the placeholder calibration 1.0: L' 9.7, N2 10.3 ADU/s), so the cases scale the
+    # noise by ~0.8 (pass) and ~1.6 (fail); per-detector values can go in by_detector.
+    limit:
+      noise_flux:
+        value: 12.0 # PLACEHOLDER
+        pass_if: "<="
+        unit: flux (PLACEHOLDER)
+        note: 1-sigma point-source noise in a 10000 s exposure
+    cases:
+      pass: {inject: {noise_flux: 8.0}}
+      fail: {inject: {noise_flux: 16.0}}

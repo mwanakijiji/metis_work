@@ -1,0 +1,41 @@
+# IMG-RAD-09 nominal background behaviour: parameters of the point-source noise
+# measurement (modules/backbone_img_rad_09_nom.py), shared by the SIM and the (future)
+# ANALYSIS; merged on top of config_file_common_observing_params.yaml
+# (load_observing_config).
+
+img_rad_09:
+  # PLACEHOLDER counts-to-flux calibration: absolute flux per ADU/s summed in the
+  # aperture, per detector (includes the aperture correction). 1.0 = flux in ADU/s
+  # until the calibration is known; the noise limit and injected noise levels in
+  # config_file_IMG_RAD_09_nominal_background_SIM.yaml are in the same units.
+  flux_per_adu_per_s:
+    img_lm: 1.0 # PLACEHOLDER
+    img_n: 1.0 # PLACEHOLDER
+  flux_unit: "ADU/s (PLACEHOLDER: counts-to-flux calibration TBD)"
+  flux_calibration_is_placeholder: true
+
+  # aperture photometry of a point source: radius in lambda/D, apertures on a square
+  # grid with this spacing (in radii) over the field mask
+  aperture_radius_lambda_over_d: 1.0
+  aperture_spacing_radii: 3.0
+  telescope_diameter_m: 39.146 # ELT primary, outer diameter (lambda/D only)
+
+  # field mask from the raw frame: pixels > frac x median, eroded (drops the
+  # reference-pixel border)
+  mask_frac_of_median: 0.5
+  mask_erosion_px: 4
+
+  # ANALYSIS: PASS if measured + n_sigma x uncertainty <= limit, FAIL if measured -
+  # n_sigma x uncertainty > limit, else INCONCLUSIVE (the uncertainty of the noise
+  # estimate is 1.167 / sqrt(number of apertures), relative)
+  n_sigma: 3
+  # raw readout max must be <= saturation_frac x saturation (as the SIM's MAX_RAW_FRAC)
+  saturation_frac: 0.8
+  limits:
+    SENS-10000S:
+      # PLACEHOLDER: 1-sigma point-source noise limit in a 10000 s exposure, in the
+      # flux units above (must match REQ_LIM in the SIM headers; set in
+      # config_file_IMG_RAD_09_nominal_background_SIM.yaml)
+      noise_flux: 12.0
+      exptime_s: 10000
+      is_placeholder: true

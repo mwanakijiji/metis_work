@@ -1,0 +1,27 @@
+# IMG-RAD-07 photometric performance: analysis parameters and requirement limits,
+# merged on top of config_file_common_observing_params.yaml by
+# IMG_RAD_07_photometric_performance_ANALYSIS.py (load_observing_config).
+
+img_rad_07:
+  # field mask: pixels > mask_frac_of_median x median of the (brightest) flat, eroded
+  # by mask_erosion_px (drops the reference-pixel border: 64 px LM, 28 px N)
+  mask_frac_of_median: 0.5
+  mask_erosion_px: 4
+  # flats are averaged in square blocks (px) before taking maxima over the field, so
+  # the per-pixel noise does not dominate; blocks with < min_block_fill of their
+  # pixels in the mask are dropped
+  block_px: 64
+  min_block_fill: 0.5
+  # PASS if measured + n_sigma x noise <= limit, FAIL if measured - n_sigma x noise >
+  # limit, else INCONCLUSIVE
+  n_sigma: 3
+  # raw readout max must be <= saturation_frac x saturation (as the SIM's MAX_RAW_FRAC)
+  saturation_frac: 0.8
+  limits:
+    METIS-2883:
+      half_ptv: 0.03 # +/- 3% PtV: max |B / mean - 1| over the FOV
+    METIS-3300:
+      n_steps: 15 # distinct flux levels
+      flux_error: 0.003 # max |flux / nominal - 1| over the steps
+      pattern_change: 0.005 # max |normalised flat / step-averaged one - 1|
+      pattern_change_goal: 0.003

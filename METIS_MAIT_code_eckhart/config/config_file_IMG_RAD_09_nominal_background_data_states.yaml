@@ -1,0 +1,23 @@
+# IMG-RAD-09 nominal background behaviour: analysis runs (data states)
+# Paths are relative to the project stem (METIS_MAIT_code_eckhart/), or absolute.
+# Each run inherits defaults; override only what differs.
+#
+# Files as written by IMG_RAD_09_nominal_background_behavior_SIM.py
+# (config/config_file_IMG_RAD_09_nominal_background_SIM.yaml):
+# IMG_RAD_09_<requirement>_<instrument>_<case>.fits, with the injected truth (REQ_ID,
+# EXPECTED, INJ_VAL, ...) in the primary header. det_key: the detector (img_lm, img_n),
+# for the pixel scale, filter wavelength and flux calibration.
+
+defaults:
+  req_id: SENS-10000S
+  results_write_dir: results/IMG_RAD_09_nominal_background_analysis_results/
+
+runs:
+  - {instrument: Lp, det_key: img_lm, case: pass,
+     file_name_abs: data/IMG_RAD_09_nominal_background_simmed_data/IMG_RAD_09_SENS-10000S_Lp_pass.fits}
+  - {instrument: Lp, det_key: img_lm, case: fail,
+     file_name_abs: data/IMG_RAD_09_nominal_background_simmed_data/IMG_RAD_09_SENS-10000S_Lp_fail.fits}
+  - {instrument: N2, det_key: img_n, case: pass,
+     file_name_abs: data/IMG_RAD_09_nominal_background_simmed_data/IMG_RAD_09_SENS-10000S_N2_pass.fits}
+  - {instrument: N2, det_key: img_n, case: fail,
+     file_name_abs: data/IMG_RAD_09_nominal_background_simmed_data/IMG_RAD_09_SENS-10000S_N2_fail.fits}
