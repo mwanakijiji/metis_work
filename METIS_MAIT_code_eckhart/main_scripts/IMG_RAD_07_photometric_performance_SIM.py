@@ -44,12 +44,13 @@ be known.
 
 Structure: one function per requirement (simulate_metis_NNNN), driven by the scenario in
 config/config_file_IMG_RAD_07_phot_performance_SIM.yaml (limits and injected values per
-case) and run by modules.sim_common.run_scenario. Each function writes at least one case
-that clearly passes and one that clearly fails, named
+case) and run by modules.sim_common.run_scenario. Each function (except the stub for
+METIS-2594, which writes nothing) writes at least one case that clearly passes and one
+that clearly fails, named
 IMG_RAD_07_<requirement>_<instrument>_<case>[_...].fits (instruments: Br_alpha on
 the LM detector, N2 on the N detector), with the requirement and the
 injected truth in the primary header:
-  REQ_ID    requirement ID, e.g. 'METIS-2594'
+  REQ_ID    requirement ID, e.g. 'METIS-3300'
   CASE      case name from the config ('pass', 'fail', 'near', ...)
   EXPECTED  'PASS' or 'FAIL' (injected value vs. limit)
   REQ_QTY, REQ_LIM, PASS_IF, INJ_VAL   quantity, limit, sense and injected value
@@ -63,8 +64,7 @@ raw = flat + (factor - 1) * (flat - dark_1), and the written BACKGROUND is an
 independent dark (dark_2), so BCKGD_SUBTED = raw - dark_2 has realistic noise. Images
 are written as float32. All raw readouts peak at <= sim_common.MAX_RAW_FRAC of
 saturation: each base set-up has an ND filter (LM: ND_OD2, N: ND_OD1) and the
-detector's minimum DIT, the DIT is
-checked by sim_common.run_scenario, METIS-2594 levels are capped below that, and the
+detector's minimum DIT, the DIT is checked by sim_common.run_scenario, and the
 METIS-3300 flux steps (fixed BB aperture) are made with ND filters and DITs whose
 product T_ND x DIT is stepped linearly up to that limit.
 """
@@ -86,74 +86,6 @@ from pipeline_registry import (  # pylint: disable=import-error,wrong-import-ord
 )
 
 TEST_PREFIX = "IMG_RAD_07"
-
-
-def signal_ceiling(dark, signal, max_raw):
-    """
-    Largest scaling k_c of the signal such that no pixel of dark + k * signal exceeds
-    max_raw, and the median raw level at that scaling (the ceiling of the calibration
-    flux levels).
-
-    OUTPUTS:
-    - float: k_c
-    - float: median(dark + k_c * signal) (ADU)
-
-    Raises ValueError if there is no positive signal, or if the dark alone already
-    reaches max_raw where there is signal.
-    """
-    dark = np.asarray(dark, dtype=float)
-    signal = np.asarray(signal, dtype=float)
-    positive = signal > 0
-    if not np.any(positive):
-        raise ValueError("No positive signal to scale")
-    k_c = float(np.min((max_raw - dark[positive]) / signal[positive]))
-    if k_c <= 0:
-        raise ValueError(
-            f"The dark alone reaches the raw ceiling {max_raw:.4g} ADU: no headroom "
-            "for calibration flux levels"
-        )
-    return k_c, float(np.median(dark + k_c * signal))
-
-
-def raw_target_level(background, ceiling, frac):
-    """
-    Raw level (ADU) a fraction frac (0..1) of the way from the background up to the
-    ceiling: background + frac * (ceiling - background).
-
-    Raises ValueError if the background is at or above the ceiling (no headroom), or
-    if frac is outside [0, 1].
-    """
-    background, ceiling, frac = float(background), float(ceiling), float(frac)
-    if background >= ceiling:
-        raise ValueError(
-            f"Background {background:.4g} ADU is at or above the ceiling "
-            f"({ceiling:.4g} ADU): no headroom for calibration flux levels"
-        )
-    if not 0.0 <= frac <= 1.0:
-        raise ValueError(f"Level fraction {frac} is outside [0, 1]")
-    return background + frac * (ceiling - background)
-
-
-def signal_factor_for_raw_level(dark, signal, target, n_iter=5):
-    """
-    Factor k such that the median of the raw frame dark + k * signal is target (ADU).
-    The median is not linear, so k is refined iteratively from the first guess
-    (target - median(dark)) / median(signal).
-
-    Raises ValueError if target is below the median of the dark (not reachable by
-    scaling the signal).
-    """
-    median_dark = float(np.median(dark))
-    median_signal = float(np.median(signal))
-    if target < median_dark:
-        raise ValueError(
-            f"Target raw level {target:.4g} ADU is below the median of the dark "
-            f"({median_dark:.4g} ADU): not reachable by scaling the signal"
-        )
-    factor = (target - median_dark) / median_signal
-    for _ in range(n_iter):
-        factor += (target - float(np.median(dark + factor * signal))) / median_signal
-    return max(factor, 0.0)
 
 
 def max_exposure(  # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -207,92 +139,26 @@ def choose_nd_and_dit(exposure, nd_transmissions, mindit):
     name="simulate_metis_2594",
     cluster=CLUSTER_PHOT,
     cluster_color=COLOR_PHOT,
-    label="SIM METIS-2594: calibration flux range",
+    label="SIM METIS-2594: calibration flux range (stub)",
 )
-def simulate_metis_2594(ctx, req_key, req_cfg):  # pylint: disable=too-many-locals
+def simulate_metis_2594(ctx, req_key, req_cfg):
     """
-    Simulated data for METIS-2594: METIS internal calibration shall provide a range of
-    flux levels matching that encountered in scientific operation as defined in
-    METIS-3137.
+    Stub for METIS-2594: METIS internal calibration shall provide a range of flux
+    levels matching that encountered in scientific operation as defined in METIS-3137.
 
-    Per case, two flats at the faintest and brightest flux the calibration provides.
-    The injected flux_min, flux_max are fractions (0..1) of the headroom between the
-    closed-aperture background B (median of dark_1) and the ceiling C: the median raw
-    level at the largest scaling of the signal for which no pixel of the raw readout
-    exceeds sim_common.MAX_RAW_FRAC of saturation (signal_ceiling). The raw level
-    (median of the raw frame, background included) is B + frac * (C - B). Each flat is
-    made by scaling the signal (flat - dark) of a full-aperture ScopeSim flat to that
-    median; the noise of the scaled signal is scaled with it, so it is not shot-noise
-    correct for large factors. Writes ..._<case>_min.fits and ..._<case>_max.fits for
-    one PASS case and one FAIL case on each side.
+    Writes nothing (the scenario's cases are still checked, so the config stays
+    valid for a future implementation).
 
     OUTPUTS:
-    - list[str]: written files
+    - list[str]: written files (empty)
     """
-    expected = sim_common.check_cases(req_key, req_cfg)
-    dark_1, _ = ctx.darks()
-    flat, _ = ctx.lit_frame()
-    signal = flat - dark_1
-    saturation = float(ctx.observing["saturation_adu"][ctx.det_key])
-    max_raw = sim_common.MAX_RAW_FRAC * saturation
-    background = float(np.median(dark_1))
-    k_ceiling, ceiling = signal_ceiling(dark_1, signal, max_raw)
+    sim_common.check_cases(req_key, req_cfg)
     logging.info(
-        "%s: background (dark median) %.4g ADU = %.3g of saturation (%.0f ADU, %s); "
-        "ceiling (raw median with max raw = %.2f of saturation) %.4g ADU; headroom "
-        "%.4g ADU",
+        "%s (%s): stub, no files written",
         req_key,
-        background,
-        background / saturation,
-        saturation,
-        ctx.det_key,
-        sim_common.MAX_RAW_FRAC,
-        ceiling,
-        ceiling - background,
+        sim_common.instrument_tag(ctx.instrument),
     )
-
-    written = []
-    for case, case_cfg in req_cfg["cases"].items():
-        inject = case_cfg["inject"]
-        cards = sim_common.requirement_cards(
-            req_key, req_cfg, case, inject, expected[case], ctx.simver
-        )
-        for end in ("min", "max"):
-            frac = float(inject[f"flux_{end}"])
-            target = raw_target_level(background, ceiling, frac)
-            # never past the ceiling, whatever the median iteration does
-            factor = min(signal_factor_for_raw_level(dark_1, signal, target), k_ceiling)
-            raw = dark_1 + factor * signal
-            logging.info(
-                "%s case %s %s: %.3g of the headroom -> target raw median %.4g ADU; "
-                "signal factor %.4g; raw median %.4g, max %.4g ADU",
-                req_key,
-                case,
-                end,
-                frac,
-                target,
-                factor,
-                float(np.median(raw)),
-                float(np.max(raw)),
-            )
-            written.append(
-                ctx.write_case(
-                    req_key,
-                    case,
-                    f"_{end}",
-                    raw,
-                    cards
-                    + [
-                        ("LEVEL", end.upper(), "Faintest/brightest calibration flux"),
-                        ("FLUXFRAC", frac, "(raw - bckgd) / (ceiling - bckgd)"),
-                        ("FLUXINJ", target, "Injected raw level (ADU/DIT, median)"),
-                        ("BKG_ADU", background, "Background: dark median (ADU/DIT)"),
-                        ("CEIL_ADU", ceiling, "Ceiling: raw median at max cap"),
-                        ("SIGFAC", factor, "Signal scaling factor"),
-                    ],
-                )
-            )
-    return written
+    return []
 
 
 @pipeline_stage(
