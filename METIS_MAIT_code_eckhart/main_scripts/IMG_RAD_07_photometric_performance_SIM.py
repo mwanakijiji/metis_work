@@ -363,6 +363,13 @@ SIMULATORS = {
 }
 
 
+@pipeline_stage(
+    name="generate_phot_performance_sim",
+    depends_on=("simulate_metis_2594", "simulate_metis_2883", "simulate_metis_3300"),
+    cluster=CLUSTER_PHOT,
+    cluster_color=COLOR_PHOT,
+    label="Generate IMG-RAD-07 SIM data",
+)
 def main():
     """
     Generate IMG-RAD-07 photometric performance simulations, one set per requirement,
