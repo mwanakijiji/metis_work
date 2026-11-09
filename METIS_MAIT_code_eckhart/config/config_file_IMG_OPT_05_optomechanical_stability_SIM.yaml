@@ -1,0 +1,65 @@
+# Scenario for IMG_OPT_05_optomechanical_stability_SIM.py (STUB): one entry per
+# requirement. Format and options: see modules/sim_common.py and
+# config_file_IMG_RAD_07_phot_performance_SIM.yaml.
+# Files (once implemented): data/IMG_OPT_05_optomechanical_stability_simmed_data/
+#   IMG_OPT_05_<requirement>_<instrument>_<case>.fits
+#
+# The Vortex Phase Mask (VPM) is not yet in ScopeSim (the capability will be added
+# later), so the focal-plane mask (the VPM in CFO-FP2) and the pupil-plane mask are not
+# known yet (null = TBD), and nothing is simulated.
+
+instruments:
+  LM: # LM (HAWAII-2RG, fast mode); L- and M-band VPMs
+    fp_mask: null # TBD: L/M-band VPM in CFO-FP2
+    pp_mask: null # TBD
+    obs_filter: HCI_L_short # placeholder
+    nd_filter: null
+    obs_mode: wcu_img_lm
+    dit: 0.04 # s; placeholder (mindit of the fast mode)
+    ndit: 1
+    intrapixel_capacitance: true
+  N: # N (GeoSnap, high-capacity mode); N-band VPMs
+    fp_mask: null # TBD: N-band VPM in CFO-FP2
+    pp_mask: null # TBD
+    obs_filter: N2 # placeholder
+    nd_filter: null
+    obs_mode: wcu_img_n
+    dit: 0.011 # s; placeholder (mindit of the high-capacity mode)
+    ndit: 1
+    intrapixel_capacitance: true
+
+# N.b. both requirements carry the ID METIS-5422 in the IMG-OPT-05 test description's
+# table (likely an error in the table; to be checked); the keys here are distinct.
+requirements:
+
+  METIS-5422-FLUXCAL:
+    simulate: false
+    req_id: METIS-5422
+    verification: by test at System level
+    description: >-
+      METIS shall require an on-sky flux calibration not more often than once per hour
+      per instrument mode, so long as the instrument is not powered down or disturbed in
+      a manner outside its nominal operations concept during this period.
+    # for reference (no limit/cases until a simulation is implemented)
+    calibration_interval_min_h: 1
+    reason: stub; simulation of the flux-calibration stability TBD
+
+  METIS-5422-VPM:
+    simulate: false
+    req_id: METIS-5422
+    verification: by test at System level, applicable to IMG
+    description: >-
+      The position of the Vortex Phase Mask (VPM) located in CFO-FP2 shall be stable
+      with respect to the IMG detectors, with the following accuracy: On timescales
+      between 10 sec and 10 min (goal: up to 1h): - 0.2 mas RMS on sky for the L- and
+      M-band VPMs with respect to the IMG-LM detector - 0.5 mas RMS on sky for the
+      N-band VPMs with respect to the IMG-N detector. On timescales below 10 sec: - 1
+      mas RMS on sky for the L- and M-band VPMs with respect to the IMG-LM detector -
+      2.5 mas RMS on sky for the N-band VPMs with respect to the IMG-N detector.
+    # for reference (no limit/cases until a simulation is implemented): VPM position
+    # RMS on sky (mas) per timescale and detector
+    limits_mas_rms:
+      10s_to_10min: {img_lm: 0.2, img_n: 0.5}
+      below_10s: {img_lm: 1.0, img_n: 2.5}
+    goal_timescale_max_s: 3600 # goal: the 10 s - 10 min limits up to 1 h
+    reason: the VPM is not yet in ScopeSim (capability to be added); masks TBD

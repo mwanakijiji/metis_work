@@ -78,6 +78,16 @@ digraph pipeline {
     stray_light_segmentation_combined;
   }
 
+  subgraph cluster_img_opt_05_optomechanical_stability_stub {
+    label="IMG-OPT-05 Optomechanical stability (stub)";
+    labeljust=l;
+    style="dashed";
+    color="#bcbd22";
+    simulate_metis_5422_flux_calibration;
+    simulate_metis_5422_vpm_stability;
+    generate_optomechanical_stability_sim;
+  }
+
   subgraph cluster_img_opt_04_stray_light {
     label="IMG-OPT-04 Stray light";
     labeljust=l;
@@ -139,6 +149,9 @@ digraph pipeline {
   sim_img_04_metis_1189_1429 [label="SIM METIS-1189/-1429:\nstray light vs. PSF peak"];
   sim_img_04_metis_9522 [label="SIM METIS-9522:\nartefacts vs. 3-sigma\nbackground"];
   generate_stray_light_sim [label="Generate stray-light\nsims"];
+  simulate_metis_5422_flux_calibration [label="SIM METIS-5422: flux\ncalibration interval\n(stub)", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
+  simulate_metis_5422_vpm_stability [label="SIM METIS-5422: VPM\nposition stability\n(stub: no VPM in\nScopeSim)", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
+  generate_optomechanical_stability_sim [label="Generate optomechanical-\nstability sims", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
   sim_img_06_metis_5838 [label="SIM METIS-5838: out-of-\nfield attenuation"];
   generate_out_of_field_sim [label="Generate out-of-field\nsims"];
   simulate_img_07_pupil_imaging [label="SIM pupil images (stub:\nmasks TBD)", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
@@ -191,22 +204,25 @@ digraph pipeline {
   img_04_fyi_plots [label="FYI plots", style="rounded,dashed,filled"];
   img_06_fyi_plots [label="FYI plots", style="rounded,dashed,filled"];
 
-  { rank=same; sim_img_01_metis_1095; sim_img_02_grid_frames; sim_img_03_strehl_cases; sim_img_06_metis_5838; sim_img_04_metis_1189_1429; sim_img_04_metis_9522; simulate_img_07_pupil_imaging; simulate_metis_2594; simulate_metis_2883; simulate_metis_3300; simulate_rad_09_sensitivity; }
+  { rank=same; sim_img_01_metis_1095; sim_img_02_grid_frames; sim_img_03_strehl_cases; sim_img_06_metis_5838; simulate_metis_5422_flux_calibration; simulate_metis_5422_vpm_stability; sim_img_04_metis_1189_1429; sim_img_04_metis_9522; simulate_img_07_pupil_imaging; simulate_metis_2594; simulate_metis_2883; simulate_metis_3300; simulate_rad_09_sensitivity; }
   sim_img_01_metis_1095 -> sim_img_02_grid_frames [style=invis];
   sim_img_02_grid_frames -> sim_img_03_strehl_cases [style=invis];
   sim_img_03_strehl_cases -> sim_img_06_metis_5838 [style=invis];
-  sim_img_06_metis_5838 -> sim_img_04_metis_1189_1429 [style=invis];
+  sim_img_06_metis_5838 -> simulate_metis_5422_flux_calibration [style=invis];
+  simulate_metis_5422_flux_calibration -> simulate_metis_5422_vpm_stability [style=invis];
+  simulate_metis_5422_vpm_stability -> sim_img_04_metis_1189_1429 [style=invis];
   sim_img_04_metis_1189_1429 -> sim_img_04_metis_9522 [style=invis];
   sim_img_04_metis_9522 -> simulate_img_07_pupil_imaging [style=invis];
   simulate_img_07_pupil_imaging -> simulate_metis_2594 [style=invis];
   simulate_metis_2594 -> simulate_metis_2883 [style=invis];
   simulate_metis_2883 -> simulate_metis_3300 [style=invis];
   simulate_metis_3300 -> simulate_rad_09_sensitivity [style=invis];
-  { rank=same; generate_fov_sim; generate_distortion_sim; generate_psf_quality_sim; generate_out_of_field_sim; generate_stray_light_sim; generate_pupil_imaging_sim; generate_phot_performance_sim; generate_nominal_background_sim; }
+  { rank=same; generate_fov_sim; generate_distortion_sim; generate_psf_quality_sim; generate_out_of_field_sim; generate_optomechanical_stability_sim; generate_stray_light_sim; generate_pupil_imaging_sim; generate_phot_performance_sim; generate_nominal_background_sim; }
   generate_fov_sim -> generate_distortion_sim [style=invis];
   generate_distortion_sim -> generate_psf_quality_sim [style=invis];
   generate_psf_quality_sim -> generate_out_of_field_sim [style=invis];
-  generate_out_of_field_sim -> generate_stray_light_sim [style=invis];
+  generate_out_of_field_sim -> generate_optomechanical_stability_sim [style=invis];
+  generate_optomechanical_stability_sim -> generate_stray_light_sim [style=invis];
   generate_stray_light_sim -> generate_pupil_imaging_sim [style=invis];
   generate_pupil_imaging_sim -> generate_phot_performance_sim [style=invis];
   generate_phot_performance_sim -> generate_nominal_background_sim [style=invis];
@@ -257,6 +273,8 @@ digraph pipeline {
   sim_img_03_strehl_cases -> generate_psf_quality_sim [weight=10];
   sim_img_04_metis_1189_1429 -> generate_stray_light_sim [weight=10];
   sim_img_04_metis_9522 -> generate_stray_light_sim [weight=10];
+  simulate_metis_5422_flux_calibration -> generate_optomechanical_stability_sim [weight=10];
+  simulate_metis_5422_vpm_stability -> generate_optomechanical_stability_sim [weight=10];
   sim_img_06_metis_5838 -> generate_out_of_field_sim [weight=10];
   simulate_img_07_pupil_imaging -> generate_pupil_imaging_sim [weight=10];
   simulate_metis_2594 -> generate_phot_performance_sim [weight=10];

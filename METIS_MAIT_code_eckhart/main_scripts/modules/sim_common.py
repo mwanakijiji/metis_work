@@ -882,3 +882,32 @@ def run_scenario(  # pylint: disable=too-many-arguments,too-many-positional-argu
     for (req_key, name), files in written.items():
         logging.info("%s (%s): %s files written", req_key, name, len(files))
     return written
+
+
+def log_stub_inputs(scenario, keys=("fp_mask", "pp_mask")):
+    """
+    For stub SIMs: log what is still TBD, i.e. the instruments' set-up entries in keys
+    that are null (e.g. focal- and pupil-plane masks) and the requirements not
+    simulated (with their reason).
+
+    OUTPUTS:
+    - int: number of instruments with an entry TBD
+    """
+    n_tbd = 0
+    for name, instrument in scenario_instruments(scenario).items():
+        missing = [key for key in keys if instrument.get(key) is None]
+        if missing:
+            n_tbd += 1
+            logging.warning(
+                "! ------- Instrument %s (%s, %s): %s TBD",
+                name,
+                instrument["obs_mode"],
+                instrument["obs_filter"],
+                " and ".join(missing),
+            )
+    for req_key, req_cfg in scenario["requirements"].items():
+        if not req_cfg.get("simulate", False):
+            logging.info(
+                "%s: not simulated (%s)", req_key, req_cfg.get("reason", "no reason")
+            )
+    return n_tbd

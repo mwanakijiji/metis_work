@@ -1,0 +1,39 @@
+# Scenario for IMG_OPT_07_pupil_imaging_SIM.py (STUB): one entry per requirement.
+# Format and options: see modules/sim_common.py and
+# config_file_IMG_RAD_07_phot_performance_SIM.yaml.
+# Files (once implemented): data/IMG_OPT_07_pupil_imaging_simmed_data/
+#   IMG_OPT_07_<requirement>_<instrument>_<case>.fits
+#
+# Pupil imaging is not yet possible in ScopeSim (the capability will be added later),
+# so the WCU focal-plane and pupil-plane masks are not known yet (null = TBD) and
+# nothing is simulated.
+
+instruments:
+  LM: # LM (HAWAII-2RG, fast mode)
+    fp_mask: null # TBD: WCU focal-plane mask for pupil imaging
+    pp_mask: null # TBD: pupil-plane mask for pupil imaging
+    obs_filter: HCI_L_short # placeholder
+    nd_filter: null
+    obs_mode: wcu_img_lm
+    dit: 0.04 # s; placeholder (mindit of the fast mode)
+    ndit: 1
+    intrapixel_capacitance: true
+  N: # N (GeoSnap, high-capacity mode)
+    fp_mask: null # TBD
+    pp_mask: null # TBD
+    obs_filter: N2 # placeholder
+    nd_filter: null
+    obs_mode: wcu_img_n
+    dit: 0.011 # s; placeholder (mindit of the high-capacity mode)
+    ndit: 1
+    intrapixel_capacitance: true
+
+requirements:
+
+  PUPIL-TBD:
+    simulate: false
+    req_id: IMG-OPT-07 pupil imaging (ID TBD)
+    description: TBD (requirement text of the IMG-OPT-07 test description)
+    reason: >-
+      pupil imaging not yet possible in ScopeSim (capability to be added); the focal-
+      and pupil-plane masks are TBD
