@@ -1,6 +1,6 @@
 """
-IMG-RAD-09 nominal background behaviour: the point-source noise of a long on-sky
-exposure, in absolute flux units.
+IMG-RAD-09 nominal background behaviour: the point-source noise of a long
+background exposure (simulated as a WCU flat field), in absolute flux units.
 
 Shared by the SIM (which injects a noise level, so it must be the quantity measured
 here) and the ANALYSIS (IMG_RAD_09_nominal_background_behavior_ANALYSIS.py):

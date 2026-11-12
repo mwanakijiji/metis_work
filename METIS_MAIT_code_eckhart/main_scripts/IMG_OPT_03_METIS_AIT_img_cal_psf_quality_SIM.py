@@ -149,36 +149,11 @@ def simulate_strehl(ctx, req_key, req_cfg):
     return written
 
 
-def write_reference_frame(ctx, req_key, req_cfg):
-    """
-    The unmodified illuminated ScopeSim frame (no requirement, nothing injected), as
-    <prefix>_<req_key>_<instrument>_reference.fits.
-
-    OUTPUTS:
-    - list[str]: written files
-    """
-    del req_cfg  # no limit or cases
-    flat, _ = ctx.lit_frame()
-    return [
-        ctx.write_case(
-            req_key,
-            "reference",
-            "",
-            flat,
-            [
-                ("REQ_ID", "none", "No requirement simulated"),
-                ("CASE", "reference", "Unmodified ScopeSim frame"),
-                ("SIMVER", ctx.simver, "ScopeSim, IRDB, code versions"),
-            ],
-        )
-    ]
-
-
 # requirement key (in the scenario config) -> function writing its simulated data
 SIMULATORS = {
     "METIS-1408-1409": simulate_strehl,
     "METIS-2864": simulate_strehl,
-    "TABLE-4-1": write_reference_frame,
+    "TABLE-4-1": sim_common.write_reference_frame,
 }
 
 

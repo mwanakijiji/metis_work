@@ -23,6 +23,8 @@ CLUSTER_OOF = "IMG-OPT-06 Out-of-field stray light"
 CLUSTER_PUPIL = "IMG-OPT-07 Pupil imaging (stub)"
 CLUSTER_PHOT = "IMG-RAD-07 Photometric performance"
 CLUSTER_NOMBKG = "IMG-RAD-09 Nominal background behaviour"
+CLUSTER_PTEXT = "IMG-RAD-08 Point vs extended slope (stub)"
+CLUSTER_CHOP = "IMG-RAD-11 Background systematics with chopper (stub)"
 COLOR_FOV = "#1f77b4"
 COLOR_DISTORTION = "#ff7f0e"
 COLOR_PSF = "#2ca02c"
@@ -32,6 +34,8 @@ COLOR_OOF = "#8c564b"
 COLOR_PUPIL = "#17becf"
 COLOR_PHOT = "#9467bd"
 COLOR_NOMBKG = "#e377c2"
+COLOR_PTEXT = "#7f7f7f"
+COLOR_CHOP = "#aec7e8"
 
 
 @dataclass(frozen=True)

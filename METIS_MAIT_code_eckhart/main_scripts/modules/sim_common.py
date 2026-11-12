@@ -4,12 +4,12 @@ readouts, and the requirement scenarios (limits, cases on either side of them, a
 FITS files with the requirement and the injected truth in the header).
 
 A scenario config (config/config_file_<test>_SIM.yaml) has
-- instruments: name -> WCU / instrument set-up (obs_filter, fp_mask, pp_mask,
+- instruments: filter -> WCU / instrument set-up (obs_filter, fp_mask, pp_mask,
   psf_kernel, nd_filter, obs_mode, dit, ndit, intrapixel_capacitance); or a single
   'instrument:' block (as for IMG-RAD-07)
 - requirements: requirement key -> {simulate, description, limit, cases, ...}, where
   - limit: quantity -> {value, pass_if ('<=', '>=' or 'in' with value [lo, hi]), unit}
-  - cases: case name -> {inject: {quantity: injected value}}; a 'pass' and a 'fail'
+  - cases: case filter -> {inject: {quantity: injected value}}; a 'pass' and a 'fail'
     case are required, and must be on the right side of the limit
   - by_detector (optional): detector key ('img_lm', 'img_n') -> keys (e.g. limit,
     cases) overriding the ones above for instruments on that detector
@@ -55,8 +55,6 @@ IRDB_DIR = irdb_dir()
 DETECTOR_KEYS = {
     "wcu_img_lm": "img_lm",
     "wcu_img_n": "img_n",
-    "img_lm": "img_lm",  # on sky
-    "img_n": "img_n",  # on sky
 }
 
 # simulated raw readouts must peak at <= this fraction of saturation; DITs are tuned to
@@ -90,7 +88,7 @@ def setup_scopesim():
 
 
 def detector_key(obs_mode):
-    """Detector key ('img_lm' or 'img_n') of a WCU or on-sky imaging obs_mode."""
+    """Detector key ('img_lm' or 'img_n') of a WCU imaging obs_mode."""
     if obs_mode not in DETECTOR_KEYS:
         raise ValueError(f"No detector key for obs_mode {obs_mode!r}")
     return DETECTOR_KEYS[obs_mode]
@@ -326,162 +324,28 @@ def readout_frame(metis, bb_aperture, instrument):
     return hdul[1].data.astype(float), hdul[0].header
 
 
-def set_nd_filter(metis, name):
-    """Put ND filter `name` (one of the ND wheel's, e.g. 'ND_OD3') in the beam."""
-    metis["nd_filter_wheel"].change_filter(name)
-    logging.info("ND filter: %s", name)
+def set_nd_filter(metis, filter):
+    """Put ND filter `filter` (one of the ND wheel's, e.g. 'ND_OD3') in the beam."""
+    metis["nd_filter_wheel"].change_filter(filter)
+    logging.info("ND filter: %s", filter)
 
 
-def nd_transmission(metis, name):
+def nd_transmission(metis, filter):
     """
-    Transmission of ND filter `name` of the ND wheel: the plateau of its (grey) curve.
+    Transmission of ND filter `filter` of the ND wheel: the plateau of its (grey) curve.
 
     Raises ValueError if the curve is not grey (nonzero values differing by > 1%).
     """
-    trans = np.asarray(metis["nd_filter_wheel"].filters[name].table["transmission"])
+    trans = np.asarray(metis["nd_filter_wheel"].filters[filter].table["transmission"])
     plateau = trans[trans > 0]
     if plateau.size == 0 or np.max(plateau) > 1.01 * np.min(plateau):
-        raise ValueError(f"ND filter {name} is not grey: transmissions {plateau}")
+        raise ValueError(f"ND filter {filter} is not grey: transmissions {plateau}")
     return float(np.median(plateau))
 
 
 def detector_mindit(metis):
     """Minimum DIT (s) of the detector readout mode (!DET.mindit)."""
     return float(metis.cmds["!DET.mindit"])
-
-
-# ---------------------------------------------------------------- on-sky set-ups
-
-
-def pupil_mask_transmission(pp_mask):
-    """
-    Transmission of pupil mask pp_mask, from the pupil-mask table of the IRDB
-    (METIS/METIS_WCU.yaml, effect 'pupil_masks'), which the on-sky modes do not load.
-    """
-    with open(
-        os.path.join(IRDB_DIR, "METIS", "METIS_WCU.yaml"), encoding="utf-8"
-    ) as file:
-        for doc in yaml.safe_load_all(file):
-            for effect in (doc or {}).get("effects", []):
-                if effect.get("name") == "pupil_masks":
-                    masks = effect["kwargs"]["pupil_masks"]
-                    table = dict(zip(masks["names"], masks["transmissions"]))
-                    if pp_mask not in table:
-                        raise ValueError(
-                            f"Pupil mask {pp_mask} not in the IRDB table: "
-                            f"{sorted(table)}"
-                        )
-                    return float(table[pp_mask])
-    raise ValueError("No pupil_masks effect in METIS_WCU.yaml")
-
-
-def build_sky_optical_train(instrument):
-    """
-    ScopeSim OpticalTrain for an on-sky set-up (obs_mode 'img_lm' / 'img_n': Armazones
-    atmosphere, ELT and METIS, no WCU), observing an empty sky, so a readout is the sky
-    + telescope + instrument background. The pupil mask pp_mask sets the PSF kernel
-    (METIS_psfs/PSF_<pp_mask>.fits, as psf_name does in the WCU modes) and the
-    cold-stop transmission (!OBS.pupil_transmission, from pupil_mask_transmission).
-    The on-sky modes have no focal-plane mask element (fp_mask is a header label).
-    IPC on or off as configured. Sets instrument['psf_kernel'] to pp_mask (headers).
-    """
-    pp_mask = instrument["pp_mask"]
-    transmission = pupil_mask_transmission(pp_mask)
-    # (UserCommands consumes the properties dict)
-    properties = {
-        "!OBS.filter_name": instrument["obs_filter"],
-        "!OBS.pupil_transmission": transmission,
-    }
-    if instrument.get("nd_filter") is not None:
-        properties["!OBS.nd_filter_name"] = instrument["nd_filter"]
-    cmd = sim.UserCommands(
-        use_instrument="METIS",
-        set_modes=[instrument["obs_mode"]],
-        properties=properties,
-    )
-    metis = sim.OpticalTrain(cmd)
-    metis["psf"].update(pupil_mask=pp_mask)
-    instrument["psf_kernel"] = pp_mask
-    logging.info(
-        "Pupil mask %s: PSF kernel PSF_%s.fits, cold-stop transmission %.4f "
-        "(optical train: %s)",
-        pp_mask,
-        pp_mask,
-        transmission,
-        metis.cmds.get("!OBS.pupil_transmission"),
-    )
-    if not instrument.get("intrapixel_capacitance", True):
-        metis["ipc"].include = False
-        logging.info("Turning off inter-pixel capacitance")
-    if metis.cmds.get("!OBS.filter_name") != instrument["obs_filter"]:
-        logging.error(
-            "! ------- OBS filter %s does not match user input %s",
-            metis.cmds.get("!OBS.filter_name"),
-            instrument["obs_filter"],
-        )
-        sys.exit(1)
-    metis.observe(sim.source.source_templates.empty_sky())
-    logging.info(
-        "On-sky optical train: mode %s, filter %s, empty sky observed",
-        instrument["obs_mode"],
-        instrument["obs_filter"],
-    )
-    return metis
-
-
-def readout_sky(metis, dit, ndit):
-    """
-    One readout of the observed (empty) sky: ScopeSim integrates DIT x NDIT and returns
-    the average per DIT (ExposureOutput mode 'average'), with shot and read noise of the
-    whole integration.
-
-    OUTPUTS:
-    - np.ndarray: frame (ADU per DIT)
-    - astropy header: primary header
-    """
-    hdul = metis.readout(dit=float(dit), ndit=int(ndit))[0]
-    frame = hdul[1].data.astype(float)
-    logging.info(
-        "Sky readout: DIT %.4g s, NDIT %s (%.6g s): median %.6g, max %.6g ADU/DIT",
-        dit,
-        ndit,
-        dit * ndit,
-        float(np.median(frame)),
-        float(np.max(frame)),
-    )
-    return frame, hdul[0].header
-
-
-def sky_dit(metis, saturation_adu, fill_frac=0.5, max_frac=MAX_RAW_FRAC):
-    """
-    DIT for on-sky readouts: the background is linear in the DIT, so from a single
-    readout at the minimum DIT, DIT = mindit x fill_frac x saturation / peak; never
-    below mindit. Raises ValueError if the raw peak at that DIT would exceed max_frac of
-    saturation (background too bright even at mindit).
-
-    OUTPUTS:
-    - float: DIT (s)
-    - float: expected raw peak / saturation at that DIT
-    """
-    mindit = detector_mindit(metis)
-    probe, _ = readout_sky(metis, mindit, 1)
-    peak = float(np.max(probe))
-    dit = max(mindit, mindit * fill_frac * saturation_adu / peak)
-    peak_frac = peak * dit / mindit / saturation_adu
-    if peak_frac > max_frac:
-        raise ValueError(
-            f"Sky background peaks at {peak_frac:.3f} of saturation at the minimum "
-            f"DIT {mindit} s (> {max_frac}): use a narrower filter or an ND filter"
-        )
-    logging.info(
-        "Sky DIT: probe peak %.6g ADU at mindit %.3g s -> DIT %.4g s (raw peak %.3f of "
-        "saturation)",
-        peak,
-        mindit,
-        dit,
-        peak_frac,
-    )
-    return dit, peak_frac
 
 
 def take_darks(metis, instrument):
@@ -613,8 +477,8 @@ def smooth_pattern(shape, kind="tilt_and_radial"):
 
 
 def instrument_tag(instrument):
-    """Instrument label in file names: its scenario name, else the filter."""
-    return instrument.get("name") or instrument["obs_filter"]
+    """Instrument label in file filters: its scenario filter, else the filter."""
+    return instrument.get("filter") or instrument["obs_filter"]
 
 
 def write_case_file(  # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -754,6 +618,32 @@ class SimContext:  # pylint: disable=too-many-instance-attributes
         )
 
 
+def write_reference_frame(ctx, req_key, req_cfg):
+    """
+    Simulator for scenario entries without a requirement (no limit or cases): the
+    unmodified illuminated ScopeSim frame, with dark_2 as BACKGROUND, as
+    <prefix>_<req_key>_<instrument>_reference.fits.
+
+    OUTPUTS:
+    - list[str]: written files
+    """
+    del req_cfg  # no limit or cases
+    flat, _ = ctx.lit_frame()
+    return [
+        ctx.write_case(
+            req_key,
+            "reference",
+            "",
+            flat,
+            [
+                ("REQ_ID", "none", "No requirement simulated"),
+                ("CASE", "reference", "Unmodified ScopeSim frame"),
+                ("SIMVER", ctx.simver, "ScopeSim, IRDB, code versions"),
+            ],
+        )
+    ]
+
+
 def saturation_of(observing, det_key):
     """Saturation level (ADU per DIT) of a detector from the observing config, or None."""
     try:
@@ -766,15 +656,15 @@ def scenario_instruments(scenario):
     """name -> instrument config, from 'instruments:' or a single 'instrument:'."""
     if "instruments" in scenario:
         return {
-            name: {**cfg, "name": name} for name, cfg in scenario["instruments"].items()
+            filter: {**cfg, "filter": filter} for filter, cfg in scenario["instruments"].items()
         }
     return {None: dict(scenario["instrument"])}
 
 
-def requirement_applies(req_cfg, name, instrument):
+def requirement_applies(req_cfg, filter, instrument):
     """True if a requirement is to be simulated for this instrument."""
     names = req_cfg.get("instruments")
-    if names is not None and name not in names:
+    if names is not None and filter not in names:
         return False
     detectors = req_cfg.get("detectors")
     if detectors is not None and detector_key(instrument["obs_mode"]) not in detectors:
@@ -805,6 +695,8 @@ def run_scenario(  # pylint: disable=too-many-arguments,too-many-positional-argu
     - dict: (requirement key, instrument name) -> list of written files
     """
     to_simulate = {}
+
+    # collect the METIS requirements to simulate
     for req_key, req_cfg in scenario["requirements"].items():
         if not req_cfg.get("simulate", False):
             logging.info(
@@ -816,6 +708,7 @@ def run_scenario(  # pylint: disable=too-many-arguments,too-many-positional-argu
             sys.exit(1)
         to_simulate[req_key] = req_cfg
 
+    import ipdb; ipdb.set_trace()
     simver = sim_version()
     logging.info("SIMVER: %s", simver)
     logging.info(
@@ -825,33 +718,35 @@ def run_scenario(  # pylint: disable=too-many-arguments,too-many-positional-argu
 
     written = {}
     dit_summary = []
-    for name, instrument in scenario_instruments(scenario).items():
+    for filter, instrument_setup in scenario_instruments(scenario).items():
         applicable = {
             req_key: req_cfg
             for req_key, req_cfg in to_simulate.items()
             if requirement_applies(req_cfg, name, instrument)
         }
         if not applicable:
-            logging.info("Instrument %s: no requirements to simulate", name)
+            logging.info("Instrument %s: no requirements to simulate", filter)
             continue
         logging.info("##################################################")
-        logging.info("Instrument %s: %s", name, instrument)
+        logging.info("Instrument %s: %s", filter, instrument)
         metis = build_optical_train(instrument)
+        import ipdb; ipdb.set_trace()
 
         saturation = saturation_of(observing, detector_key(instrument["obs_mode"]))
         if saturation is None:
             logging.warning(
                 "Instrument %s: no saturation_adu in the observing config; DIT not "
                 "checked against saturation",
-                name,
+                filter,
             )
         else:
             instrument, dit_info = limit_dit_to_saturation(
                 metis, instrument, saturation
             )
             instrument["dit_cfg"] = dit_info["dit_cfg"]
-            dit_summary.append((name, instrument, dit_info))
+            dit_summary.append((filter, instrument, dit_info))
 
+        import ipdb; ipdb.set_trace()
         ctx = SimContext(
             metis,
             instrument,
@@ -863,24 +758,24 @@ def run_scenario(  # pylint: disable=too-many-arguments,too-many-positional-argu
         )
         for req_key, req_cfg in applicable.items():
             logging.info("==================================================")
-            logging.info("%s (%s): %s", req_key, name, req_cfg["description"])
-            written[(req_key, name)] = simulators[req_key](
+            logging.info("%s (%s): %s", req_key, filter, req_cfg["description"])
+            written[(req_key, filter)] = simulators[req_key](
                 ctx, req_key, resolve_for_detector(req_cfg, ctx.det_key)
             )
 
     logging.info("==================================================")
-    for name, instrument, info in dit_summary:
+    for filter, instrument, info in dit_summary:
         logging.info(
             "DIT %s: %.5g -> %.5g s%s (NDIT %s); trial raw peak %.3f of saturation",
-            name if name is not None else instrument["obs_filter"],
+            filter if filter is not None else instrument["obs_filter"],
             info["dit_cfg"],
             info["dit"],
             " (shortened)" if info["dit"] != info["dit_cfg"] else "",
             instrument["ndit"],
             info["peak_frac"],
         )
-    for (req_key, name), files in written.items():
-        logging.info("%s (%s): %s files written", req_key, name, len(files))
+    for (req_key, filter), files in written.items():
+        logging.info("%s (%s): %s files written", req_key, filter, len(files))
     return written
 
 
@@ -894,13 +789,13 @@ def log_stub_inputs(scenario, keys=("fp_mask", "pp_mask")):
     - int: number of instruments with an entry TBD
     """
     n_tbd = 0
-    for name, instrument in scenario_instruments(scenario).items():
+    for filter, instrument in scenario_instruments(scenario).items():
         missing = [key for key in keys if instrument.get(key) is None]
         if missing:
             n_tbd += 1
             logging.warning(
                 "! ------- Instrument %s (%s, %s): %s TBD",
-                name,
+                filter,
                 instrument["obs_mode"],
                 instrument["obs_filter"],
                 " and ".join(missing),

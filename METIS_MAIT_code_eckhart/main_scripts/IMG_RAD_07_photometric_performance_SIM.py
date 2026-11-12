@@ -396,6 +396,7 @@ def main():
         + "config/config_file_IMG_RAD_07_phot_performance_SIM.yaml",
         print_one_line=False,
     )
+    import ipdb; ipdb.set_trace()
     sim_common.run_scenario(scenario, SIMULATORS, observing, out_dir, TEST_PREFIX)
 
 

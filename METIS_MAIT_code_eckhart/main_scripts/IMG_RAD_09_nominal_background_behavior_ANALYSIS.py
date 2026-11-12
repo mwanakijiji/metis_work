@@ -8,8 +8,9 @@ Reqs.:
 1. (requirement ID TBD) Verify sensititity requirement on point source in a 10000
 second exposure.
 
-Measured: the 1-sigma point-source noise of the background-subtracted 10000 s on-sky
-frame (BCKGD_SUBTED = exposure A - exposure B of an empty sky), from the robust spread
+Measured: the 1-sigma point-source noise of the background-subtracted 10000 s
+frame (BCKGD_SUBTED = exposure A - exposure B of a uniform background; in the SIM a WCU
+black-body flat with no source), from the robust spread
 of the sums in apertures of radius aperture_radius_lambda_over_d x lambda/D, in absolute
 flux units via the counts-to-flux calibration. The calibration and the noise limit are
 PLACEHOLDERS (config/config_file_IMG_RAD_09_nominal_background_observing.yaml).

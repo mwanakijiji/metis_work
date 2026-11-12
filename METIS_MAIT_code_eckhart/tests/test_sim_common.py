@@ -17,13 +17,16 @@ for _p in (_ROOT / "main_scripts", _ROOT / "misc"):
         sys.path.insert(0, str(_p))
 
 import IMG_OPT_01_METIS_AIT_img_cal_fov_SIM as sim01  # noqa: E402
+import IMG_OPT_02_METIS_AIT_img_cal_distortion_SIM as sim02  # noqa: E402
 import IMG_OPT_03_METIS_AIT_img_cal_psf_quality_SIM as sim03  # noqa: E402
 import IMG_OPT_04_METIS_AIT_img_stray_light_SIM as sim04  # noqa: E402
 import IMG_OPT_05_optomechanical_stability_SIM as sim_opt05  # noqa: E402
 import IMG_OPT_06_METIS_AIT_out_of_field_SIM as sim06  # noqa: E402
 import IMG_OPT_07_pupil_imaging_SIM as sim_opt07  # noqa: E402
 import IMG_RAD_07_photometric_performance_SIM as sim07  # noqa: E402
+import IMG_RAD_08_point_vs_extended_slope_SIM as sim_rad08  # noqa: E402
 import IMG_RAD_09_nominal_background_behavior_SIM as sim09  # noqa: E402
+import IMG_RAD_11_background_systematics_w_chopper_SIM as sim_rad11  # noqa: E402
 from modules import sim_common  # noqa: E402
 from modules.config_common import load_observing_config  # noqa: E402
 from modules import backbone_img_rad_09_nom as nom  # noqa: E402
@@ -126,6 +129,7 @@ def test_scenario_configs_are_consistent():
     # detector it is resolved for) and a simulator
     scenarios = {
         "config_file_IMG_OPT_01_METIS_AIT_img_cal_fov_SIM.yaml": sim01.SIMULATORS,
+        "config_file_IMG_OPT_02_distortion_SIM.yaml": sim02.SIMULATORS,
         "config_file_IMG_OPT_03_SIM.yaml": sim03.SIMULATORS,
         "config_file_IMG_OPT_04_stray_light_SIM.yaml": sim04.SIMULATORS,
         "config_file_IMG_OPT_05_optomechanical_stability_SIM.yaml": (
@@ -134,17 +138,26 @@ def test_scenario_configs_are_consistent():
         "config_file_IMG_OPT_06_outoffield_stray_light_SIM.yaml": sim06.SIMULATORS,
         "config_file_IMG_OPT_07_pupil_imaging_SIM.yaml": sim_opt07.SIMULATORS,
         "config_file_IMG_RAD_07_phot_performance_SIM.yaml": sim07.SIMULATORS,
+        "config_file_IMG_RAD_08_point_vs_extended_slope_SIM.yaml": (
+            sim_rad08.SIMULATORS
+        ),
         "config_file_IMG_RAD_09_nominal_background_SIM.yaml": sim09.SIMULATORS,
+        "config_file_IMG_RAD_11_background_systematics_SIM.yaml": (
+            sim_rad11.SIMULATORS
+        ),
     }
     for file_name, simulators in scenarios.items():
         with open(_ROOT / "config" / file_name, encoding="utf-8") as file:
             scenario = yaml.safe_load(file)
         instruments = sim_common.scenario_instruments(scenario)
         for req_key, req_cfg in scenario["requirements"].items():
-            if not req_cfg.get("simulate") or req_key == "TABLE-4-1":
+            if not req_cfg.get("simulate"):
                 continue
             if simulators is not None:
                 assert req_key in simulators, (file_name, req_key)
+            if "cases" not in req_cfg:
+                # reference frames (e.g. TABLE-4-1, GRID-FRAMES): no limit or cases
+                continue
             applies_to = [
                 name
                 for name, inst in instruments.items()
@@ -284,7 +297,7 @@ def test_metis_3300_steps_legal_and_unsaturated():
     assert np.allclose(np.diff(peaks), peaks[0])  # smooth (linear) progression
 
 
-# IMG-RAD-09: point-source noise of the on-sky background (aperture sums)
+# IMG-RAD-09: point-source noise of the background (aperture sums)
 
 
 def test_aperture_radius_px():

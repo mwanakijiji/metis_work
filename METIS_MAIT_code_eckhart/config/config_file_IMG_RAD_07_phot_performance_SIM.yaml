@@ -48,7 +48,7 @@ instruments:
 requirements:
 
   METIS-2594:
-    simulate: true
+    simulate: false
     description: >-
       METIS internal calibration shall provide a range of flux levels matching that
       encountered in scientific operation as defined in METIS-3137 (E-TNT-MPIA-MET-1004).
@@ -76,13 +76,13 @@ requirements:
       fail_low: {inject: {flux_min: 0.2, flux_max: 0.9}} # does not reach low enough
 
   METIS-2883:
-    simulate: true
+    simulate: false
     description: >-
       The source used for detector linearity calibration METIS-3289 shall provide an
       illumination that is spatially homogeneous within +/- 3% peak-to-valley over the
       science field of view of METIS.
     limit:
-      half_ptv:
+      half_ptv: # peak to valley
         value: 0.03
         pass_if: "<="
         unit: fraction
@@ -93,7 +93,7 @@ requirements:
       fail: {inject: {half_ptv: 0.06}}
 
   METIS-3300:
-    simulate: true
+    simulate: false
     description: >-
       The level of flux of the flat field shall be tunable to 15 discrete values and
       shall be known at each step to 0.3%. The resulting spatial illumination pattern
@@ -126,27 +126,36 @@ requirements:
       pass: {inject: {flux_error: 0.001, pattern_change: 0.001}}
       fail: {inject: {flux_error: 0.01, pattern_change: 0.01}}
 
-  # not simulated (yet)
-  METIS-2595:
-    simulate: false
-    description: Relative photometric accuracy shall be better than 0.97% rms.
-    reason: verified by test at Observatory level
-  METIS-2595-colour:
-    simulate: false
-    description: Uncertainty in color correction should be less than 1% rms.
-    reason: >-
-      verified by test at Observatory level (the test description lists this as
-      METIS-2595 too; check the requirement ID)
-  METIS-3291:
+METIS-3291:
     simulate: false
     description: >-
-      METIS shall allow the characterisation and correction of the relative spectral
-      response function (RSRF) with 3% precision over the wavelength range specified
-      in METIS-1090.
-    reason: needs a spectrally resolved WCU source model; TBD
-  METIS-3301:
-    simulate: false
-    description: >-
-      After calibration, the distortions introduced by METIS shall be removed to better
-      than 0.5 mas over the full field of view.
-    reason: distortion; simulated for IMG-OPT-02
+      METIS shall allow the characterisation and correction of the relative spectral response
+      function (RSRF) with 3% precision over the wavelength range specified in METIS-
+      1090.
+    limit:
+      flux_error:
+        value: 0.003
+        pass_if: "<="
+        unit: fraction
+        note: max |flux / nominal flux - 1| over the steps
+    cases:
+      pass: {inject: {flux_error: 0.001}}
+      fail: {inject: {flux_error: 0.01}}
+
+# not simulated (yet)
+METIS-2595:
+  simulate: false
+  description: Relative photometric accuracy shall be better than 0.97% rms.
+  reason: verified by test at Observatory level
+METIS-2595-colour:
+  simulate: false
+  description: Uncertainty in color correction should be less than 1% rms.
+  reason: >-
+    verified by test at Observatory level (the test description lists this as
+    METIS-2595 too; check the requirement ID)
+METIS-3301:
+  simulate: false
+  description: >-
+    After calibration, the distortions introduced by METIS shall be removed to better
+    than 0.5 mas over the full field of view.
+  reason: distortion; simulated for IMG-OPT-02
