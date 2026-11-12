@@ -1,0 +1,37 @@
+# Scenario for IMG_RAD_08_point_vs_extended_slope_SIM.py (STUB): one entry per
+# requirement. Format and options: see modules/sim_common.py and
+# config_file_IMG_RAD_07_phot_performance_SIM.yaml.
+# Files (once implemented): data/IMG_RAD_08_point_vs_extended_slope_simmed_data/
+#   IMG_RAD_08_<requirement>_<instrument>_<case>.fits
+#
+# The requirement text(s) of the IMG-RAD-08 test description and the WCU set-ups
+# (focal-plane masks for the point and the extended source, pupil-plane masks) are not
+# known yet (null = TBD), so nothing is simulated.
+
+instruments:
+  LM: # LM (HAWAII-2RG, fast mode)
+    fp_mask: null # TBD
+    pp_mask: null # TBD
+    obs_filter: Lp # placeholder
+    nd_filter: null
+    obs_mode: wcu_img_lm
+    dit: 0.04 # s; placeholder (mindit of the fast mode)
+    ndit: 1
+    intrapixel_capacitance: true
+  N: # N (GeoSnap, high-capacity mode)
+    fp_mask: null # TBD
+    pp_mask: null # TBD
+    obs_filter: N2 # placeholder
+    nd_filter: null
+    obs_mode: wcu_img_n
+    dit: 0.011 # s; placeholder (mindit of the high-capacity mode)
+    ndit: 1
+    intrapixel_capacitance: true
+
+requirements:
+
+  RAD-08-TBD:
+    simulate: false
+    req_id: IMG-RAD-08 point vs extended slope (ID TBD)
+    description: TBD (requirement text of the IMG-RAD-08 test description)
+    reason: requirement text TBD; focal- and pupil-plane masks TBD
