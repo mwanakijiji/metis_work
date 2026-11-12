@@ -55,6 +55,10 @@ IRDB_DIR = irdb_dir()
 DETECTOR_KEYS = {
     "wcu_img_lm": "img_lm",
     "wcu_img_n": "img_n",
+    # long-slit modes read out on the imager detectors (same saturation levels)
+    "wcu_lss_l": "img_lm",
+    "wcu_lss_m": "img_lm",
+    "wcu_lss_n": "img_n",
 }
 
 # simulated raw readouts must peak at <= this fraction of saturation; DITs are tuned to
@@ -708,7 +712,7 @@ def run_scenario(  # pylint: disable=too-many-arguments,too-many-positional-argu
             sys.exit(1)
         to_simulate[req_key] = req_cfg
 
-    import ipdb; ipdb.set_trace()
+    # log stuff
     simver = sim_version()
     logging.info("SIMVER: %s", simver)
     logging.info(
@@ -718,21 +722,23 @@ def run_scenario(  # pylint: disable=too-many-arguments,too-many-positional-argu
 
     written = {}
     dit_summary = []
+
+    # loop over each scenario: filter, instrument configuration
     for filter, instrument_setup in scenario_instruments(scenario).items():
         applicable = {
             req_key: req_cfg
             for req_key, req_cfg in to_simulate.items()
-            if requirement_applies(req_cfg, name, instrument)
+            if requirement_applies(req_cfg, filter, instrument_setup)
         }
         if not applicable:
-            logging.info("Instrument %s: no requirements to simulate", filter)
+            logging.info("Instrument setup %s: no requirements to simulate", filter)
             continue
         logging.info("##################################################")
-        logging.info("Instrument %s: %s", filter, instrument)
-        metis = build_optical_train(instrument)
-        import ipdb; ipdb.set_trace()
+        logging.info("Instrument setup %s: %s", filter, instrument_setup)
+        metis = build_optical_train(instrument_setup)
 
-        saturation = saturation_of(observing, detector_key(instrument["obs_mode"]))
+        # check saturation
+        saturation = saturation_of(observing, detector_key(instrument_setup["obs_mode"]))
         if saturation is None:
             logging.warning(
                 "Instrument %s: no saturation_adu in the observing config; DIT not "
@@ -740,38 +746,59 @@ def run_scenario(  # pylint: disable=too-many-arguments,too-many-positional-argu
                 filter,
             )
         else:
-            instrument, dit_info = limit_dit_to_saturation(
-                metis, instrument, saturation
+            # Shorten the configured DIT, if needed, so the raw readout with the WCU
+            # black-body aperture fully open, through this set-up's FP mask (so the
+            # PSF(s) of a pinhole/grid mask, plus the background), peaks at <=
+            # MAX_RAW_FRAC (0.8) of saturation (trial readouts at NDIT 1; aims at
+            # TARGET_RAW_FRAC, never lengthens the DIT). All requirement simulators
+            # for this set-up then use the tuned DIT. Every case file has the DIT
+            # used in its header (DIT, and ScopeSim's ESO DET DIT), the configured
+            # one as DIT_CFG, and the raw peak / saturation of the written frame as
+            # PEAKFRAC; the change is also in the DIT summary at the end of the log.
+            instrument_setup, dit_info = limit_dit_to_saturation(
+                metis, instrument_setup, saturation
             )
-            instrument["dit_cfg"] = dit_info["dit_cfg"]
-            dit_summary.append((filter, instrument, dit_info))
+            instrument_setup["dit_cfg"] = dit_info["dit_cfg"]
+            dit_summary.append((filter, instrument_setup, dit_info))
 
-        import ipdb; ipdb.set_trace()
+        # initialize the general simulator context
         ctx = SimContext(
             metis,
-            instrument,
+            instrument_setup,
             observing,
             out_dir,
             test_prefix,
             simver,
             results_dir=results_dir,
         )
+        # Execute simulations for each requirement (if simulate: true, and listed
+        # for it by 'instruments' / 'detectors'): look up its function in the SIM
+        # script's SIMULATORS dict and call it with the shared ctx (same OpticalTrain,
+        # tuned DIT, cached darks and lit frame) and the requirement's config, with any
+        # by_detector overrides for this detector merged in. It writes its case files
+        # and returns their paths, collected per (requirement, set-up).
         for req_key, req_cfg in applicable.items():
             logging.info("==================================================")
             logging.info("%s (%s): %s", req_key, filter, req_cfg["description"])
+            # resolve_for_detector: merge requirements
+            # simulators: dict containing the simulator functions for each requirement
+            import ipdb; ipdb.set_trace()
+            # req_cfg: configuration for this requirement
+            # ctx.det_key: the detector
+            # written: dict collecting the written files per (requirement, set-up)
             written[(req_key, filter)] = simulators[req_key](
                 ctx, req_key, resolve_for_detector(req_cfg, ctx.det_key)
             )
 
     logging.info("==================================================")
-    for filter, instrument, info in dit_summary:
+    for filter, instrument_setup, info in dit_summary:
         logging.info(
             "DIT %s: %.5g -> %.5g s%s (NDIT %s); trial raw peak %.3f of saturation",
-            filter if filter is not None else instrument["obs_filter"],
+            filter if filter is not None else instrument_setup["obs_filter"],
             info["dit_cfg"],
             info["dit"],
             " (shortened)" if info["dit"] != info["dit_cfg"] else "",
-            instrument["ndit"],
+            instrument_setup["ndit"],
             info["peak_frac"],
         )
     for (req_key, filter), files in written.items():

@@ -356,11 +356,173 @@ def simulate_metis_3300(  # pylint: disable=too-many-locals,too-many-statements
     return written
 
 
+@pipeline_stage(
+    name="simulate_metis_3291",
+    cluster=CLUSTER_PHOT,
+    cluster_color=COLOR_PHOT,
+    label="SIM METIS-3291: RSRF precision",
+)
+def simulate_metis_3291(  # pylint: disable=too-many-locals,too-many-statements
+    ctx, req_key, req_cfg
+):
+    """
+    Simulated data for METIS-3291: METIS shall allow the characterisation and
+    correction of the relative spectral response function (RSRF) with 3% precision
+    over the wavelength range specified in METIS-1090.
+
+    WORK IN PROGRESS: the body is still a copy of simulate_metis_3300 (flat-field flux
+    steps), not an RSRF simulation. As it stands it needs the METIS-3300 keys in the
+    scenario entry (n_steps, bb_aperture, nd_filters, peak_margin, and both flux_error
+    and pattern_change in each case's inject), and does the following.
+
+    Flux steps: the WCU black-body aperture is fixed (bb_aperture); the exposure
+    E = T_ND x DIT is stepped linearly, E_k = E_max * k / n_steps (header NOMFLUX = k /
+    n_steps, the nominal relative flux). E_max puts the raw peak (background included,
+    which scales with E too) at sim_common.MAX_RAW_FRAC of saturation / (1 +
+    peak_margin), scaled from a probe flat (base ND and DIT). Per step, the least
+    attenuating ND of nd_filters with DIT = E_k / T_ND >= the detector's minimum DIT is
+    used (choose_nd_and_dit), with two darks and a flat read out at that ND and DIT
+    (the background scales with it). Per case and step, injected:
+    - flux error: the flux is off the nominal by +/- flux_error (alternating sign),
+    - pattern change: a smooth pattern with amplitude ramping from -pattern_change to
+      +pattern_change over the steps (so each step's normalised flat differs from the
+      step-averaged one by at most pattern_change).
+    Writes ..._<case>_stepNN.fits for each configured case, one ScopeSim readout per
+    step shared by all cases.
+
+    OUTPUTS:
+    - list[str]: written files
+    """
+
+    import ipdb; ipdb.set_trace()
+    expected = sim_common.check_cases(req_key, req_cfg)
+
+    '''
+    n_steps = int(req_cfg["n_steps"])
+    bb_aperture = float(req_cfg["bb_aperture"])
+    base_nd = ctx.instrument.get("nd_filter")
+    if base_nd is None:
+        raise ValueError(
+            f"{req_key}: the instrument needs a base nd_filter (the probe flat's ND)"
+        )
+    mindit = sim_common.detector_mindit(ctx.metis)
+    nd_trans = {
+        name: sim_common.nd_transmission(ctx.metis, name)
+        for name in req_cfg["nd_filters"]
+    }
+    max_raw = sim_common.MAX_RAW_FRAC * ctx.saturation_adu
+
+    # probe: a flat at the base ND and DIT and the steps' BB aperture (the cached base
+    # flat if that is 1.0)
+    if bb_aperture == 1.0:
+        probe, _ = ctx.lit_frame()
+    else:
+        probe, _ = sim_common.readout_frame(ctx.metis, bb_aperture, ctx.instrument)
+    t_probe = sim_common.nd_transmission(ctx.metis, base_nd)
+    dit_probe = float(ctx.instrument["dit"])
+    e_max = max_exposure(
+        float(np.max(probe)),
+        t_probe,
+        dit_probe,
+        max_raw,
+        float(req_cfg["peak_margin"]),
+    )
+    plan = [
+        choose_nd_and_dit(exposure, nd_trans, mindit)
+        for exposure in exposure_steps(e_max, n_steps)
+    ]
+    peak_per_exposure = float(np.max(probe)) / (t_probe * dit_probe)
+    logging.info(
+        "%s: probe raw peak %.4g ADU (%s, T %.3g, DIT %.4g s) -> E_max %.4g s; "
+        "mindit %.3g s",
+        req_key,
+        float(np.max(probe)),
+        base_nd,
+        t_probe,
+        dit_probe,
+        e_max,
+        mindit,
+    )
+    for step, (nd_name, dit) in enumerate(plan):
+        logging.info(
+            "%s step %02d: %s (T %.3g), DIT %.4g s -> expected raw peak %.3f of "
+            "saturation",
+            req_key,
+            step + 1,
+            nd_name,
+            nd_trans[nd_name],
+            dit,
+            peak_per_exposure * nd_trans[nd_name] * dit / ctx.saturation_adu,
+        )
+
+    pattern = None
+    signs = np.where(np.arange(n_steps) % 2 == 0, 1.0, -1.0)
+    ramp = np.linspace(-1.0, 1.0, n_steps)
+
+    written = []
+    try:
+        for step, (nd_name, dit) in enumerate(plan):
+            # one ScopeSim readout per step (darks at the same ND and DIT, as the
+            # background scales with both), injected differently for each case
+            step_inst = {**ctx.instrument, "nd_filter": nd_name, "dit": dit}
+            sim_common.set_nd_filter(ctx.metis, nd_name)
+            dark_1, dark_2 = sim_common.take_darks(ctx.metis, step_inst)
+            flat, header = sim_common.readout_frame(ctx.metis, bb_aperture, step_inst)
+            signal = flat - dark_1
+            if pattern is None:
+                pattern = sim_common.smooth_pattern(signal.shape, "saddle")
+            for case, case_cfg in req_cfg["cases"].items():
+                inject = case_cfg["inject"]
+                flux_factor = 1.0 + float(inject["flux_error"]) * signs[step]
+                pattern_factor = (
+                    1.0 + float(inject["pattern_change"]) * ramp[step] * pattern
+                )
+                raw = flat + (flux_factor * pattern_factor - 1.0) * signal
+                written.append(
+                    sim_common.write_case_file(
+                        ctx.out_dir,
+                        ctx.test_prefix,
+                        req_key,
+                        step_inst,
+                        case,
+                        f"_step{step + 1:02d}",
+                        raw,
+                        dark_2,
+                        header,
+                        sim_common.requirement_cards(
+                            req_key, req_cfg, case, inject, expected[case], ctx.simver
+                        )
+                        + [
+                            ("STEP", step + 1, "Flux step"),
+                            ("N_STEPS", n_steps, "Number of flux steps"),
+                            ("BB_APER", bb_aperture, "WCU BB aperture (fixed)"),
+                            ("ND_TRANS", nd_trans[nd_name], "ND filter transmission"),
+                            ("EXPOSURE", nd_trans[nd_name] * dit, "T_ND x DIT (s)"),
+                            ("NOMFLUX", (step + 1) / n_steps, "Nominal relative flux"),
+                            ("FLUXFAC", flux_factor, "Injected flux / nominal"),
+                            (
+                                "PATTAMP",
+                                float(inject["pattern_change"]) * ramp[step],
+                                "Injected pattern amplitude",
+                            ),
+                        ],
+                        saturation_adu=ctx.saturation_adu,
+                    )
+                )
+    finally:
+        sim_common.set_nd_filter(ctx.metis, base_nd)
+    '''
+    return written
+
+
+
 # requirement key (in the scenario config) -> function writing its simulated data
+# (i.e., these are the reqs that can be simulated)
 SIMULATORS = {
     "METIS-2594": simulate_metis_2594,
     "METIS-2883": simulate_metis_2883,
     "METIS-3300": simulate_metis_3300,
+    "METIS-3291": simulate_metis_3291,
 }
 
 
@@ -396,7 +558,7 @@ def main():
         + "config/config_file_IMG_RAD_07_phot_performance_SIM.yaml",
         print_one_line=False,
     )
-    import ipdb; ipdb.set_trace()
+
     sim_common.run_scenario(scenario, SIMULATORS, observing, out_dir, TEST_PREFIX)
 
 

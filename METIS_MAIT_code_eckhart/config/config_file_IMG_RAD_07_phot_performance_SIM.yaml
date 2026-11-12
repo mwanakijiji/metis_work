@@ -126,21 +126,21 @@ requirements:
       pass: {inject: {flux_error: 0.001, pattern_change: 0.001}}
       fail: {inject: {flux_error: 0.01, pattern_change: 0.01}}
 
-METIS-3291:
-    simulate: false
-    description: >-
-      METIS shall allow the characterisation and correction of the relative spectral response
-      function (RSRF) with 3% precision over the wavelength range specified in METIS-
-      1090.
-    limit:
-      flux_error:
-        value: 0.003
-        pass_if: "<="
-        unit: fraction
-        note: max |flux / nominal flux - 1| over the steps
-    cases:
-      pass: {inject: {flux_error: 0.001}}
-      fail: {inject: {flux_error: 0.01}}
+  METIS-3291:
+      simulate: true
+      description: >-
+        METIS shall allow the characterisation and correction of the relative spectral response
+        function (RSRF) with 3% precision over the wavelength range specified in METIS-
+        1090.
+      limit:
+        flux_error:
+          value: 0.003
+          pass_if: "<="
+          unit: fraction
+          note: max |flux / nominal flux - 1| over the steps
+      cases:
+        pass: {inject: {flux_error: 0.001}}
+        fail: {inject: {flux_error: 0.01}}
 
 # not simulated (yet)
 METIS-2595:
