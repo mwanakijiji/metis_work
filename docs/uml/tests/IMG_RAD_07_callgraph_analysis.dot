@@ -1,0 +1,68 @@
+digraph callgraph {
+  rankdir=LR;
+  ranksep=0.6;
+  nodesep=0.15;
+  label="IMG-RAD-07 Photometric performance: ANALYSIS call graph (IMG_RAD_07_photometric_performance_ANALYSIS.py)\nbox = @pipeline_stage, oval = helper, dashed box = class instantiated, dashed arrow = passed as callback; numbers = call order in main(); hover for the full docstring";
+  labelloc=t;
+  fontsize=14;
+  fontname="Helvetica";
+  node [fontname="Helvetica", fontsize=10];
+  edge [fontname="Helvetica", fontsize=9, color="#555555"];
+  subgraph cluster_IMG_RAD_07_photometric_performance_ANALYSIS {
+    label="IMG_RAD_07_photometric_performance_ANALYSIS.py";
+    style=filled; fillcolor="#f2f2f2"; color="#999999";
+    IMG_RAD_07_photometric_performance_ANALYSIS__main [label="main()", tooltip="Run the IMG-RAD-07 analysis for each data state (requirement, instrument,\ncase).", shape=box, style="filled,bold", fillcolor="white"];
+  }
+  subgraph cluster_paths {
+    label="modules/paths.py";
+    style=filled; fillcolor="#e8f0fb"; color="#999999";
+    paths__project_root [label="project_root\nThe project root\n(METIS_MAIT_code_eckhart/), as set\nin config/paths.yaml", tooltip="The project root (METIS_MAIT_code_eckhart/), as set in config/paths.yaml.\n\nOUTPUTS\n-------\nstr\n    Absolute path, ending in '/' (scripts append to it, e.g. stem + \"data/\").", shape=ellipse];
+    paths___load_paths [label="_load_paths\nLoad (once) the paths config from\nPATHS_FILE.", tooltip="Load (once) the paths config from PATHS_FILE.", shape=ellipse];
+  }
+  subgraph cluster_helpers {
+    label="modules/helpers.py";
+    style=filled; fillcolor="#e8f0fb"; color="#999999";
+    helpers__setup_logging [label="setup_logging\nInitialize logging with a file +\nconsole handler and pipe basic\nmetadata", tooltip="Initialize logging with a file + console handler and pipe basic metadata.\n\nINPUTS\n----------\nlog_dir : str\n    Directory where the log file should be written.\nlog_file_name : str\n    Full path to the output log file.\nnow : datetime.datetime, optional\n    Timestamp used for the \"created at\" log line. If None, that line is skipped.\n\nOUTPUTS\n-------\nNone\n    Configures the root logger and writes startup log lines.", shape=ellipse];
+    helpers__load_config_and_pipe [label="load_config_and_pipe\nLoad a YAML configuration file and\npipe its contents to the log", tooltip="Load a YAML configuration file and pipe its contents to the log.\n\nINPUTS\n----------\nconfig_file_choice : str\n    Path to the configuration file.\nprint_one_line : bool, optional\n    If True, log the entire config on a single line. If False (default), log\n    in a more readable, multiline format.\n\nOUTPUTS\n-------\nconfig_this : dict\n    The configuration dictionary loaded from file.", shape=ellipse];
+  }
+  subgraph cluster_config_common {
+    label="modules/config_common.py";
+    style=filled; fillcolor="#e8f0fb"; color="#999999";
+    config_common__load_observing_config [label="load_observing_config\nLoad the common observing config,\nthen merge each test-specific\nconfig on top, in order (top-level\nkeys of la…", tooltip="Load the common observing config, then merge each test-specific config on top, in\norder (top-level keys of later files override earlier ones).\n\nINPUTS\n----------\nstem : str\n    Project root (METIS_MAIT_code_eckhart/), prepended to relative paths.\n*test_config_files : str\n    Test-specific observing configs, relative to stem or absolute.\n\nOUTPUTS\n-------\ndict\n    The merged observing config.", shape=ellipse];
+  }
+  subgraph cluster_analysis_common {
+    label="modules/analysis_common.py";
+    style=filled; fillcolor="#fde3e3"; color="#999999";
+    analysis_common__load_data_states [label="load_data_states\nData states from a config with\n'defaults' and 'runs': each run is\nthe defaults overridden by the\nrun's entrie…", tooltip="Data states from a config with 'defaults' and 'runs': each run is the defaults\noverridden by the run's entries, with the relative paths named in path_keys (if\npresent) prefixed with stem.\n\nINPUTS:\n- stem (str): project root, ending in '/'\n- config_file (str): data-states config, relative to stem or absolute\n- path_keys (iterable of str): keys holding paths relative to stem\n\nOUTPUTS:\n- list[dict]: one merged dict per run", shape=ellipse];
+    analysis_common__check_saturation [label="check_saturation\nLog an error if the max counts in\nimage extension hdu_index (the raw\nreadout, before background\nsubtraction)…", tooltip="Log an error if the max counts in image extension hdu_index (the raw readout,\nbefore background subtraction) exceed frac of the saturation level. Does not stop\nthe analysis.\n\nOUTPUTS:\n- bool: True if the check passed", shape=ellipse];
+  }
+  subgraph cluster_backbone_img_rad_07_phot {
+    label="modules/backbone_img_rad_07_phot.py";
+    style=filled; fillcolor="#ece4f3"; color="#999999";
+    backbone_img_rad_07_phot__populate_run [label="populate_run\nSet up one run from a data state:\nits files (file_name_abs, or the\nfile_name_pattern glob of the\nMETIS-3300 s…", tooltip="Set up one run from a data state: its files (file_name_abs, or the\nfile_name_pattern glob of the METIS-3300 steps, sorted by the STEP header card),\ntheir primary headers, and the limits and analysis parameters from the IMG-RAD-07\nobserving config (warning if a header's limit differs).\n\nOUTPUTS:\n- PhotRunResult", shape=ellipse];
+    backbone_img_rad_07_phot__reduce_flats [label="reduce_flats\nReduce the run's flats\n(BCKGD_SUBTED) one at a time: the\nfield mask from the brightest\n(last) file, then per…", tooltip="Reduce the run's flats (BCKGD_SUBTED) one at a time: the field mask from the\nbrightest (last) file, then per file the mean flux in the mask and its standard\nerror, and the block mean / standard error maps.\n\nOUTPUTS:\n- PhotRunResult, with exposure, flux, flux_sigma, block_means, block_sigmas", shape=ellipse];
+    backbone_img_rad_07_phot__plot_run [label="plot_run\nFYI plots in result.results_dir:\nMETIS-2883 the B/mean - 1 block\nmap; METIS-3300 the flux error per\nstep (wit…", tooltip="FYI plots in result.results_dir: METIS-2883 the B/mean - 1 block map; METIS-3300\nthe flux error per step (with the limit band) and the pattern-change map of the\nworst step.\n\nOUTPUTS:\n- list[str]: written plot files", shape=box, style="filled", fillcolor="white"];
+    backbone_img_rad_07_phot__log_test_outcome [label="log_test_outcome\nLog the outcome of the run's\nrequirement (as decided by\nmetis_2883_check or\nmetis_3300_check) and compare it…", tooltip="Log the outcome of the run's requirement (as decided by metis_2883_check or\nmetis_3300_check) and compare it with the injected truth (EXPECTED).\n\nOUTPUTS:\n- PhotRunResult, with verdict_overall and consistent set", shape=box, style="filled", fillcolor="white"];
+    backbone_img_rad_07_phot__log_summary [label="log_summary\nLog a table of all runs\n(requirement, instrument, case,\nverdict, expected, consistency\nwith the injected trut…", tooltip="Log a table of all runs (requirement, instrument, case, verdict, expected,\nconsistency with the injected truth); METIS-2594 is NOT EVALUATED (no SIM data).\n\nOUTPUTS:\n- int: number of runs inconsistent with the injected truth", shape=ellipse];
+    backbone_img_rad_07_phot__block_stats [label="block_stats\nMean and standard error of the\nmean of the masked pixels of frame\nin square blocks of block_px; NaN\nfor block…", tooltip="Mean and standard error of the mean of the masked pixels of frame in square blocks\nof block_px; NaN for blocks with less than min_fill of their pixels in the mask\n(incomplete blocks at the frame edge are dropped).\n\nOUTPUTS:\n- np.ndarray: block means\n- np.ndarray: block standard errors (std / sqrt(n))", shape=ellipse];
+    backbone_img_rad_07_phot__half_ptv [label="half_ptv\nHalf peak-to-valley inhomogeneity\nmax |B / mean(B) - 1| over the\nvalid blocks, and its noise sigma\n(the relat…", tooltip="Half peak-to-valley inhomogeneity max |B / mean(B) - 1| over the valid blocks, and\nits noise sigma (the relative standard error of the block where the max is).\n\nOUTPUTS:\n- float: max |B / mean - 1|\n- float: sigma\n- np.ndarray: map of B / mean - 1", shape=ellipse];
+    backbone_img_rad_07_phot___plot_map [label="_plot_map\nDiverging image of a relative-\ndeviation block map", tooltip="Diverging image of a relative-deviation block map.", shape=ellipse];
+    backbone_img_rad_07_phot__PhotRunResult [label="PhotRunResult(...)", tooltip="One IMG-RAD-07 run (requirement, instrument, case), filled in by the stages.", shape=box, style="rounded,dashed,filled", fillcolor="white"];
+  }
+  IMG_RAD_07_photometric_performance_ANALYSIS__main -> paths__project_root [label="1"];
+  IMG_RAD_07_photometric_performance_ANALYSIS__main -> helpers__setup_logging [label="2"];
+  IMG_RAD_07_photometric_performance_ANALYSIS__main -> config_common__load_observing_config [label="3"];
+  IMG_RAD_07_photometric_performance_ANALYSIS__main -> analysis_common__load_data_states [label="4"];
+  IMG_RAD_07_photometric_performance_ANALYSIS__main -> backbone_img_rad_07_phot__populate_run [label="5"];
+  IMG_RAD_07_photometric_performance_ANALYSIS__main -> analysis_common__check_saturation [label="6"];
+  IMG_RAD_07_photometric_performance_ANALYSIS__main -> backbone_img_rad_07_phot__reduce_flats [label="7"];
+  IMG_RAD_07_photometric_performance_ANALYSIS__main -> backbone_img_rad_07_phot__plot_run [label="8"];
+  IMG_RAD_07_photometric_performance_ANALYSIS__main -> backbone_img_rad_07_phot__log_test_outcome [label="9"];
+  IMG_RAD_07_photometric_performance_ANALYSIS__main -> backbone_img_rad_07_phot__log_summary [label="10"];
+  paths__project_root -> paths___load_paths [];
+  analysis_common__load_data_states -> helpers__load_config_and_pipe [];
+  backbone_img_rad_07_phot__populate_run -> backbone_img_rad_07_phot__PhotRunResult [];
+  backbone_img_rad_07_phot__reduce_flats -> backbone_img_rad_07_phot__block_stats [];
+  backbone_img_rad_07_phot__plot_run -> backbone_img_rad_07_phot__half_ptv [];
+  backbone_img_rad_07_phot__plot_run -> backbone_img_rad_07_phot___plot_map [];
+}

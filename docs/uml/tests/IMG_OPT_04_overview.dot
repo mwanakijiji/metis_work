@@ -1,0 +1,45 @@
+digraph overview {
+  rankdir=TB;
+  ranksep=0.35;
+  newrank=true;
+  label="IMG-OPT-04 Stray light: overview\npipeline stages (this test's + the shared ones it uses), then each stage's purpose and the result fields it writes";
+  labelloc=t;
+  fontsize=14;
+  fontname="Helvetica";
+  node [fontname="Helvetica", fontsize=10];
+  edge [fontname="Helvetica", fontsize=9, color="#555555"];
+  subgraph cluster_flow {
+    label="pipeline stages"; style=rounded; color="#999999";
+    node [shape=box, style="rounded,filled"];
+    centroid_2passes_oversample [label="Centroid PSFs", fillcolor="#fde3e3", style="rounded,filled"];
+    generate_stray_light_sim [label="Generate stray-light sims", fillcolor="#f2f2f2", style="rounded,filled"];
+    img_04_fyi_plots [label="FYI plots", fillcolor="#f8d8d8", style="rounded,dashed,filled"];
+    img_04_metis_1189_1429_check [label="METIS-1189/-1429: stray light vs. 0.04% of PSF peak", fillcolor="#f8d8d8", style="rounded,filled"];
+    img_04_metis_9522_check [label="METIS-9522: artefacts vs. 3-sigma background", fillcolor="#f8d8d8", style="rounded,filled"];
+    img_04_test_outcome [label="IMG-OPT-04 pass/fail", fillcolor="#f8d8d8", style="rounded,filled", penwidth=2];
+    populate_result_obj_info [label="Populate result object", fillcolor="#fde3e3", style="rounded,filled"];
+    sim_img_04_metis_1189_1429 [label="SIM METIS-1189/-1429: stray light vs. PSF peak", fillcolor="#f2f2f2", style="rounded,filled"];
+    sim_img_04_metis_9522 [label="SIM METIS-9522: artefacts vs. 3-sigma background", fillcolor="#f2f2f2", style="rounded,filled"];
+    stray_light_brightness_spectrum [label="Arrange segments into brightnesses as function of spatial scales", fillcolor="#f8d8d8", style="rounded,filled"];
+    stray_light_mask_real [label="Mask the real PSF", fillcolor="#fde3e3", style="rounded,filled"];
+    stray_light_segmentation [label="Segment stray light", fillcolor="#fde3e3", style="rounded,filled"];
+    stray_light_segmentation_combined [label="Segment stray light (weighted combination of methods)", fillcolor="#fde3e3", style="rounded,filled"];
+    populate_result_obj_info -> centroid_2passes_oversample;
+    sim_img_04_metis_1189_1429 -> generate_stray_light_sim;
+    sim_img_04_metis_9522 -> generate_stray_light_sim;
+    stray_light_brightness_spectrum -> img_04_fyi_plots;
+    stray_light_brightness_spectrum -> img_04_metis_1189_1429_check;
+    stray_light_brightness_spectrum -> img_04_metis_9522_check;
+    img_04_metis_1189_1429_check -> img_04_test_outcome;
+    img_04_metis_9522_check -> img_04_test_outcome;
+    generate_stray_light_sim -> populate_result_obj_info;
+    stray_light_segmentation -> stray_light_brightness_spectrum;
+    stray_light_segmentation_combined -> stray_light_brightness_spectrum;
+    centroid_2passes_oversample -> stray_light_mask_real;
+    stray_light_mask_real -> stray_light_segmentation;
+    stray_light_mask_real -> stray_light_segmentation_combined;
+  }
+  stage_table [shape=plaintext, label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4"><TR><TD BGCOLOR="#dddddd"><B>stage</B></TD><TD BGCOLOR="#dddddd"><B>module</B></TD><TD BGCOLOR="#dddddd"><B>purpose (docstring)</B></TD><TD BGCOLOR="#dddddd"><B>writes</B></TD></TR><TR><TD ALIGN="LEFT">generate_stray_light_sim</TD><TD ALIGN="LEFT">IMG_OPT_04_METIS_AIT_img_stray_light_SIM.py</TD><TD ALIGN="LEFT">Generate IMG-OPT-04 stray-light simulations, one set per<BR ALIGN="LEFT"/>requirement, as set in the scenario config<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT">N_ART, ART_PEAK, REF_PEAK, SIG_PIX,<BR ALIGN="LEFT"/>TRUTH_LABELS<BR ALIGN="LEFT"/></TD></TR><TR><TD ALIGN="LEFT">sim_img_04_metis_1189_1429</TD><TD ALIGN="LEFT">IMG_OPT_04_METIS_AIT_img_stray_light_SIM.py</TD><TD ALIGN="LEFT">Simulated data for METIS-1189 and -1429: stray light<BR ALIGN="LEFT"/>irradiance &lt; 0.04% of the peak irradiance<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT">N_ART, ART_PEAK, REF_PEAK, TRUTH_LABELS<BR ALIGN="LEFT"/></TD></TR><TR><TD ALIGN="LEFT">sim_img_04_metis_9522</TD><TD ALIGN="LEFT">IMG_OPT_04_METIS_AIT_img_stray_light_SIM.py</TD><TD ALIGN="LEFT">Simulated data for METIS-9522: the flux of each artefact &lt;<BR ALIGN="LEFT"/>3-sigma of the background noise for its spatial scale<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT">N_ART, SIG_PIX, REF_PEAK, TRUTH_LABELS<BR ALIGN="LEFT"/></TD></TR><TR><TD ALIGN="LEFT">populate_result_obj_info</TD><TD ALIGN="LEFT">modules/stray_light_common.py</TD><TD ALIGN="LEFT">Populate the result object with information from the data<BR ALIGN="LEFT"/>state<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT">wavel_central, pixel_scale<BR ALIGN="LEFT"/></TD></TR><TR><TD ALIGN="LEFT">centroid_2passes_oversample</TD><TD ALIGN="LEFT">modules/stray_light_common.py</TD><TD ALIGN="LEFT">Centroid the PSF in the image of the result object, starting<BR ALIGN="LEFT"/>from first guesses of the positions<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT">centroids<BR ALIGN="LEFT"/></TD></TR><TR><TD ALIGN="LEFT">stray_light_mask_real</TD><TD ALIGN="LEFT">modules/stray_light_common.py</TD><TD ALIGN="LEFT">Mask the real PSF, so we can find the stray light<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT">real_psf_mask<BR ALIGN="LEFT"/></TD></TR><TR><TD ALIGN="LEFT">stray_light_segmentation_combined</TD><TD ALIGN="LEFT">modules/stray_light_common.py</TD><TD ALIGN="LEFT">Segment the stray light with a weighted combination of the<BR ALIGN="LEFT"/>methods in SEGMENTATION_METHODS.<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT">segment_map, segmentation_method,<BR ALIGN="LEFT"/>segmentation_weights,<BR ALIGN="LEFT"/>segmentation_vote_fraction,<BR ALIGN="LEFT"/>method_label_maps, final_label_map<BR ALIGN="LEFT"/></TD></TR><TR><TD ALIGN="LEFT">stray_light_segmentation</TD><TD ALIGN="LEFT">modules/stray_light_common.py</TD><TD ALIGN="LEFT">Segment the stray light<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT">segment_map, segmentation_method<BR ALIGN="LEFT"/></TD></TR><TR><TD ALIGN="LEFT">stray_light_brightness_spectrum</TD><TD ALIGN="LEFT">modules/backbone_img_opt_04_stray_light.py</TD><TD ALIGN="LEFT">Sort out the segments into brightnesses as function of<BR ALIGN="LEFT"/>spatial scales, and measure the quantities the requirements<BR ALIGN="LEFT"/>are tested against (pass…<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT">regions, background_rms, psf_max<BR ALIGN="LEFT"/></TD></TR><TR><TD ALIGN="LEFT">img_04_metis_1189_1429_check</TD><TD ALIGN="LEFT">modules/backbone_img_opt_04_stray_light.py</TD><TD ALIGN="LEFT">Decide METIS-1189 (stray light &lt; 0.1% of the peak irradiance<BR ALIGN="LEFT"/>in the IMG focal planes) and METIS-1429 (&lt; 0.04% in the IMG-<BR ALIGN="LEFT"/>LM and IMG-N detec…<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT">pass_metis_1189_1429<BR ALIGN="LEFT"/></TD></TR><TR><TD ALIGN="LEFT">img_04_metis_9522_check</TD><TD ALIGN="LEFT">modules/backbone_img_opt_04_stray_light.py</TD><TD ALIGN="LEFT">Decide METIS-9522: the total flux of every stray light<BR ALIGN="LEFT"/>region is below 3-sigma of the background noise of the<BR ALIGN="LEFT"/>summed flux over the region&#x27;s…<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT">pass_metis_9522<BR ALIGN="LEFT"/></TD></TR><TR><TD ALIGN="LEFT">img_04_test_outcome</TD><TD ALIGN="LEFT">modules/backbone_img_opt_04_stray_light.py</TD><TD ALIGN="LEFT">Log the outcome of each IMG-OPT-04 requirement (as decided<BR ALIGN="LEFT"/>by metis_1189_1429_check and metis_9522_check) and of the<BR ALIGN="LEFT"/>whole test: PASS if bo…<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT">verdict_overall<BR ALIGN="LEFT"/></TD></TR></TABLE>>];
+  img_04_fyi_plots -> stage_table [style=invis];
+  img_04_test_outcome -> stage_table [style=invis];
+}

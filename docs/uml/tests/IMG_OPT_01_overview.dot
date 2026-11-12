@@ -1,0 +1,29 @@
+digraph overview {
+  rankdir=TB;
+  ranksep=0.35;
+  newrank=true;
+  label="IMG-OPT-01 FOV (need distortion info): overview\npipeline stages (this test's + the shared ones it uses), then each stage's purpose and the result fields it writes";
+  labelloc=t;
+  fontsize=14;
+  fontname="Helvetica";
+  node [fontname="Helvetica", fontsize=10];
+  edge [fontname="Helvetica", fontsize=9, color="#555555"];
+  subgraph cluster_flow {
+    label="pipeline stages"; style=rounded; color="#999999";
+    node [shape=box, style="rounded,filled"];
+    fov_calc [label="Compute FOV", fillcolor="#d7e7f2", style="rounded,dashed,filled"];
+    generate_fov_sim [label="Generate FOV sims", fillcolor="#f2f2f2", style="rounded,dashed,filled"];
+    img_01_fyi_plots [label="FYI plots", fillcolor="#d7e7f2", style="rounded,dashed,filled"];
+    img_01_test_outcome [label="IMG-OPT-01 pass/fail", fillcolor="#d7e7f2", style="rounded,dashed,filled", penwidth=2];
+    metis_1095_fov_check [label="METIS-1095: FoV", fillcolor="#d7e7f2", style="rounded,dashed,filled"];
+    sim_img_01_metis_1095 [label="SIM METIS-1095: FoV", fillcolor="#f2f2f2", style="rounded,dashed,filled"];
+    generate_fov_sim -> fov_calc;
+    sim_img_01_metis_1095 -> generate_fov_sim;
+    fov_calc -> img_01_fyi_plots;
+    metis_1095_fov_check -> img_01_test_outcome;
+    fov_calc -> metis_1095_fov_check;
+  }
+  stage_table [shape=plaintext, label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4"><TR><TD BGCOLOR="#dddddd"><B>stage</B></TD><TD BGCOLOR="#dddddd"><B>module</B></TD><TD BGCOLOR="#dddddd"><B>purpose (docstring)</B></TD><TD BGCOLOR="#dddddd"><B>writes</B></TD></TR><TR><TD ALIGN="LEFT">generate_fov_sim</TD><TD ALIGN="LEFT">IMG_OPT_01_METIS_AIT_img_cal_fov_SIM.py</TD><TD ALIGN="LEFT">Generate IMG-OPT-01 FoV simulations, one set per<BR ALIGN="LEFT"/>requirement, as set in the scenario config<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT">DITHER, DITHX, DITHY, DITHNOM, FOV_TRUE<BR ALIGN="LEFT"/></TD></TR><TR><TD ALIGN="LEFT">sim_img_01_metis_1095</TD><TD ALIGN="LEFT">IMG_OPT_01_METIS_AIT_img_cal_fov_SIM.py</TD><TD ALIGN="LEFT">Simulated data for METIS-1095: the FoV shall be 10.0<BR ALIGN="LEFT"/>+1.0/-0.0 arcsec (LM) and 13.47 +0.50/-0.99 arcsec (N)<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT">DITHER, DITHX, DITHY, DITHNOM, FOV_TRUE<BR ALIGN="LEFT"/></TD></TR><TR><TD ALIGN="LEFT">fov_calc</TD><TD ALIGN="LEFT">modules/backbone_img_opt_01_fov.py</TD><TD ALIGN="LEFT">For one filter configuration, centroid the PSF in each<BR ALIGN="LEFT"/>dithered FITS file in two passes, as in the other tests: a<BR ALIGN="LEFT"/>1st-pass centroid seeded…<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT"></TD></TR><TR><TD ALIGN="LEFT">img_01_test_outcome</TD><TD ALIGN="LEFT">modules/backbone_img_opt_01_fov.py</TD><TD ALIGN="LEFT">Decide and log the pass/fail of each IMG-OPT-01 requirement,<BR ALIGN="LEFT"/>and of the whole test<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT"></TD></TR><TR><TD ALIGN="LEFT">metis_1095_fov_check</TD><TD ALIGN="LEFT">modules/backbone_img_opt_01_fov.py</TD><TD ALIGN="LEFT">METIS-1095: the FoV shall be 10.0 +1.0/-0.0 arcsec for the<BR ALIGN="LEFT"/>LM-arm and 13.47 +0.50/-0.99 arcsec for the N-arm of the<BR ALIGN="LEFT"/>IMG. Both the x and y F…<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT"></TD></TR><TR><TD ALIGN="LEFT">img_01_fyi_plots</TD><TD ALIGN="LEFT">modules/backbone_img_opt_01_fov.py</TD><TD ALIGN="LEFT">FYI plot of one run: the FoV from each side of the dither<BR ALIGN="LEFT"/>square (pixel scale from that side times the illuminated<BR ALIGN="LEFT"/>pixels, x and y), their…<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT"></TD></TR></TABLE>>];
+  img_01_fyi_plots -> stage_table [style=invis];
+  img_01_test_outcome -> stage_table [style=invis];
+}

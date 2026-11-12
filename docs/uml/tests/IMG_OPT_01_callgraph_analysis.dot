@@ -1,0 +1,68 @@
+digraph callgraph {
+  rankdir=LR;
+  ranksep=0.6;
+  nodesep=0.15;
+  label="IMG-OPT-01 FOV (need distortion info): ANALYSIS call graph (IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS.py)\nbox = @pipeline_stage, oval = helper, dashed box = class instantiated, dashed arrow = passed as callback; numbers = call order in main(); hover for the full docstring";
+  labelloc=t;
+  fontsize=14;
+  fontname="Helvetica";
+  node [fontname="Helvetica", fontsize=10];
+  edge [fontname="Helvetica", fontsize=9, color="#555555"];
+  subgraph cluster_IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS {
+    label="IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS.py";
+    style=filled; fillcolor="#f2f2f2"; color="#999999";
+    IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS__main [label="main()", tooltip="Run the IMG-OPT-01 field-of-view analysis on the simulated frames.", shape=box, style="filled,bold", fillcolor="white"];
+  }
+  subgraph cluster_paths {
+    label="modules/paths.py";
+    style=filled; fillcolor="#e8f0fb"; color="#999999";
+    paths__project_root [label="project_root\nThe project root\n(METIS_MAIT_code_eckhart/), as set\nin config/paths.yaml", tooltip="The project root (METIS_MAIT_code_eckhart/), as set in config/paths.yaml.\n\nOUTPUTS\n-------\nstr\n    Absolute path, ending in '/' (scripts append to it, e.g. stem + \"data/\").", shape=ellipse];
+    paths___load_paths [label="_load_paths\nLoad (once) the paths config from\nPATHS_FILE.", tooltip="Load (once) the paths config from PATHS_FILE.", shape=ellipse];
+  }
+  subgraph cluster_helpers {
+    label="modules/helpers.py";
+    style=filled; fillcolor="#e8f0fb"; color="#999999";
+    helpers__setup_logging [label="setup_logging\nInitialize logging with a file +\nconsole handler and pipe basic\nmetadata", tooltip="Initialize logging with a file + console handler and pipe basic metadata.\n\nINPUTS\n----------\nlog_dir : str\n    Directory where the log file should be written.\nlog_file_name : str\n    Full path to the output log file.\nnow : datetime.datetime, optional\n    Timestamp used for the \"created at\" log line. If None, that line is skipped.\n\nOUTPUTS\n-------\nNone\n    Configures the root logger and writes startup log lines.", shape=ellipse];
+    helpers__load_config_and_pipe [label="load_config_and_pipe\nLoad a YAML configuration file and\npipe its contents to the log", tooltip="Load a YAML configuration file and pipe its contents to the log.\n\nINPUTS\n----------\nconfig_file_choice : str\n    Path to the configuration file.\nprint_one_line : bool, optional\n    If True, log the entire config on a single line. If False (default), log\n    in a more readable, multiline format.\n\nOUTPUTS\n-------\nconfig_this : dict\n    The configuration dictionary loaded from file.", shape=ellipse];
+  }
+  subgraph cluster_tbd_warnings {
+    label="modules/tbd_warnings.py";
+    style=filled; fillcolor="#e8f0fb"; color="#999999";
+    tbd_warnings__log_tbd_distortion [label="log_tbd_distortion\nLog a prominent warning that\ndistortion info from DD is still\nneeded", tooltip="Log a prominent warning that distortion info from DD is still needed.", shape=ellipse];
+    tbd_warnings__stamp_all_saved_figures [label="stamp_all_saved_figures\nFrom now on in this process, stamp\nthe warning banner on every\nmatplotlib figure before it is\nsaved (Figure.s…", tooltip="From now on in this process, stamp the warning banner on every matplotlib figure\nbefore it is saved (Figure.savefig, which plt.savefig also calls). For scripts whose\nplots are made deep in shared modules.", shape=ellipse];
+    tbd_warnings__add_tbd_banner [label="add_tbd_banner\nStamp a red warning banner across\nthe top of a matplotlib figure\n(once)", tooltip="Stamp a red warning banner across the top of a matplotlib figure (once).", shape=ellipse];
+  }
+  subgraph cluster_config_common {
+    label="modules/config_common.py";
+    style=filled; fillcolor="#e8f0fb"; color="#999999";
+    config_common__load_observing_config [label="load_observing_config\nLoad the common observing config,\nthen merge each test-specific\nconfig on top, in order (top-level\nkeys of la…", tooltip="Load the common observing config, then merge each test-specific config on top, in\norder (top-level keys of later files override earlier ones).\n\nINPUTS\n----------\nstem : str\n    Project root (METIS_MAIT_code_eckhart/), prepended to relative paths.\n*test_config_files : str\n    Test-specific observing configs, relative to stem or absolute.\n\nOUTPUTS\n-------\ndict\n    The merged observing config.", shape=ellipse];
+  }
+  subgraph cluster_backbone_img_opt_01_fov {
+    label="modules/backbone_img_opt_01_fov.py";
+    style=filled; fillcolor="#d7e7f2"; color="#999999";
+    backbone_img_opt_01_fov__fov_calc [label="fov_calc\nFor one filter configuration,\ncentroid the PSF in each dithered\nFITS file in two passes, as in the\nother test…", tooltip="For one filter configuration, centroid the PSF in each dithered FITS file in two\npasses, as in the other tests: a 1st-pass centroid seeded by guess_x / guess_y from\nthe merged analysis run state (first_pass_centroid), then a Gaussian fit seeded by\nthe 1st-pass centroid. Also writes FYI plots (fyi_fov_dithers_*.png,\nfyi_fov_per_side_*.png) to results_write_dir.\n\nINPUTS\n----------\nrun_state : dict\n    Merged entry from config_file_IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS.yaml\n    (defaults + one ``runs`` item). Must include ``filter_name`` and a\n    ``dithers`` list with ``guess_x``, ``guess_y``, and ``file_name`` per dither;\n    an optional ``run_label`` distinguishes runs with the same filter and masks.\nstem : str, optional\n    Project root prepended to relative paths in ``file_name`` and\n    ``results_write_dir``.\noversample_factor : int, optional\n    Oversampling factor for both passes.\nedge_size_oversamp : int, optional\n    Cutout size in oversampled pixels for the Gaussian fit (2nd pass).\n\nOUTPUTS\n-------\ndict\n    ``centroid_results_all`` keyed by dither index. Also writes a pickle\n    under ``results_write_dir``.\ndict\n    Requirement ID -> verdict (from metis_1095_fov_check), for log_test_outcome.", shape=box, style="filled", fillcolor="white"];
+    backbone_img_opt_01_fov__log_test_outcome [label="log_test_outcome\nDecide and log the pass/fail of\neach IMG-OPT-01 requirement, and\nof the whole test", tooltip="Decide and log the pass/fail of each IMG-OPT-01 requirement, and of the whole test.\n\nOverall: PASS only if all requirements pass; FAIL if any fails; else INCONCLUSIVE.\n(Only METIS-1095 for now.)\n\nINPUTS:\n- verdicts (dict): requirement ID (e.g. 'METIS-1095') -> verdict (PASS, FAIL or\n  INCONCLUSIVE)\n- run_label (str): the analysis run the verdicts are for (filter, run label)\n\nOUTPUTS:\n- verdict_overall (str): PASS, FAIL or INCONCLUSIVE", shape=box, style="filled", fillcolor="white"];
+    backbone_img_opt_01_fov___resolve_path [label="_resolve_path", tooltip="_resolve_path", shape=ellipse];
+    backbone_img_opt_01_fov__first_pass_centroid [label="first_pass_centroid\n1st-pass centroid (x, y) in native\npixels of the full frame, as in\nthe other tests\n(psf_grid_prep.oversample_…", tooltip="1st-pass centroid (x, y) in native pixels of the full frame, as in the other tests\n(psf_grid_prep.oversample_1st_pass_centroid: photutils centroid_2dg on the\noversampled image, seeded by the guess), on a box of +/- half_box pixels around the\nguess. Falls back to the guess if the centroiding fails.", shape=ellipse];
+    backbone_img_opt_01_fov___cutout [label="_cutout\nsize x size cutout centred on\ncenter_yx (rounded), zero-padded\nat the edges", tooltip="size x size cutout centred on center_yx (rounded), zero-padded at the edges.", shape=ellipse];
+    backbone_img_opt_01_fov__metis_1095_fov_check [label="metis_1095_fov_check\nMETIS-1095: the FoV shall be 10.0\n+1.0/-0.0 arcsec for the LM-arm\nand 13.47 +0.50/-0.99 arcsec for\nthe N-arm…", tooltip="METIS-1095: the FoV shall be 10.0 +1.0/-0.0 arcsec for the LM-arm and 13.47\n+0.50/-0.99 arcsec for the N-arm of the IMG. Both the x and y FoV must be in range.\n\nINPUTS:\n- effective_fov_x_arcsec, effective_fov_y_arcsec (float): measured FoV (fov_calc)\n- detector (str): 'LM' or 'N'\n\nOUTPUTS:\n- verdict (str): PASS or FAIL\n- (fov_min, fov_max) (tuple[float, float]): the FoV range (arcsec)", shape=box, style="filled", fillcolor="white"];
+    backbone_img_opt_01_fov__fyi_plot_dithers [label="fyi_plot_dithers\nFYI plot of one run: the four\ndithers co-added (binned), with\nthe guesses, the 1st-pass\ncentroids, the final…", tooltip="FYI plot of one run: the four dithers co-added (binned), with the guesses, the\n1st-pass centroids, the final (2-pass) centroids and the square they make, and a\ncutout around each pinhole with the same markers.\n\nOUTPUTS:\n- str: path of the written plot", shape=ellipse];
+    backbone_img_opt_01_fov__fyi_plot_fov [label="fyi_plot_fov\nFYI plot of one run: the FoV from\neach side of the dither square\n(pixel scale from that side times\nthe illumi…", tooltip="FYI plot of one run: the FoV from each side of the dither square (pixel scale from\nthat side times the illuminated pixels, x and y), their mean, the requirement range\nand, for simulated data, the injected FoV.\n\nOUTPUTS:\n- str: path of the written plot", shape=box, style="filled", fillcolor="white"];
+  }
+  IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS__main -> paths__project_root [label="1"];
+  IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS__main -> helpers__setup_logging [label="2"];
+  IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS__main -> tbd_warnings__log_tbd_distortion [label="3"];
+  IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS__main -> tbd_warnings__stamp_all_saved_figures [label="4"];
+  IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS__main -> config_common__load_observing_config [label="5"];
+  IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS__main -> helpers__load_config_and_pipe [label="6"];
+  IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS__main -> backbone_img_opt_01_fov__fov_calc [label="7"];
+  IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS__main -> backbone_img_opt_01_fov__log_test_outcome [label="8"];
+  paths__project_root -> paths___load_paths [];
+  tbd_warnings__stamp_all_saved_figures -> tbd_warnings__add_tbd_banner [];
+  backbone_img_opt_01_fov__fov_calc -> backbone_img_opt_01_fov___resolve_path [];
+  backbone_img_opt_01_fov__fov_calc -> backbone_img_opt_01_fov__first_pass_centroid [];
+  backbone_img_opt_01_fov__fov_calc -> backbone_img_opt_01_fov___cutout [];
+  backbone_img_opt_01_fov__fov_calc -> backbone_img_opt_01_fov__metis_1095_fov_check [];
+  backbone_img_opt_01_fov__fov_calc -> backbone_img_opt_01_fov__fyi_plot_dithers [];
+  backbone_img_opt_01_fov__fov_calc -> backbone_img_opt_01_fov__fyi_plot_fov [];
+}

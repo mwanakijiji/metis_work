@@ -1,0 +1,40 @@
+digraph callgraph {
+  rankdir=LR;
+  ranksep=0.6;
+  nodesep=0.15;
+  label="IMG-RAD-08 Point vs extended slope (stub): SIM call graph (IMG_RAD_08_point_vs_extended_slope_SIM.py)\nbox = @pipeline_stage, oval = helper, dashed box = class instantiated, dashed arrow = passed as callback; numbers = call order in main(); hover for the full docstring";
+  labelloc=t;
+  fontsize=14;
+  fontname="Helvetica";
+  node [fontname="Helvetica", fontsize=10];
+  edge [fontname="Helvetica", fontsize=9, color="#555555"];
+  subgraph cluster_IMG_RAD_08_point_vs_extended_slope_SIM {
+    label="IMG_RAD_08_point_vs_extended_slope_SIM.py";
+    style=filled; fillcolor="#f2f2f2"; color="#999999";
+    IMG_RAD_08_point_vs_extended_slope_SIM__main [label="main\nIMG-RAD-08 point vs", tooltip="IMG-RAD-08 point vs. extended slope simulations (STUB): load the scenario config and\nlog what is still TBD; nothing is simulated or written.", shape=box, style="filled,bold", fillcolor="white"];
+  }
+  subgraph cluster_paths {
+    label="modules/paths.py";
+    style=filled; fillcolor="#e8f0fb"; color="#999999";
+    paths__project_root [label="project_root\nThe project root\n(METIS_MAIT_code_eckhart/), as set\nin config/paths.yaml", tooltip="The project root (METIS_MAIT_code_eckhart/), as set in config/paths.yaml.\n\nOUTPUTS\n-------\nstr\n    Absolute path, ending in '/' (scripts append to it, e.g. stem + \"data/\").", shape=ellipse];
+    paths___load_paths [label="_load_paths\nLoad (once) the paths config from\nPATHS_FILE.", tooltip="Load (once) the paths config from PATHS_FILE.", shape=ellipse];
+  }
+  subgraph cluster_sim_common {
+    label="modules/sim_common.py";
+    style=filled; fillcolor="#e8f0fb"; color="#999999";
+    sim_common__start_sim_logging [label="start_sim_logging\nLog file <stem>logs/<log_subdir>/l\nog_<log_stub>_<timestamp>.txt", tooltip="Log file <stem>logs/<log_subdir>/log_<log_stub>_<timestamp>.txt.", shape=ellipse];
+    sim_common__log_stub_inputs [label="log_stub_inputs\nFor stub SIMs: log what is still\nTBD, i.e", tooltip="For stub SIMs: log what is still TBD, i.e. the instruments' set-up entries in keys\nthat are null (e.g. focal- and pupil-plane masks) and the requirements not\nsimulated (with their reason).\n\nOUTPUTS:\n- int: number of instruments with an entry TBD", shape=ellipse];
+    sim_common__scenario_instruments [label="scenario_instruments\nname -> instrument config, from\n'instruments:' or a single\n'instrument:'.", tooltip="name -> instrument config, from 'instruments:' or a single 'instrument:'.", shape=ellipse];
+  }
+  subgraph cluster_helpers {
+    label="modules/helpers.py";
+    style=filled; fillcolor="#e8f0fb"; color="#999999";
+    helpers__load_config_and_pipe [label="load_config_and_pipe\nLoad a YAML configuration file and\npipe its contents to the log", tooltip="Load a YAML configuration file and pipe its contents to the log.\n\nINPUTS\n----------\nconfig_file_choice : str\n    Path to the configuration file.\nprint_one_line : bool, optional\n    If True, log the entire config on a single line. If False (default), log\n    in a more readable, multiline format.\n\nOUTPUTS\n-------\nconfig_this : dict\n    The configuration dictionary loaded from file.", shape=ellipse];
+  }
+  IMG_RAD_08_point_vs_extended_slope_SIM__main -> paths__project_root [label="1"];
+  IMG_RAD_08_point_vs_extended_slope_SIM__main -> sim_common__start_sim_logging [label="2"];
+  IMG_RAD_08_point_vs_extended_slope_SIM__main -> helpers__load_config_and_pipe [label="3"];
+  IMG_RAD_08_point_vs_extended_slope_SIM__main -> sim_common__log_stub_inputs [label="4"];
+  paths__project_root -> paths___load_paths [];
+  sim_common__log_stub_inputs -> sim_common__scenario_instruments [];
+}

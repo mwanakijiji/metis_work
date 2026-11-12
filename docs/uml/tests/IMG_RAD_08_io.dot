@@ -1,0 +1,26 @@
+digraph io {
+  rankdir=TB;
+  ranksep=0.55;
+  nodesep=0.2;
+  label="IMG-RAD-08 Point vs extended slope (stub): SIM → ANALYSIS I/O map\ngold = config read, black = FITS written / read (edge labels: header cards), green = outputs";
+  labelloc=t;
+  fontsize=14;
+  fontname="Helvetica";
+  node [fontname="Helvetica", fontsize=10];
+  edge [fontname="Helvetica", fontsize=9, color="#555555"];
+  subgraph cluster_cfg {
+    label="config/"; style=filled; fillcolor="#fff8dc"; color="#bbbbbb";
+    y_config_file_IMG_RAD_08_point_vs_extended_slope_SIM_yaml [label="config_file_IMG_RAD_08_point_vs_extended_slope_SIM.yaml", shape=note, style=filled, fillcolor="white"];
+  }
+  subgraph cluster_IMG_RAD_08_point_vs_extended_slope_SIM {
+    label="IMG_RAD_08_point_vs_extended_slope_SIM.py";
+    style=filled; fillcolor="#e8e8e8"; color="#999999";
+    IMG_RAD_08_point_vs_extended_slope_SIM__main [label="main()", shape=box, style="rounded,filled,bold", fillcolor="white"];
+  }
+  subgraph cluster_IMG_RAD_08_point_vs_extended_slope_ANALYSIS {
+    label="IMG_RAD_08_point_vs_extended_slope_ANALYSIS.py + modules";
+    style=filled; fillcolor="#f2f2f2"; color="#999999";
+    IMG_RAD_08_point_vs_extended_slope_ANALYSIS__main [label="main()", shape=box, style="rounded,filled,bold", fillcolor="white"];
+  }
+  y_config_file_IMG_RAD_08_point_vs_extended_slope_SIM_yaml -> IMG_RAD_08_point_vs_extended_slope_SIM__main [color="#b8860b"];
+}

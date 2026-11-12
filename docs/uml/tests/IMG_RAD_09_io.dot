@@ -1,0 +1,50 @@
+digraph io {
+  rankdir=TB;
+  ranksep=0.55;
+  nodesep=0.2;
+  label="IMG-RAD-09 Nominal background behaviour: SIM → ANALYSIS I/O map\ngold = config read, black = FITS written / read (edge labels: header cards), green = outputs";
+  labelloc=t;
+  fontsize=14;
+  fontname="Helvetica";
+  node [fontname="Helvetica", fontsize=10];
+  edge [fontname="Helvetica", fontsize=9, color="#555555"];
+  subgraph cluster_cfg {
+    label="config/"; style=filled; fillcolor="#fff8dc"; color="#bbbbbb";
+    y_config_file_IMG_RAD_09_nominal_background_observing_yaml [label="config_file_IMG_RAD_09_nominal_background_observing.yaml", shape=note, style=filled, fillcolor="white"];
+    y_config_file_IMG_RAD_09_nominal_background_SIM_yaml [label="config_file_IMG_RAD_09_nominal_background_SIM.yaml", shape=note, style=filled, fillcolor="white"];
+    y_config_file_common_observing_params_yaml [label="config_file_common_observing_params.yaml", shape=note, style=filled, fillcolor="white"];
+    y_config_file_IMG_RAD_09_nominal_background_data_states_yaml [label="config_file_IMG_RAD_09_nominal_background_data_states.yaml", shape=note, style=filled, fillcolor="white"];
+  }
+  subgraph cluster_IMG_RAD_09_nominal_background_behavior_SIM {
+    label="IMG_RAD_09_nominal_background_behavior_SIM.py";
+    style=filled; fillcolor="#fae7f4"; color="#999999";
+    IMG_RAD_09_nominal_background_behavior_SIM__main [label="main()", shape=box, style="rounded,filled,bold", fillcolor="white"];
+    IMG_RAD_09_nominal_background_behavior_SIM__simulate_sensitivity [label="simulate_sensitivity\nSimulated data for the point-\nsource sensitivity in a 10000 s\nexposure: two independent long WCU\nflat exposure…", shape=box, style="rounded,filled", fillcolor="white"];
+    IMG_RAD_09_nominal_background_behavior_SIM__main -> IMG_RAD_09_nominal_background_behavior_SIM__simulate_sensitivity [style=dashed];
+  }
+  fits [shape=record, style=filled, fillcolor="#e8f0fb", label="{data/IMG_RAD_09_nominal_background_simmed_data\n*.fits|<primary> PRIMARY header:\nTARGET EXPTIME NEXP AP_RAD N_APER FLUXCAL FLUXPLH NAT_NOIS\nNOISFAC FILTER WCU_FP WCU_PP PSF_KERN ND_FILT BB_TEMP NDIT\nDIT DIT_CFG SAT_ADU PEAKFRAC REQ_ID CASE EXPECTED REQ_PLH\nSIMVER|{<x_BCKGD_SUBTED> BCKGD_SUBTED|<x_RAW_READOUT> RAW_READOUT|<x_BACKGROUND> BACKGROUND}}"];
+  IMG_RAD_09_nominal_background_behavior_SIM__simulate_sensitivity -> fits;
+  subgraph cluster_IMG_RAD_09_nominal_background_behavior_ANALYSIS {
+    label="IMG_RAD_09_nominal_background_behavior_ANALYSIS.py + modules";
+    style=filled; fillcolor="#f2f2f2"; color="#999999";
+    IMG_RAD_09_nominal_background_behavior_ANALYSIS__main [label="main()", shape=box, style="rounded,filled,bold", fillcolor="white"];
+    backbone_img_rad_09_nom__measure_noise [label="measure_noise", shape=box, style="rounded,filled", fillcolor="white"];
+    backbone_img_rad_09_nom__log_summary [label="log_summary", shape=box, style="rounded,filled", fillcolor="white"];
+  }
+  fits:primary -> IMG_RAD_09_nominal_background_behavior_ANALYSIS__main [label="SAT_ADU"];
+  fits:x_RAW_READOUT -> backbone_img_rad_09_nom__measure_noise;
+  fits:x_BCKGD_SUBTED -> backbone_img_rad_09_nom__measure_noise;
+  fits:primary -> backbone_img_rad_09_nom__measure_noise [label="FILTER, DIT, EXPTIME"];
+  fits:primary -> backbone_img_rad_09_nom__log_summary [label="EXPECTED"];
+  y_config_file_IMG_RAD_09_nominal_background_observing_yaml -> IMG_RAD_09_nominal_background_behavior_SIM__main [color="#b8860b"];
+  y_config_file_IMG_RAD_09_nominal_background_observing_yaml -> IMG_RAD_09_nominal_background_behavior_ANALYSIS__main [color="#b8860b"];
+  y_config_file_IMG_RAD_09_nominal_background_SIM_yaml -> IMG_RAD_09_nominal_background_behavior_SIM__main [color="#b8860b"];
+  y_config_file_common_observing_params_yaml -> IMG_RAD_09_nominal_background_behavior_SIM__main [color="#b8860b"];
+  y_config_file_common_observing_params_yaml -> IMG_RAD_09_nominal_background_behavior_ANALYSIS__main [color="#b8860b"];
+  y_config_file_IMG_RAD_09_nominal_background_data_states_yaml -> IMG_RAD_09_nominal_background_behavior_ANALYSIS__main [color="#b8860b"];
+  subgraph cluster_out {
+    label="outputs"; style=filled; fillcolor="#e6f4e6"; color="#bbbbbb";
+    o_logs_IMG_RAD_09_nom_bkgd_logs [label="logs/IMG_RAD_09_nom_bkgd_logs/", shape=folder, style=filled, fillcolor="white"];
+  }
+  IMG_RAD_09_nominal_background_behavior_ANALYSIS__main -> o_logs_IMG_RAD_09_nom_bkgd_logs [color="#2ca02c"];
+}

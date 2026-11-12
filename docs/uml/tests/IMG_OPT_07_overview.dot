@@ -1,0 +1,20 @@
+digraph overview {
+  rankdir=TB;
+  ranksep=0.35;
+  newrank=true;
+  label="IMG-OPT-07 Pupil imaging (stub): overview\npipeline stages (this test's + the shared ones it uses), then each stage's purpose and the result fields it writes";
+  labelloc=t;
+  fontsize=14;
+  fontname="Helvetica";
+  node [fontname="Helvetica", fontsize=10];
+  edge [fontname="Helvetica", fontsize=9, color="#555555"];
+  subgraph cluster_flow {
+    label="pipeline stages"; style=rounded; color="#999999";
+    node [shape=box, style="rounded,filled"];
+    generate_pupil_imaging_sim [label="Generate pupil-imaging sims", fillcolor="#f2f2f2", style="rounded,dashed,filled"];
+    simulate_img_07_pupil_imaging [label="SIM pupil images (stub: masks TBD)", fillcolor="#d5f3f6", style="rounded,dashed,filled"];
+    simulate_img_07_pupil_imaging -> generate_pupil_imaging_sim;
+  }
+  stage_table [shape=plaintext, label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4"><TR><TD BGCOLOR="#dddddd"><B>stage</B></TD><TD BGCOLOR="#dddddd"><B>module</B></TD><TD BGCOLOR="#dddddd"><B>purpose (docstring)</B></TD><TD BGCOLOR="#dddddd"><B>writes</B></TD></TR><TR><TD ALIGN="LEFT">generate_pupil_imaging_sim</TD><TD ALIGN="LEFT">IMG_OPT_07_pupil_imaging_SIM.py</TD><TD ALIGN="LEFT">IMG-OPT-07 pupil imaging simulations (STUB): load the<BR ALIGN="LEFT"/>scenario config and log what is still TBD; nothing is<BR ALIGN="LEFT"/>simulated or written<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT">FITS case files (via sim_common)<BR ALIGN="LEFT"/></TD></TR></TABLE>>];
+  generate_pupil_imaging_sim -> stage_table [style=invis];
+}

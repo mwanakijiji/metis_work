@@ -1,0 +1,22 @@
+digraph overview {
+  rankdir=TB;
+  ranksep=0.35;
+  newrank=true;
+  label="IMG-OPT-05 Optomechanical stability (stub): overview\npipeline stages (this test's + the shared ones it uses), then each stage's purpose and the result fields it writes";
+  labelloc=t;
+  fontsize=14;
+  fontname="Helvetica";
+  node [fontname="Helvetica", fontsize=10];
+  edge [fontname="Helvetica", fontsize=9, color="#555555"];
+  subgraph cluster_flow {
+    label="pipeline stages"; style=rounded; color="#999999";
+    node [shape=box, style="rounded,filled"];
+    generate_optomechanical_stability_sim [label="Generate optomechanical-stability sims", fillcolor="#f2f2f2", style="rounded,dashed,filled"];
+    simulate_metis_5422_flux_calibration [label="SIM METIS-5422: flux calibration interval (stub)", fillcolor="#f3f3d7", style="rounded,dashed,filled"];
+    simulate_metis_5422_vpm_stability [label="SIM METIS-5422: VPM position stability (stub: no VPM in ScopeSim)", fillcolor="#f3f3d7", style="rounded,dashed,filled"];
+    simulate_metis_5422_flux_calibration -> generate_optomechanical_stability_sim;
+    simulate_metis_5422_vpm_stability -> generate_optomechanical_stability_sim;
+  }
+  stage_table [shape=plaintext, label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4"><TR><TD BGCOLOR="#dddddd"><B>stage</B></TD><TD BGCOLOR="#dddddd"><B>module</B></TD><TD BGCOLOR="#dddddd"><B>purpose (docstring)</B></TD><TD BGCOLOR="#dddddd"><B>writes</B></TD></TR><TR><TD ALIGN="LEFT">generate_optomechanical_stability_sim</TD><TD ALIGN="LEFT">IMG_OPT_05_optomechanical_stability_SIM.py</TD><TD ALIGN="LEFT">IMG-OPT-05 optomechanical stability simulations (STUB): load<BR ALIGN="LEFT"/>the scenario config and log what is still TBD; nothing is<BR ALIGN="LEFT"/>simulated or written<BR ALIGN="LEFT"/></TD><TD ALIGN="LEFT">FITS case files (via sim_common)<BR ALIGN="LEFT"/></TD></TR></TABLE>>];
+  generate_optomechanical_stability_sim -> stage_table [style=invis];
+}
