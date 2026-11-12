@@ -46,7 +46,9 @@ Linting is done by the git pre-commit hook (`.git/hooks/pre-commit`, run from
 `--max-line-length=88` (excluding tests, misc, dev_notebooks). The same hook regenerates
 `docs/uml/classes.{dot,svg}` (pyreverse on `main_scripts/modules`) and
 `docs/uml/pipeline_flow.{dot,svg}` (`docs/uml/render_pipeline_flow.py`) and `git add`s
-them.
+them. Per-test diagrams (SIM/ANALYSIS call graphs, result-field data flow, SIM→ANALYSIS
+I/O map, overview + `.md` table) are made by `python docs/uml/render_test_diagrams.py
+IMG_OPT_06` (or `--all`) into `docs/uml/tests/` (ast-only, needs graphviz `dot`).
 
 ## Architecture
 

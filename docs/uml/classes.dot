@@ -1,7 +1,9 @@
 digraph "classes_METIS_MAIT" {
 rankdir=BT
 charset="utf-8"
+"modules.backbone_img_rad_09_nom.NoiseRunResult" [color="black", fontcolor="black", label=<NoiseRunResult>, shape="record", style="solid"];
 "modules.backbone_img_opt_06_out_of_field.OutOfFieldResult" [color="black", fontcolor="black", label=<OutOfFieldResult>, shape="record", style="solid"];
+"modules.backbone_img_rad_07_phot.PhotRunResult" [color="black", fontcolor="black", label=<PhotRunResult>, shape="record", style="solid"];
 "modules.backbone_img_03_psf_quality.PsfGrid" [color="black", fontcolor="black", label=<PsfGrid>, shape="record", style="solid"];
 "modules.psf_grid_prep.PsfGridPrep" [color="black", fontcolor="black", label=<PsfGridPrep>, shape="record", style="solid"];
 "modules.sim_common.SimContext" [color="black", fontcolor="black", label=<SimContext>, shape="record", style="solid"];

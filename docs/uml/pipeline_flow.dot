@@ -120,12 +120,22 @@ digraph pipeline {
     simulate_metis_2594;
     simulate_metis_2883;
     simulate_metis_3300;
+    simulate_metis_3291;
     generate_phot_performance_sim;
     img_rad_07_metis_2594_check;
     img_rad_07_metis_2883_check;
     img_rad_07_metis_3300_check;
     img_rad_07_fyi_plots;
     img_rad_07_log_test_outcome;
+  }
+
+  subgraph cluster_img_rad_08_point_vs_extended_slope_stub {
+    label="IMG-RAD-08 Point vs extended slope (stub)";
+    labeljust=l;
+    style="dashed";
+    color="#7f7f7f";
+    simulate_rad_08_point_vs_extended;
+    generate_point_vs_extended_sim;
   }
 
   subgraph cluster_img_rad_09_nominal_background_behaviour {
@@ -138,6 +148,15 @@ digraph pipeline {
     img_rad_09_sens_10000s_check;
     img_rad_09_fyi_plots;
     img_rad_09_test_outcome;
+  }
+
+  subgraph cluster_img_rad_11_background_systematics_with_chopper_stub {
+    label="IMG-RAD-11 Background systematics with chopper (stub)";
+    labeljust=l;
+    style="dashed";
+    color="#aec7e8";
+    simulate_rad_11_chopper_background;
+    generate_background_systematics_sim;
   }
 
   sim_img_01_metis_1095 [label="SIM METIS-1095: FoV", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
@@ -159,9 +178,14 @@ digraph pipeline {
   simulate_metis_2594 [label="SIM METIS-2594:\ncalibration flux range\n(stub)", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
   simulate_metis_2883 [label="SIM METIS-2883: flat\nhomogeneity"];
   simulate_metis_3300 [label="SIM METIS-3300: 15\nND+DIT flux steps"];
+  simulate_metis_3291 [label="SIM METIS-3291: RSRF\nprecision"];
   generate_phot_performance_sim [label="Generate photometric-\nperformance sims"];
-  simulate_rad_09_sensitivity [label="SIM 10000 s on-sky\nbackground: point-source\nnoise"];
-  generate_nominal_background_sim [label="Generate on-sky\nbackground sims"];
+  simulate_rad_08_point_vs_extended [label="SIM point vs extended\nslope (stub: reqs TBD)", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
+  generate_point_vs_extended_sim [label="Generate point-vs-\nextended sims", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
+  simulate_rad_09_sensitivity [label="SIM 10000 s WCU flat:\npoint-source noise"];
+  generate_nominal_background_sim [label="Generate nominal\nbackground sims"];
+  simulate_rad_11_chopper_background [label="SIM chopped background\n(stub: reqs TBD)", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
+  generate_background_systematics_sim [label="Generate chopper\nbackground sims", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
   prepare_psf_grid [label="Load frame, 1st-pass\ncentroids"];
   process_one_psf [label="Fit one PSF"];
   collect_strehls [label="Collect Strehl over FOV"];
@@ -204,7 +228,7 @@ digraph pipeline {
   img_04_fyi_plots [label="FYI plots", style="rounded,dashed,filled"];
   img_06_fyi_plots [label="FYI plots", style="rounded,dashed,filled"];
 
-  { rank=same; sim_img_01_metis_1095; sim_img_02_grid_frames; sim_img_03_strehl_cases; sim_img_06_metis_5838; simulate_metis_5422_flux_calibration; simulate_metis_5422_vpm_stability; sim_img_04_metis_1189_1429; sim_img_04_metis_9522; simulate_img_07_pupil_imaging; simulate_metis_2594; simulate_metis_2883; simulate_metis_3300; simulate_rad_09_sensitivity; }
+  { rank=same; sim_img_01_metis_1095; sim_img_02_grid_frames; sim_img_03_strehl_cases; sim_img_06_metis_5838; simulate_metis_5422_flux_calibration; simulate_metis_5422_vpm_stability; sim_img_04_metis_1189_1429; sim_img_04_metis_9522; simulate_img_07_pupil_imaging; simulate_metis_2594; simulate_metis_2883; simulate_metis_3291; simulate_metis_3300; simulate_rad_08_point_vs_extended; simulate_rad_09_sensitivity; simulate_rad_11_chopper_background; }
   sim_img_01_metis_1095 -> sim_img_02_grid_frames [style=invis];
   sim_img_02_grid_frames -> sim_img_03_strehl_cases [style=invis];
   sim_img_03_strehl_cases -> sim_img_06_metis_5838 [style=invis];
@@ -215,9 +239,12 @@ digraph pipeline {
   sim_img_04_metis_9522 -> simulate_img_07_pupil_imaging [style=invis];
   simulate_img_07_pupil_imaging -> simulate_metis_2594 [style=invis];
   simulate_metis_2594 -> simulate_metis_2883 [style=invis];
-  simulate_metis_2883 -> simulate_metis_3300 [style=invis];
-  simulate_metis_3300 -> simulate_rad_09_sensitivity [style=invis];
-  { rank=same; generate_fov_sim; generate_distortion_sim; generate_psf_quality_sim; generate_out_of_field_sim; generate_optomechanical_stability_sim; generate_stray_light_sim; generate_pupil_imaging_sim; generate_phot_performance_sim; generate_nominal_background_sim; }
+  simulate_metis_2883 -> simulate_metis_3291 [style=invis];
+  simulate_metis_3291 -> simulate_metis_3300 [style=invis];
+  simulate_metis_3300 -> simulate_rad_08_point_vs_extended [style=invis];
+  simulate_rad_08_point_vs_extended -> simulate_rad_09_sensitivity [style=invis];
+  simulate_rad_09_sensitivity -> simulate_rad_11_chopper_background [style=invis];
+  { rank=same; generate_fov_sim; generate_distortion_sim; generate_psf_quality_sim; generate_out_of_field_sim; generate_optomechanical_stability_sim; generate_stray_light_sim; generate_pupil_imaging_sim; generate_phot_performance_sim; generate_point_vs_extended_sim; generate_nominal_background_sim; generate_background_systematics_sim; }
   generate_fov_sim -> generate_distortion_sim [style=invis];
   generate_distortion_sim -> generate_psf_quality_sim [style=invis];
   generate_psf_quality_sim -> generate_out_of_field_sim [style=invis];
@@ -225,7 +252,9 @@ digraph pipeline {
   generate_optomechanical_stability_sim -> generate_stray_light_sim [style=invis];
   generate_stray_light_sim -> generate_pupil_imaging_sim [style=invis];
   generate_pupil_imaging_sim -> generate_phot_performance_sim [style=invis];
-  generate_phot_performance_sim -> generate_nominal_background_sim [style=invis];
+  generate_phot_performance_sim -> generate_point_vs_extended_sim [style=invis];
+  generate_point_vs_extended_sim -> generate_nominal_background_sim [style=invis];
+  generate_nominal_background_sim -> generate_background_systematics_sim [style=invis];
   { rank=same; fov_calc; image_distortion; prepare_psf_grid; populate_result_obj_info; img_rad_07_metis_2594_check; img_rad_07_metis_2883_check; img_rad_07_metis_3300_check; img_rad_09_sens_10000s_check; }
   fov_calc -> image_distortion [style=invis];
   image_distortion -> prepare_psf_grid [style=invis];
@@ -280,7 +309,9 @@ digraph pipeline {
   simulate_metis_2594 -> generate_phot_performance_sim [weight=10];
   simulate_metis_2883 -> generate_phot_performance_sim [weight=10];
   simulate_metis_3300 -> generate_phot_performance_sim [weight=10];
+  simulate_rad_08_point_vs_extended -> generate_point_vs_extended_sim [weight=10];
   simulate_rad_09_sensitivity -> generate_nominal_background_sim [weight=10];
+  simulate_rad_11_chopper_background -> generate_background_systematics_sim [weight=10];
   generate_psf_quality_sim -> prepare_psf_grid [weight=10];
   prepare_psf_grid -> process_one_psf [weight=10];
   process_one_psf -> collect_strehls [weight=10];
