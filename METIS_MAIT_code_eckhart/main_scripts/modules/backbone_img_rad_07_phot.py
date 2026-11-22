@@ -2,15 +2,23 @@
 IMG-RAD-07 photometric performance: analysis of the WCU flat fields for
 - METIS-2883: spatial homogeneity of the flat (+/- 3% peak-to-valley over the FOV),
 - METIS-3300: the flat-field flux is tunable to 15 discrete values, known at each step
-  to 0.3%, with the illumination pattern constant within 0.5% after tuning.
+  to 0.3%, with the illumination pattern constant within 0.5% after tuning,
+- METIS-3291: the relative spectral response function (RSRF), characterized only
+  (the 3% precision is not evaluated yet; verdict NOT EVALUATED).
 
 Stages (called in order by IMG_RAD_07_photometric_performance_ANALYSIS.py): populate_run
 -> reduce_flats -> metis_2883_check / metis_3300_check -> plots -> log_test_outcome; and
-log_summary over all runs. Everything is measured on the background-subtracted frames
+log_summary over all runs; METIS-3291 runs skip reduce_flats and go through
+metis_3291_characterize. The flats are measured on the background-subtracted frames
 (BCKGD_SUBTED), within a field mask (the illuminated detector area without the
 reference-pixel border), averaged over square blocks so that the per-pixel noise does
 not dominate the max over the field. Verdicts are noise-aware
 (analysis_common.verdict_with_noise).
+
+METIS-3291 uses the extraction of the SIM (modules/rsrf_common.py): S_empirical is the
+sum of BCKGD_SUBTED over the illuminated slit columns per row; the wavelength per row
+(standing in for a wavelength calibration) and the model S_perfect, alpha_fcn come from
+the case file's 'RSRF' table, and rsrf = S_empirical / (S_perfect * alpha_fcn).
 """
 
 import glob
@@ -23,13 +31,15 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.io import fits
+from astropy.table import Table
 from pipeline_registry import CLUSTER_PHOT, COLOR_PHOT, pipeline_stage
 
-from . import analysis_common
+from . import analysis_common, rsrf_common
 from .analysis_common import field_mask
 from .psf_grid_prep import load_fits_data
 
-REQUIREMENTS = ("METIS-2594", "METIS-2883", "METIS-3300")  # METIS-2594: stub
+# METIS-2594: stub; METIS-3291: characterized only
+REQUIREMENTS = ("METIS-2594", "METIS-2883", "METIS-3291", "METIS-3300")
 
 
 @dataclass
@@ -53,6 +63,7 @@ class PhotRunResult:  # pylint: disable=too-many-instance-attributes
     measured: dict = field(default_factory=dict)
     sigma: dict = field(default_factory=dict)
     verdicts: dict = field(default_factory=dict)
+    rsrf: dict = field(default_factory=dict)  # METIS-3291: per-row arrays
     verdict_overall: str = "NOT EVALUATED"
     consistent: Any = None
 
@@ -138,6 +149,27 @@ def pattern_changes(block_means, block_sigmas):
     idx = np.nanargmax(np.abs(change))
     step = int(np.unravel_index(idx, change.shape)[0])
     return float(np.abs(change).flat[idx]), float(change_sig.flat[idx]), step, change
+
+
+def rsrf_stats(rsrf, evaluate):
+    """
+    Characterization of an RSRF over the evaluated rows: median, min, max, 5th and
+    95th percentiles, rel_rms (std / median) and half_ptv (max |rsrf / median - 1|).
+
+    OUTPUTS:
+    - dict
+    """
+    values = np.asarray(rsrf, dtype=float)[np.asarray(evaluate, bool)]
+    median = float(np.median(values))
+    return {
+        "median": median,
+        "min": float(np.min(values)),
+        "max": float(np.max(values)),
+        "p05": float(np.percentile(values, 5)),
+        "p95": float(np.percentile(values, 95)),
+        "rel_rms": float(np.std(values) / median),
+        "half_ptv": float(np.max(np.abs(values / median - 1.0))),
+    }
 
 
 # ---------------------------------------------------------------- stages
@@ -374,8 +406,148 @@ def metis_3300_check(result):
 
 
 @pipeline_stage(
+    name="img_rad_07_metis_3291_characterize",
+    depends_on=("generate_phot_performance_sim",),
+    cluster=CLUSTER_PHOT,
+    cluster_color=COLOR_PHOT,
+    label="METIS-3291: RSRF characterization",
+)
+def metis_3291_characterize(result):  # pylint: disable=too-many-locals
+    """
+    Characterize the RSRF (METIS-3291: METIS shall allow the characterisation and
+    correction of the RSRF with 3% precision over the wavelength range of METIS-1090);
+    the 3% precision is not evaluated yet, so the verdict is NOT EVALUATED.
+
+    From the run's file: S_empirical = BCKGD_SUBTED summed over the slit columns
+    (rsrf_common.slit_columns, collapse_slit, as in the SIM); the wavelength per row,
+    the in-range and evaluated rows and the model S_perfect, alpha_fcn from the 'RSRF'
+    table; rsrf = S_empirical / (S_perfect * alpha_fcn) on the in-range rows (NaN
+    elsewhere), characterized over the evaluated rows (rsrf_stats). Cross-check
+    (logged, not a verdict): max |rsrf / RSRF_TRUE - 1| over the evaluated rows, the
+    agreement with the RSRF the SIM injected. Writes the measured RSRF table
+    (write_rsrf_table).
+
+    OUTPUTS:
+    - PhotRunResult, with rsrf (per-row arrays), measured['rsrf_*'] and
+      verdicts['METIS-3291'] = 'NOT EVALUATED'
+    """
+    file_name, header = result.file_names[0], result.headers[0]
+    frame, _ = load_fits_data(file_name, hdu_index="BCKGD_SUBTED")
+    frame = frame.astype(float)
+    table = Table.read(file_name, hdu="RSRF")
+
+    slit_cols = rsrf_common.slit_columns(
+        frame, float(result.analysis_cfg["rsrf"]["slit_frac"])
+    )
+    n_cols = int(np.count_nonzero(slit_cols))
+    if "NSLITCOL" in header and n_cols != int(header["NSLITCOL"]):
+        logging.warning(
+            "! ------- %s: %s slit columns found, the SIM used %s",
+            result.run_name,
+            n_cols,
+            header["NSLITCOL"],
+        )
+    s_emp = rsrf_common.collapse_slit(frame, slit_cols)
+    del frame
+
+    lam = np.asarray(table["WAVELENGTH"], dtype=float)
+    in_range = np.asarray(table["IN_RANGE"], bool)
+    evaluate = np.asarray(table["EVAL"], bool)
+    s_perfect = np.asarray(table["S_PERFECT"], dtype=float)
+    alpha = np.asarray(table["ALPHA"], dtype=float)
+    rsrf = np.full(lam.shape, np.nan)
+    rsrf[in_range] = rsrf_common.rsrf(
+        s_emp[in_range], s_perfect[in_range], alpha[in_range]
+    )
+    result.rsrf = {
+        "wavelength": lam,
+        "evaluate": evaluate,
+        "s_empirical": s_emp,
+        "s_perfect": s_perfect,
+        "alpha": alpha,
+        "rsrf": rsrf,
+    }
+
+    stats = rsrf_stats(rsrf, evaluate)
+    for key, value in stats.items():
+        result.measured[f"rsrf_{key}"] = value
+    lam_eval = lam[evaluate]
+    logging.info(
+        "METIS-3291 RSRF over %s rows, %.3f-%.3f um (%s slit columns): median %.4g, "
+        "min %.4g, max %.4g, 5-95%% %.4g-%.4g, rel. rms %.4f, max |rsrf/median - 1| "
+        "%.4f",
+        lam_eval.size,
+        lam_eval.min(),
+        lam_eval.max(),
+        n_cols,
+        stats["median"],
+        stats["min"],
+        stats["max"],
+        stats["p05"],
+        stats["p95"],
+        stats["rel_rms"],
+        stats["half_ptv"],
+    )
+    if "RSRF_TRUE" in table.colnames:
+        rsrf_true = np.asarray(table["RSRF_TRUE"], dtype=float)
+        result.rsrf["rsrf_true"] = rsrf_true
+        result.measured["rsrf_vs_true"] = float(
+            np.max(np.abs(rsrf[evaluate] / rsrf_true[evaluate] - 1.0))
+        )
+        logging.info(
+            "METIS-3291 cross-check with the injected RSRF: max |rsrf / RSRF_TRUE - 1| "
+            "%.4f (SIM measured rsrf_error %s, injected %s)",
+            result.measured["rsrf_vs_true"],
+            header.get("MEAS_SIM", "-"),
+            header.get("INJ_VAL", header.get("INJ_VAL1", "-")),
+        )
+    write_rsrf_table(result)
+    result.verdicts["METIS-3291"] = "NOT EVALUATED"
+    logging.info("METIS-3291: RSRF characterized only; 3% precision NOT EVALUATED yet")
+    return result
+
+
+def write_rsrf_table(result):
+    """
+    Write the measured RSRF (per row: ROW, WAVELENGTH, EVAL, S_EMPIRICAL, S_PERFECT,
+    ALPHA, RSRF) to <results_dir>/<run_name>_rsrf.fits.
+
+    OUTPUTS:
+    - str: the file written
+    """
+    rows = result.rsrf
+    table = Table(
+        {
+            "ROW": np.arange(rows["wavelength"].size),
+            "WAVELENGTH": rows["wavelength"],
+            "EVAL": rows["evaluate"],
+            "S_EMPIRICAL": rows["s_empirical"],
+            "S_PERFECT": rows["s_perfect"],
+            "ALPHA": rows["alpha"],
+            "RSRF": rows["rsrf"],
+        }
+    )
+    table["WAVELENGTH"].unit = "um"
+    for name in ("S_EMPIRICAL", "S_PERFECT"):
+        table[name].unit = "adu"
+    hdu = fits.table_to_hdu(table)
+    hdu.name = "RSRF"
+    hdu.header["REQ_ID"] = result.req_id
+    hdu.header["CASE"] = result.case
+    os.makedirs(result.results_dir, exist_ok=True)
+    file_name = os.path.join(result.results_dir, f"{result.run_name}_rsrf.fits")
+    fits.HDUList([fits.PrimaryHDU(), hdu]).writeto(file_name, overwrite=True)
+    logging.info("Saved %s", file_name)
+    return file_name
+
+
+@pipeline_stage(
     name="img_rad_07_fyi_plots",
-    depends_on=("img_rad_07_metis_2883_check", "img_rad_07_metis_3300_check"),
+    depends_on=(
+        "img_rad_07_metis_2883_check",
+        "img_rad_07_metis_3291_characterize",
+        "img_rad_07_metis_3300_check",
+    ),
     cluster=CLUSTER_PHOT,
     cluster_color=COLOR_PHOT,
     fyi=True,  # not needed for the pass/fail
@@ -385,7 +557,7 @@ def plot_run(result):
     """
     FYI plots in result.results_dir: METIS-2883 the B/mean - 1 block map; METIS-3300
     the flux error per step (with the limit band) and the pattern-change map of the
-    worst step.
+    worst step; METIS-3291 S_empirical vs. S_perfect * alpha_fcn and the RSRF.
 
     OUTPUTS:
     - list[str]: written plot files
@@ -403,6 +575,8 @@ def plot_run(result):
                 os.path.join(result.results_dir, f"{result.run_name}_homogeneity.png"),
             )
         )
+    elif result.req_id == "METIS-3291":
+        written.append(_plot_rsrf(result))
     elif result.req_id == "METIS-3300":
         fig, ax = plt.subplots(figsize=(7, 4))
         steps = np.arange(1, len(result.flux) + 1)
@@ -433,6 +607,49 @@ def plot_run(result):
     return written
 
 
+def _plot_rsrf(result):
+    """S_empirical vs. S_perfect * alpha_fcn (top) and the RSRF (bottom)."""
+    rows = result.rsrf
+    lam, evaluate = rows["wavelength"], rows["evaluate"]
+    fig, (ax_s, ax_r) = plt.subplots(2, 1, figsize=(8, 6), sharex=True)
+    ax_s.plot(lam[evaluate], rows["s_empirical"][evaluate], lw=0.6, label="S_empirical")
+    ax_s.plot(
+        lam[evaluate],
+        (rows["s_perfect"] * rows["alpha"])[evaluate],
+        lw=0.8,
+        label="S_perfect * alpha_fcn",
+    )
+    ax_s.set_ylabel("ADU per row")
+    ax_s.legend(fontsize=8)
+    if "rsrf_true" in rows:
+        ax_r.plot(
+            lam[evaluate],
+            rows["rsrf_true"][evaluate],
+            lw=1.5,
+            color="tab:orange",
+            label="RSRF_TRUE (SIM)",
+        )
+    ax_r.plot(
+        lam[evaluate],
+        rows["rsrf"][evaluate],
+        lw=0.6,
+        color="tab:blue",
+        label="rsrf (measured)",
+    )
+    ax_r.axhline(result.measured["rsrf_median"], color="k", lw=0.5, ls="--")
+    ax_r.set_xlabel("wavelength [um]")
+    ax_r.set_ylabel("S_empirical / (S_perfect * alpha_fcn)")
+    ax_r.legend(fontsize=8)
+    ax_s.set_title(
+        f"{result.run_name}: RSRF (rel. rms {result.measured['rsrf_rel_rms']:.4f})",
+        fontsize=9,
+    )
+    file_name = os.path.join(result.results_dir, f"{result.run_name}_rsrf.png")
+    fig.savefig(file_name, bbox_inches="tight")
+    plt.close(fig)
+    return file_name
+
+
 def _plot_map(rel_map, title, file_name):
     """Diverging image of a relative-deviation block map."""
     vmax = float(np.nanmax(np.abs(rel_map))) or 1e-6
@@ -452,6 +669,7 @@ def _plot_map(rel_map, title, file_name):
     depends_on=(
         "img_rad_07_metis_2594_check",
         "img_rad_07_metis_2883_check",
+        "img_rad_07_metis_3291_characterize",
         "img_rad_07_metis_3300_check",
     ),
     cluster=CLUSTER_PHOT,
@@ -461,7 +679,8 @@ def _plot_map(rel_map, title, file_name):
 def log_test_outcome(result):
     """
     Log the outcome of the run's requirement (as decided by metis_2883_check or
-    metis_3300_check) and compare it with the injected truth (EXPECTED).
+    metis_3300_check) and compare it with the injected truth (EXPECTED); a NOT
+    EVALUATED verdict (METIS-2594, METIS-3291) is not compared.
 
     OUTPUTS:
     - PhotRunResult, with verdict_overall and consistent set
@@ -476,7 +695,16 @@ def log_test_outcome(result):
         result.case,
         len(result.file_names),
     )
-    for quantity in ("half_ptv", "n_steps", "flux_error", "pattern_change"):
+    for quantity in (
+        "half_ptv",
+        "n_steps",
+        "flux_error",
+        "pattern_change",
+        "rsrf_median",
+        "rsrf_rel_rms",
+        "rsrf_half_ptv",
+        "rsrf_vs_true",
+    ):
         if quantity in result.measured:
             logging.info(
                 "  %s = %s (sigma %s; limit %s)",
@@ -486,9 +714,17 @@ def log_test_outcome(result):
                 result.limits.get(quantity, "-"),
             )
     result.verdict_overall = result.verdicts.get(result.req_id, "NOT EVALUATED")
-    result.consistent = analysis_common.compare_with_expected(
-        result.req_id, result.verdict_overall, result.headers[0]
-    )
+    if result.verdict_overall == "NOT EVALUATED":
+        logging.info(
+            "%s: NOT EVALUATED, not compared with the injected truth (EXPECTED %s)",
+            result.req_id,
+            result.headers[0].get("EXPECTED", "-"),
+        )
+        result.consistent = None
+    else:
+        result.consistent = analysis_common.compare_with_expected(
+            result.req_id, result.verdict_overall, result.headers[0]
+        )
     logging.info("IMG RAD 07 %s: %s", result.req_id, result.verdict_overall)
     logging.info("--------------------------------------------------")
     return result
@@ -524,6 +760,7 @@ def log_summary(results):
             {True: "yes", False: "NO", None: "-"}[res.consistent],
         )
     logging.info("METIS-2594: NOT EVALUATED (SIM is a stub)")
+    logging.info("METIS-3291: RSRF characterized only (3% precision NOT EVALUATED)")
     n_bad = sum(1 for res in results if res.consistent is False)
     logging.info(
         "%s of %s runs inconsistent with the injected truth", n_bad, len(results)

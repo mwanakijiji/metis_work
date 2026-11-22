@@ -8,12 +8,16 @@ Reqs.:
 1. (requirement ID TBD) Verify sensititity requirement on point source in a 10000
 second exposure.
 
-Measured: the 1-sigma point-source noise of the background-subtracted 10000 s
-frame (BCKGD_SUBTED = exposure A - exposure B of a uniform background; in the SIM a WCU
-black-body flat with no source), from the robust spread
-of the sums in apertures of radius aperture_radius_lambda_over_d x lambda/D, in absolute
-flux units via the counts-to-flux calibration. The calibration and the noise limit are
-PLACEHOLDERS (config/config_file_IMG_RAD_09_nominal_background_observing.yaml).
+Measured: the 1-sigma point-source noise of the 10000 s readout itself (noise_hdu:
+RAW_READOUT, nothing subtracted; in the SIM one readout of the WCU pinhole, a point
+source in the middle of the frame, per band and pupil mask), from the robust spread of
+the sums in apertures of radius aperture_radius_lambda_over_d x lambda/D away from the
+point source, about their median, in absolute flux units via the counts-to-flux
+calibration; also the point source's flux and S/N, for information. The calibration
+and the noise limit are PLACEHOLDERS
+(config/config_file_IMG_RAD_09_nominal_background_observing.yaml). The simulated
+readouts are natural (nothing injected, no EXPECTED), so the runs are not compared
+with an injected truth.
 
 Pass/fail is decided in backbone_img_rad_09_nom.sens_10000s_check (noise-aware: the
 uncertainty of the noise estimate is included), and logged per run (requirement,

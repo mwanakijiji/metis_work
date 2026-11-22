@@ -90,6 +90,12 @@ def main():
         "%s)",
         out_dir,
     )
+    logging.warning(
+        "! ------- IMG-RAD-11 needs a chopper capability in ScopeSim (not available "
+        "yet) to simulate frames at different chopper positions, with a background "
+        "that depends on the chop position; ScopeSim's ChopNodCombiner only combines "
+        "shifted copies of one readout (identical background, correlated noise)"
+    )
     scenario = load_config_and_pipe(
         config_file_choice=stem
         + "config/config_file_IMG_RAD_11_background_systematics_SIM.yaml",

@@ -24,6 +24,17 @@ img_rad_09:
   # reference-pixel border)
   mask_frac_of_median: 0.5
   mask_erosion_px: 4
+  # frame the noise is measured on: RAW_READOUT, the pinhole readout itself (nothing
+  # subtracted; the spread of the aperture sums is taken about their median, so the
+  # background level drops out)
+  noise_hdu: RAW_READOUT
+  # the point source (the WCU pinhole PSF) is left out of the noise apertures within
+  # source_exclusion_lambda_over_d x lambda/D of the maximum of the frame smoothed by
+  # a Gaussian of source_smooth_px (backbone_img_rad_09_nom.noise_mask); nod_pair would
+  # also exclude the minimum (a negative nod image), not used here
+  source_exclusion_lambda_over_d: 30
+  source_smooth_px: 2.0
+  nod_pair: false
 
   # ANALYSIS: PASS if measured + n_sigma x uncertainty <= limit, FAIL if measured -
   # n_sigma x uncertainty > limit, else INCONCLUSIVE (the uncertainty of the noise

@@ -30,6 +30,7 @@ import IMG_RAD_11_background_systematics_w_chopper_SIM as sim_rad11  # noqa: E40
 from modules import sim_common  # noqa: E402
 from modules.config_common import load_observing_config  # noqa: E402
 from modules import backbone_img_rad_09_nom as nom  # noqa: E402
+from modules import rsrf_common  # noqa: E402
 
 LIMIT_LE = {"x": {"value": 1.0, "pass_if": "<="}}
 LIMIT_GE = {"x": {"value": 1.0, "pass_if": ">="}}
@@ -297,6 +298,65 @@ def test_metis_3300_steps_legal_and_unsaturated():
     assert np.allclose(np.diff(peaks), peaks[0])  # smooth (linear) progression
 
 
+# IMG-RAD-07 METIS-3291: RSRF
+
+
+def test_rsrf_error_pattern_mean_zero_max_one():
+    lam_eval = np.linspace(2.9, 4.2, 500)
+    pattern = sim07.rsrf_error_pattern(lam_eval, lam_eval)
+    assert np.mean(pattern) == pytest.approx(0.0, abs=1e-12)
+    assert np.max(np.abs(pattern)) == pytest.approx(1.0)
+    # clipped (constant) outside the evaluated range
+    outside = sim07.rsrf_error_pattern(np.array([2.0, 2.9, 4.2, 5.0]), lam_eval)
+    assert outside[0] == pytest.approx(outside[1])
+    assert outside[3] == pytest.approx(outside[2])
+
+
+@pytest.mark.parametrize("rsrf_error", [0.01, 0.06])
+def test_metis_3291_injection_is_measured_rsrf_error(rsrf_error):
+    # as the SIM: raw = frame + a * P(lambda) * (frame - dark), measured from
+    # raw - dark as max |rsrf / RSRF_REF - 1| over the evaluated rows
+    ny, nx = 300, 40
+    lam_map = np.repeat(np.linspace(2.8, 4.3, ny)[:, None], nx, axis=1)
+    dark = np.full((ny, nx), 100.0)
+    signal = np.zeros((ny, nx))
+    signal[:, 15:25] = 1000.0 * (1.0 + 0.3 * np.sin(lam_map[:, 15:25]))
+    frame = dark + signal
+
+    spec = rsrf_common.slit_spectrum(signal, lam_map, 2.85, 4.25)
+    rows = spec.in_range
+    evaluate = rows & (spec.lam_rows > 2.9) & (spec.lam_rows < 4.2)
+    s_perfect = np.linspace(1.0, 2.0, ny) * 1e4
+    alpha = np.full(ny, 0.7)
+    rsrf_ref = np.full(ny, np.nan)
+    rsrf_ref[rows] = rsrf_common.rsrf(spec.spectrum[rows], s_perfect[rows], alpha[rows])
+
+    lam_eval = spec.lam_rows[evaluate]
+    raw = frame + rsrf_error * sim07.rsrf_error_pattern(lam_map, lam_eval) * signal
+    s_case = (raw - dark)[:, spec.slit_cols].sum(axis=1)
+    rsrf_case = np.full(ny, np.nan)
+    rsrf_case[rows] = rsrf_common.rsrf(s_case[rows], s_perfect[rows], alpha[rows])
+    assert sim07.rsrf_deviation(rsrf_case, rsrf_ref, evaluate) == pytest.approx(
+        rsrf_error, rel=1e-9
+    )
+
+
+def test_alpha_fcn_integral_fraction():
+    filt_lam = np.linspace(2.5, 4.5, 2001)
+    ripple = 1.0 + 0.03 * np.sin(40.0 * filt_lam)
+    lam = np.linspace(3.0, 4.0, 200)
+    s_perfect = np.exp(-lam)
+    alpha_fcn, _ = rsrf_common.make_alpha_fcn(filt_lam, ripple, lam, s_perfect, 0.7)
+    assert np.sum(s_perfect * alpha_fcn(lam)) == pytest.approx(0.7 * np.sum(s_perfect))
+
+
+def test_scale_to_integral():
+    s_perfect, norm = rsrf_common.scale_to_integral(
+        np.array([1.0, 2.0]), np.array([3.0, 3.0]), 2.0
+    )
+    assert np.sum(s_perfect) == pytest.approx(12.0) and norm == pytest.approx(4.0)
+
+
 # IMG-RAD-09: point-source noise of the background (aperture sums)
 
 
@@ -330,3 +390,75 @@ def test_rad_09_injection_scales_noise_to_injected_level():
     raw = b + injected / natural * (a - b)
     measured = nom.noise_to_flux(nom.aperture_noise(raw - b, mask, 3.7, 11.0)[0], dit, calib)
     assert measured == pytest.approx(injected, rel=1e-9)
+
+
+# ---------------------------------------------------------------- METIS-3291 L/M/N
+
+
+def test_saturation_of_obs_mode_override():
+    observing = {
+        "saturation_adu": {"img_lm": 25000, "img_n": 13930},
+        "saturation_adu_by_obs_mode": {"wcu_lss_n": 12857},
+    }
+    assert sim_common.saturation_of(observing, "img_n", "wcu_lss_n") == 12857
+    assert sim_common.saturation_of(observing, "img_n", "wcu_img_n") == 13930
+    assert sim_common.saturation_of(observing, "img_lm") == 25000
+    assert sim_common.saturation_of({}, "img_lm", "wcu_lss_l") is None
+
+
+@pytest.mark.parametrize(
+    "obs_mode, obs_filter",
+    [("wcu_lss_l", "L_spec"), ("wcu_lss_m", "M_spec"), ("wcu_lss_n", "N_spec")],
+)
+def test_lss_filter_ripple_and_alpha(obs_mode, obs_filter):
+    observing = load_observing_config(str(_ROOT) + "/")
+    if not Path(sim_common.IRDB_DIR).is_dir():
+        pytest.skip("no IRDB")
+    det_key = sim_common.detector_key(obs_mode)
+    filter_file = rsrf_common.filter_file_of(
+        observing, det_key, obs_filter, sim_common.IRDB_DIR
+    )
+    assert filter_file.is_file()
+    assert sim_common.saturation_of(observing, det_key, obs_mode) is not None
+    filt_lam, ripple, in_band = rsrf_common.filter_ripple(filter_file, 0.005, 0.1, 0.9)
+    assert in_band.sum() > 100
+    assert np.all(ripple[~in_band] == 1.0)
+    lam = filt_lam[in_band][::10]
+    s_perfect = np.ones_like(lam)
+    alpha_fcn, _ = rsrf_common.make_alpha_fcn(filt_lam, ripple, lam, s_perfect, 0.7)
+    assert np.sum(s_perfect * alpha_fcn(lam)) == pytest.approx(0.7 * lam.size)
+
+
+# ---------------------------------------------------------------- IMG-OPT-05 METIS-5422
+
+
+def test_pupil_image_area_range_and_subpixel_centroid():
+    shape, diameter = (300, 300), 200.0
+    centre = np.array([149.5, 149.5])
+    disk = sim_opt05.pupil_image(shape, centre, diameter)
+    assert disk.min() >= 0.0 and disk.max() <= 1.0
+    assert disk.sum() == pytest.approx(np.pi * (diameter / 2) ** 2, rel=1e-3)
+    yy, xx = np.indices(shape)
+    for shift in (np.array([0.03, -0.02]), np.array([0.2, 0.07])):
+        moved = sim_opt05.pupil_image(shape, centre + shift, diameter)
+        centroid = np.array(
+            [(xx * moved).sum() / moved.sum(), (yy * moved).sum() / moved.sum()]
+        )
+        # the centroid follows the shift to ~0.1% of the shift (not just ~1e-3 px)
+        np.testing.assert_allclose(centroid - centre, shift, rtol=0.01, atol=1e-4)
+
+
+def test_jitter_track_rms_exact_and_zero_mean():
+    rng = np.random.default_rng(1)
+    dx, dy = sim_opt05.jitter_track(10, 0.05, rng)
+    assert dx.shape == dy.shape == (10,)
+    assert abs(dx.mean()) < 1e-12 and abs(dy.mean()) < 1e-12
+    assert sim_opt05.track_rms(dx, dy) == pytest.approx(0.05, rel=1e-12)
+
+
+def test_frame_times_and_label():
+    times = sim_opt05.frame_times(3600, 10)
+    assert times[0] == 0.0 and times[-1] == pytest.approx(3600.0)
+    np.testing.assert_allclose(np.diff(times), 400.0)
+    assert sim_opt05.timescale_label(10) == "10s"
+    assert sim_opt05.timescale_label(3600.0) == "3600s"

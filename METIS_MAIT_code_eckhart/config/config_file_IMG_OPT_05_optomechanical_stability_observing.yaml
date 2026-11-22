@@ -1,0 +1,29 @@
+# IMG-OPT-05 optomechanical stability: analysis parameters and requirement limits,
+# merged on top of config_file_common_observing_params.yaml by
+# IMG_OPT_05_optomechanical_stability_ANALYSIS.py (load_observing_config). The pixel
+# scales (mas/px) per detector come from the common config (pixel_scales).
+
+img_opt_05:
+  # pupil centre per frame (backbone_img_opt_05_optomech_stability.pupil_centre):
+  # centroid of clip(frame / level, 0, 1) in a circle of radius R + margin_px, with
+  # the level the median inside inner_frac x R, iterated n_iter times
+  pupil:
+    margin_px: 20
+    inner_frac: 0.8
+    n_iter: 3
+  # warn if the frames of a sequence span a time differing from the run's timescale
+  # by more than this fraction
+  span_tolerance: 0.1
+  # timescales above this are tested against the goal (10 s - 10 min, goal up to 1 h)
+  requirement_max_s: 600
+  # PASS if measured + n_sigma x noise <= limit, FAIL if measured - n_sigma x noise >
+  # limit, else INCONCLUSIVE
+  n_sigma: 3
+  # raw readout max must be <= saturation_frac x saturation (as the SIM's MAX_RAW_FRAC)
+  saturation_frac: 0.8
+  limits:
+    METIS-5422: # 2D RMS of the pupil-image position on sky, per detector
+      img_lm:
+        position_rms: 0.2 # mas (L- and M-band, IMG-LM)
+      img_n:
+        position_rms: 0.5 # mas (N-band, IMG-N)

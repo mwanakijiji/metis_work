@@ -191,7 +191,7 @@
 <!-- backbone_img_rad_07_phot__plot_run -->
 <g id="node11" class="node">
 <title>backbone_img_rad_07_phot__plot_run</title>
-<g id="a_node11"><a xlink:title="FYI plots in result.results_dir: METIS&#45;2883 the B/mean &#45; 1 block map; METIS&#45;3300&#10;the flux error per step (with the limit band) and the pattern&#45;change map of the&#10;worst step.&#10;&#10;OUTPUTS:&#10;&#45; list[str]: written plot files">
+<g id="a_node11"><a xlink:title="FYI plots in result.results_dir: METIS&#45;2883 the B/mean &#45; 1 block map; METIS&#45;3300&#10;the flux error per step (with the limit band) and the pattern&#45;change map of the&#10;worst step; METIS&#45;3291 S_empirical vs. S_perfect * alpha_fcn and the RSRF.&#10;&#10;OUTPUTS:&#10;&#45; list[str]: written plot files">
 <polygon fill="white" stroke="black" points="735.28,-507.88 549.03,-507.88 549.03,-436.12 735.28,-436.12 735.28,-507.88"/>
 <text xml:space="preserve" text-anchor="middle" x="642.15" y="-494.38" font-family="Helvetica,sans-Serif" font-size="10.00">plot_run</text>
 <text xml:space="preserve" text-anchor="middle" x="642.15" y="-481.62" font-family="Helvetica,sans-Serif" font-size="10.00">FYI plots in result.results_dir:</text>
@@ -211,7 +211,7 @@
 <!-- backbone_img_rad_07_phot__log_test_outcome -->
 <g id="node12" class="node">
 <title>backbone_img_rad_07_phot__log_test_outcome</title>
-<g id="a_node12"><a xlink:title="Log the outcome of the run&#39;s requirement (as decided by metis_2883_check or&#10;metis_3300_check) and compare it with the injected truth (EXPECTED).&#10;&#10;OUTPUTS:&#10;&#45; PhotRunResult, with verdict_overall and consistent set">
+<g id="a_node12"><a xlink:title="Log the outcome of the run&#39;s requirement (as decided by metis_2883_check or&#10;metis_3300_check) and compare it with the injected truth (EXPECTED); a NOT&#10;EVALUATED verdict (METIS&#45;2594, METIS&#45;3291) is not compared.&#10;&#10;OUTPUTS:&#10;&#45; PhotRunResult, with verdict_overall and consistent set">
 <polygon fill="white" stroke="black" points="740.53,-424.88 543.78,-424.88 543.78,-353.12 740.53,-353.12 740.53,-424.88"/>
 <text xml:space="preserve" text-anchor="middle" x="642.15" y="-411.38" font-family="Helvetica,sans-Serif" font-size="10.00">log_test_outcome</text>
 <text xml:space="preserve" text-anchor="middle" x="642.15" y="-398.62" font-family="Helvetica,sans-Serif" font-size="10.00">Log the outcome of the run&#39;s</text>
@@ -283,9 +283,9 @@
 <polygon fill="#555555" stroke="#555555" points="840.16,-756.49 850.6,-754.68 841.31,-749.58 840.16,-756.49"/>
 </g>
 <!-- backbone_img_rad_07_phot__PhotRunResult -->
-<g id="node17" class="node">
+<g id="node18" class="node">
 <title>backbone_img_rad_07_phot__PhotRunResult</title>
-<g id="a_node17"><a xlink:title="One IMG&#45;RAD&#45;07 run (requirement, instrument, case), filled in by the stages.">
+<g id="a_node18"><a xlink:title="One IMG&#45;RAD&#45;07 run (requirement, instrument, case), filled in by the stages.">
 <path fill="white" stroke="black" stroke-dasharray="5,2" d="M1001.03,-197C1001.03,-197 921.28,-197 921.28,-197 915.28,-197 909.28,-191 909.28,-185 909.28,-185 909.28,-173 909.28,-173 909.28,-167 915.28,-161 921.28,-161 921.28,-161 1001.03,-161 1001.03,-161 1007.03,-161 1013.03,-167 1013.03,-173 1013.03,-173 1013.03,-185 1013.03,-185 1013.03,-191 1007.03,-197 1001.03,-197"/>
 <text xml:space="preserve" text-anchor="middle" x="961.16" y="-175.88" font-family="Helvetica,sans-Serif" font-size="10.00">PhotRunResult(...)</text>
 </a>
@@ -320,37 +320,53 @@
 <g id="node15" class="node">
 <title>backbone_img_rad_07_phot__half_ptv</title>
 <g id="a_node15"><a xlink:title="Half peak&#45;to&#45;valley inhomogeneity max |B / mean(B) &#45; 1| over the valid blocks, and&#10;its noise sigma (the relative standard error of the block where the max is).&#10;&#10;OUTPUTS:&#10;&#45; float: max |B / mean &#45; 1|&#10;&#45; float: sigma&#10;&#45; np.ndarray: map of B / mean &#45; 1">
-<ellipse fill="none" stroke="black" cx="961.16" cy="-380" rx="131.7" ry="50.73"/>
-<text xml:space="preserve" text-anchor="middle" x="961.16" y="-402.38" font-family="Helvetica,sans-Serif" font-size="10.00">half_ptv</text>
-<text xml:space="preserve" text-anchor="middle" x="961.16" y="-389.62" font-family="Helvetica,sans-Serif" font-size="10.00">Half peak&#45;to&#45;valley inhomogeneity</text>
-<text xml:space="preserve" text-anchor="middle" x="961.16" y="-376.88" font-family="Helvetica,sans-Serif" font-size="10.00">max |B / mean(B) &#45; 1| over the</text>
-<text xml:space="preserve" text-anchor="middle" x="961.16" y="-364.12" font-family="Helvetica,sans-Serif" font-size="10.00">valid blocks, and its noise sigma</text>
-<text xml:space="preserve" text-anchor="middle" x="961.16" y="-351.38" font-family="Helvetica,sans-Serif" font-size="10.00">(the relat…</text>
+<ellipse fill="none" stroke="black" cx="961.16" cy="-381" rx="131.7" ry="50.73"/>
+<text xml:space="preserve" text-anchor="middle" x="961.16" y="-403.38" font-family="Helvetica,sans-Serif" font-size="10.00">half_ptv</text>
+<text xml:space="preserve" text-anchor="middle" x="961.16" y="-390.62" font-family="Helvetica,sans-Serif" font-size="10.00">Half peak&#45;to&#45;valley inhomogeneity</text>
+<text xml:space="preserve" text-anchor="middle" x="961.16" y="-377.88" font-family="Helvetica,sans-Serif" font-size="10.00">max |B / mean(B) &#45; 1| over the</text>
+<text xml:space="preserve" text-anchor="middle" x="961.16" y="-365.12" font-family="Helvetica,sans-Serif" font-size="10.00">valid blocks, and its noise sigma</text>
+<text xml:space="preserve" text-anchor="middle" x="961.16" y="-352.38" font-family="Helvetica,sans-Serif" font-size="10.00">(the relat…</text>
 </a>
 </g>
 </g>
 <!-- backbone_img_rad_07_phot__plot_run&#45;&gt;backbone_img_rad_07_phot__half_ptv -->
 <g id="edge15" class="edge">
 <title>backbone_img_rad_07_phot__plot_run&#45;&gt;backbone_img_rad_07_phot__half_ptv</title>
-<path fill="none" stroke="#555555" d="M735.7,-445.14C769.65,-435.29 808.51,-424.01 844.26,-413.64"/>
-<polygon fill="#555555" stroke="#555555" points="845.16,-417.02 853.79,-410.87 843.21,-410.3 845.16,-417.02"/>
+<path fill="none" stroke="#555555" d="M735.7,-445.43C769.48,-435.74 808.13,-424.64 843.73,-414.42"/>
+<polygon fill="#555555" stroke="#555555" points="844.57,-417.82 853.22,-411.7 842.64,-411.09 844.57,-417.82"/>
 </g>
 <!-- backbone_img_rad_07_phot___plot_map -->
 <g id="node16" class="node">
 <title>backbone_img_rad_07_phot___plot_map</title>
 <g id="a_node16"><a xlink:title="Diverging image of a relative&#45;deviation block map.">
-<ellipse fill="none" stroke="black" cx="961.16" cy="-474" rx="115.26" ry="32.7"/>
-<text xml:space="preserve" text-anchor="middle" x="961.16" y="-483.62" font-family="Helvetica,sans-Serif" font-size="10.00">_plot_map</text>
-<text xml:space="preserve" text-anchor="middle" x="961.16" y="-470.88" font-family="Helvetica,sans-Serif" font-size="10.00">Diverging image of a relative&#45;</text>
-<text xml:space="preserve" text-anchor="middle" x="961.16" y="-458.12" font-family="Helvetica,sans-Serif" font-size="10.00">deviation block map</text>
+<ellipse fill="none" stroke="black" cx="961.16" cy="-475" rx="115.26" ry="32.7"/>
+<text xml:space="preserve" text-anchor="middle" x="961.16" y="-484.62" font-family="Helvetica,sans-Serif" font-size="10.00">_plot_map</text>
+<text xml:space="preserve" text-anchor="middle" x="961.16" y="-471.88" font-family="Helvetica,sans-Serif" font-size="10.00">Diverging image of a relative&#45;</text>
+<text xml:space="preserve" text-anchor="middle" x="961.16" y="-459.12" font-family="Helvetica,sans-Serif" font-size="10.00">deviation block map</text>
 </a>
 </g>
 </g>
 <!-- backbone_img_rad_07_phot__plot_run&#45;&gt;backbone_img_rad_07_phot___plot_map -->
 <g id="edge16" class="edge">
 <title>backbone_img_rad_07_phot__plot_run&#45;&gt;backbone_img_rad_07_phot___plot_map</title>
-<path fill="none" stroke="#555555" d="M735.7,-472.58C766.56,-472.78 801.49,-473 834.45,-473.21"/>
-<polygon fill="#555555" stroke="#555555" points="834,-476.7 844.02,-473.27 834.05,-469.7 834,-476.7"/>
+<path fill="none" stroke="#555555" d="M735.7,-472.88C766.56,-473.17 801.49,-473.5 834.45,-473.81"/>
+<polygon fill="#555555" stroke="#555555" points="833.99,-477.31 844.02,-473.9 834.06,-470.31 833.99,-477.31"/>
+</g>
+<!-- backbone_img_rad_07_phot___plot_rsrf -->
+<g id="node17" class="node">
+<title>backbone_img_rad_07_phot___plot_rsrf</title>
+<g id="a_node17"><a xlink:title="S_empirical vs. S_perfect * alpha_fcn (top) and the RSRF (bottom).">
+<ellipse fill="none" stroke="black" cx="961.16" cy="-296" rx="61.7" ry="23.69"/>
+<text xml:space="preserve" text-anchor="middle" x="961.16" y="-299.25" font-family="Helvetica,sans-Serif" font-size="10.00">_plot_rsrf</text>
+<text xml:space="preserve" text-anchor="middle" x="961.16" y="-286.5" font-family="Helvetica,sans-Serif" font-size="10.00">S_empirical vs</text>
+</a>
+</g>
+</g>
+<!-- backbone_img_rad_07_phot__plot_run&#45;&gt;backbone_img_rad_07_phot___plot_rsrf -->
+<g id="edge17" class="edge">
+<title>backbone_img_rad_07_phot__plot_run&#45;&gt;backbone_img_rad_07_phot___plot_rsrf</title>
+<path fill="none" stroke="#555555" d="M735.73,-459.24C754.75,-452.98 773.32,-443.71 787.69,-430 823.36,-395.95 786.68,-357.72 823.58,-325 841.19,-309.38 865.1,-301.44 887.98,-297.6"/>
+<polygon fill="#555555" stroke="#555555" points="888.2,-301.11 897.61,-296.24 887.22,-294.17 888.2,-301.11"/>
 </g>
 </g>
 </svg>

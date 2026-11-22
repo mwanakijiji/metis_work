@@ -44,10 +44,48 @@ instruments:
     dit: 0.011 # s; mindit of the high-capacity mode
     ndit: 1
     intrapixel_capacitance: true
+  L_spec: # LM long slit (METIS-3291 RSRF), on the LM imager detector
+    fp_mask: pinhole_lm
+    pp_mask: PPS-CFO2
+    psf_kernel: null # -> PPS-CFO2_WCU
+    obs_filter: L_spec
+    # LSS readout mode: mindit 1.3 s; ND_OD1 keeps the raw peak at ~0.3 sat there
+    nd_filter: ND_OD1
+    obs_mode: wcu_lss_l
+    dit: 1.3 # s; mindit of the LSS readout mode
+    ndit: 1
+    intrapixel_capacitance: true
+  M_spec: # LM long slit (METIS-3291 RSRF), on the LM imager detector
+    fp_mask: pinhole_lm
+    pp_mask: PPS-CFO2
+    psf_kernel: null # -> PPS-CFO2_WCU
+    obs_filter: M_spec
+    # the WCU background is ~10x L's: without ND, the dark alone is ~0.4 sat at
+    # mindit (1.3 s); ND_OD1 at 8 s: dark ~0.23, raw peak ~0.62 sat (saturation of
+    # the slow mode, 40000 ADU); NDIT 4 halves the noise in the RSRF (~0.02 at NDIT 1)
+    nd_filter: ND_OD1
+    obs_mode: wcu_lss_m
+    dit: 8.0 # s
+    ndit: 4
+    intrapixel_capacitance: true
+  N_spec: # N long slit (METIS-3291 RSRF), on the N imager detector (GeoSnap)
+    fp_mask: pinhole_n
+    pp_mask: PPS-CFO2
+    psf_kernel: null # -> PPS-CFO2_WCU
+    obs_filter: N_spec
+    # background-limited (signal ~ WCU background per pixel): no ND, mindit gives the
+    # raw peak ~0.43 sat (saturation of the low-capacity mode, 12857 ADU; 0.03 s
+    # saturates); NDIT 100 brings the noise in the RSRF from ~0.15 to ~0.02
+    nd_filter: open
+    obs_mode: wcu_lss_n
+    dit: 0.011 # s; mindit of the LSS readout mode (low capacity)
+    ndit: 100
+    intrapixel_capacitance: true
 
 requirements:
 
   METIS-2594:
+    instruments: [Br_alpha, N2] # imaging only
     simulate: false
     description: >-
       METIS internal calibration shall provide a range of flux levels matching that
@@ -76,6 +114,7 @@ requirements:
       fail_low: {inject: {flux_min: 0.2, flux_max: 0.9}} # does not reach low enough
 
   METIS-2883:
+    instruments: [Br_alpha, N2] # imaging only
     simulate: false
     description: >-
       The source used for detector linearity calibration METIS-3289 shall provide an
@@ -93,6 +132,7 @@ requirements:
       fail: {inject: {half_ptv: 0.06}}
 
   METIS-3300:
+    instruments: [Br_alpha, N2] # imaging only
     simulate: false
     description: >-
       The level of flux of the flat field shall be tunable to 15 discrete values and
@@ -127,20 +167,42 @@ requirements:
       fail: {inject: {flux_error: 0.01, pattern_change: 0.01}}
 
   METIS-3291:
-      simulate: true
-      description: >-
-        METIS shall allow the characterisation and correction of the relative spectral response
-        function (RSRF) with 3% precision over the wavelength range specified in METIS-
-        1090.
-      limit:
-        flux_error:
-          value: 0.003
-          pass_if: "<="
-          unit: fraction
-          note: max |flux / nominal flux - 1| over the steps
-      cases:
-        pass: {inject: {flux_error: 0.001}}
-        fail: {inject: {flux_error: 0.01}}
+    simulate: true
+    instruments: [L_spec, M_spec, N_spec] # needs a long-slit (LSS) mode
+    description: >-
+      METIS shall allow the characterisation and correction of the relative spectral
+      response function (RSRF) with 3% precision over the wavelength range specified
+      in METIS-1090.
+    # RSRF model (modules/rsrf_common.py): rsrf = S_empirical / (S_perfect * alpha_fcn),
+    # with S_empirical the measured spectrum (sum over the slit), S_perfect the BB at
+    # the WCU temperature scaled to src_scale_factor x the integral of S_empirical, and
+    # alpha_fcn the filter's smoothed ripple, scaled so that
+    # integral(S_perfect * alpha_fcn) = alpha_integral_frac x integral(S_perfect).
+    # Evaluated on the rows in the trace range and the filter passband (standing in
+    # for the METIS-1090 range, TBC).
+    rsrf:
+      slit_frac: 0.5 # slit columns: median over rows > slit_frac x max
+      src_scale_factor: 2.0
+      alpha_integral_frac: 0.7
+      alpha_ripple_sigma_um: 0.005 # light smoothing of the filter curve
+      alpha_trend_sigma_um: 0.1 # broad in-band trend divided out
+      alpha_in_band_frac: 0.9 # passband: T > alpha_in_band_frac x max(T)
+    limit:
+      rsrf_error:
+        value: 0.03
+        pass_if: "<="
+        unit: fraction
+        note: >-
+          max |RSRF measured / RSRF_REF - 1| over the evaluated wavelength range;
+          injected as a smooth error pattern in wavelength of that amplitude
+    cases:
+      pass: {inject: {rsrf_error: 0.01}}
+      # The low-signal rows ScopeSim leaves between its spectral FOV chunks are kept
+      # in the evaluation and set the measured max for small injections: L_spec ~0.03
+      # (~11 rows), M_spec (3 rows) noise only, N_spec ~5-10 (17 rows near zero), so
+      # 'pass' and 'near' measure as FAIL in L and N. Noise alone adds ~0.01-0.02.
+      near: {inject: {rsrf_error: 0.015}}
+      fail: {inject: {rsrf_error: 0.06}}
 
 # not simulated (yet)
 METIS-2595:

@@ -1,12 +1,16 @@
 """
-IMG-RAD-09 nominal background behaviour: the point-source noise of a long
-background exposure (simulated as a WCU flat field), in absolute flux units.
+IMG-RAD-09 nominal background behaviour: the point-source noise of a long exposure,
+in absolute flux units (simulated as one readout of the WCU pinhole, a point source in
+the middle of the frame).
 
-Shared by the SIM (which injects a noise level, so it must be the quantity measured
-here) and the ANALYSIS (IMG_RAD_09_nominal_background_behavior_ANALYSIS.py):
+Shared by the SIM (which measures the natural noise with it) and the ANALYSIS
+(IMG_RAD_09_nominal_background_behavior_ANALYSIS.py):
 - the 1-sigma point-source noise is the robust spread (1.4826 x MAD) of the sums in
-  circular apertures (radius in lambda/D) on a grid over the field of the
-  background-subtracted frame (ADU per DIT),
+  circular apertures (radius in lambda/D) on a grid over the field of the frame the
+  noise is measured on (noise_hdu: RAW_READOUT, or BCKGD_SUBTED by default; ADU per
+  DIT), about their median (so a uniform background level drops out), away from the
+  point source (source_mask: within source_exclusion_lambda_over_d x lambda/D of it,
+  and, with nod_pair, of a negative nod image, if set),
 - converted to an absolute flux with a counts-to-flux calibration (flux per ADU/s in
   the aperture; a PLACEHOLDER in
   config/config_file_IMG_RAD_09_nominal_background_observing.yaml until the
@@ -26,6 +30,7 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.io import fits
+from scipy.ndimage import gaussian_filter
 from pipeline_registry import CLUSTER_NOMBKG, COLOR_NOMBKG, pipeline_stage
 
 from . import analysis_common
@@ -83,6 +88,76 @@ def aperture_noise(frame, mask, radius_px, spacing_px):
     return float(MAD_TO_SIGMA * mad), int(sums.size)
 
 
+def source_mask(frame, radius_px, smooth_px=2.0, nod_pair=True):
+    """
+    Pixels near the point sources of a background-subtracted frame: within radius_px
+    of the maximum of the frame smoothed by a Gaussian of smooth_px (the source) and,
+    if nod_pair, of its minimum (the source's negative image from the nod).
+
+    OUTPUTS:
+    - ndarray: bool, True near a source
+    - list[tuple]: (x, y) of the positive (and negative) source [px]
+    """
+    smooth = gaussian_filter(np.asarray(frame, dtype=float), float(smooth_px))
+    peaks = [np.unravel_index(np.argmax(smooth), smooth.shape)]
+    if nod_pair:
+        peaks.append(np.unravel_index(np.argmin(smooth), smooth.shape))
+    yy, xx = np.indices(smooth.shape)
+    near = np.zeros(smooth.shape, bool)
+    for py, px in peaks:
+        near |= (xx - px) ** 2 + (yy - py) ** 2 <= radius_px**2
+    return near, [(int(px), int(py)) for py, px in peaks]
+
+
+def aperture_sum_at(frame, centre_xy, radius_px):
+    """Sum of frame in a circular aperture of radius_px around centre_xy (x, y)."""
+    yy, xx = np.indices(frame.shape)
+    disc = (xx - centre_xy[0]) ** 2 + (yy - centre_xy[1]) ** 2 <= radius_px**2
+    return float(np.sum(frame[disc]))
+
+
+def source_sum(frame, mask, centre_xy, radius_px):
+    """
+    Point-source sum in a circular aperture of radius_px around centre_xy (x, y),
+    above the background level: aperture sum - number of pixels x median of frame in
+    mask (the noise-aperture pixels; ~0 for a background-subtracted frame).
+    """
+    yy, xx = np.indices(frame.shape)
+    disc = (xx - centre_xy[0]) ** 2 + (yy - centre_xy[1]) ** 2 <= radius_px**2
+    level = float(np.median(frame[mask])) if np.any(mask) else 0.0
+    return float(np.sum(frame[disc]) - disc.sum() * level)
+
+
+def noise_mask(frame, raw, cfg, aperture_radius):
+    """
+    Pixels for the noise apertures: the field mask of the raw frame (field_mask:
+    > mask_frac_of_median x median, eroded), without the pixels near the point sources
+    (source_mask, radius source_exclusion_lambda_over_d / aperture_radius_lambda_over_d
+    x aperture_radius) if source_exclusion_lambda_over_d is set.
+
+    OUTPUTS:
+    - ndarray: bool mask
+    - list[tuple]: source positions (x, y) [px] (empty without exclusion)
+    - float: exclusion radius [px] (0 without exclusion)
+    """
+    mask = analysis_common.field_mask(
+        raw, cfg["mask_frac_of_median"], cfg["mask_erosion_px"]
+    )
+    n_excl = cfg.get("source_exclusion_lambda_over_d")
+    if not n_excl:
+        return mask, [], 0.0
+    excl_radius = (
+        aperture_radius * float(n_excl) / float(cfg["aperture_radius_lambda_over_d"])
+    )
+    near, positions = source_mask(
+        frame,
+        excl_radius,
+        float(cfg.get("source_smooth_px", 2.0)),
+        bool(cfg.get("nod_pair", True)),
+    )
+    return mask & ~near, positions, excl_radius
+
+
 def noise_to_flux(noise_adu_per_dit, dit_s, flux_per_adu_per_s):
     """
     Aperture noise in ADU per DIT (ScopeSim averages over NDIT) to an absolute flux:
@@ -116,6 +191,7 @@ class NoiseRunResult:  # pylint: disable=too-many-instance-attributes
     analysis_cfg: dict
     aperture_radius_px: float = np.nan
     aperture_sums_flux: np.ndarray = None
+    source_positions: list = field(default_factory=list)
     measured: dict = field(default_factory=dict)
     sigma: dict = field(default_factory=dict)
     verdicts: dict = field(default_factory=dict)
@@ -166,37 +242,63 @@ def populate_run(state, observing):
     )
 
 
-def measure_noise(result, observing):
+def measure_noise(result, observing):  # pylint: disable=too-many-locals
     """
-    Measure the 1-sigma point-source noise of the background-subtracted frame
-    (BCKGD_SUBTED) in absolute flux units: aperture sums (radius
-    aperture_radius_lambda_over_d x lambda/D, on a grid in the field mask of the raw
-    frame), robust spread, / DIT x counts-to-flux calibration; and its uncertainty
-    MAD_SIGMA_REL_ERR / sqrt(N apertures).
+    Measure the 1-sigma point-source noise of the frame in extension noise_hdu
+    (RAW_READOUT: the readout itself, nothing subtracted; default BCKGD_SUBTED) in
+    absolute flux units: aperture sums (radius aperture_radius_lambda_over_d x
+    lambda/D, on a grid in the field mask of the raw frame, away from the point
+    source: noise_mask), robust spread about their median, / DIT x counts-to-flux
+    calibration; and its uncertainty MAD_SIGMA_REL_ERR / sqrt(N apertures). If the
+    source is excluded, also its flux above the background in an aperture of the same
+    radius (source_sum) and its S/N (for information).
 
     OUTPUTS:
-    - NoiseRunResult, with measured/sigma['noise_flux'] and the aperture sums (flux)
+    - NoiseRunResult, with measured/sigma['noise_flux'] (and 'source_flux',
+      'source_snr'), the aperture sums (flux) and the source positions
     """
     cfg = result.analysis_cfg
     raw, _ = load_fits_data(result.file_name, hdu_index="RAW_READOUT")
-    frame, _ = load_fits_data(result.file_name, hdu_index="BCKGD_SUBTED")
-    mask = analysis_common.field_mask(
-        raw.astype(float), cfg["mask_frac_of_median"], cfg["mask_erosion_px"]
-    )
-    del raw
+    noise_hdu = cfg.get("noise_hdu", "BCKGD_SUBTED")
+    if noise_hdu == "RAW_READOUT":
+        frame = raw.astype(float)
+    else:
+        frame, _ = load_fits_data(result.file_name, hdu_index=noise_hdu)
+        frame = frame.astype(float)
     radius = aperture_radius_px(
         filter_wavelength_m(observing, result.header["FILTER"], result.det_key),
         float(cfg["telescope_diameter_m"]),
         float(observing["pixel_scales"][result.det_key]),
         float(cfg["aperture_radius_lambda_over_d"]),
     )
+    mask, positions, excl_radius = noise_mask(frame, raw.astype(float), cfg, radius)
+    del raw
     spacing = radius * float(cfg["aperture_spacing_radii"])
     dit = float(result.header["DIT"])
     calib = float(cfg["flux_per_adu_per_s"][result.det_key])
-    noise_adu, n_apertures = aperture_noise(frame.astype(float), mask, radius, spacing)
-    sums, _ = aperture_sums(frame.astype(float), mask, radius, spacing)
+    noise_adu, n_apertures = aperture_noise(frame, mask, radius, spacing)
+    sums, _ = aperture_sums(frame, mask, radius, spacing)
     noise = noise_to_flux(noise_adu, dit, calib)
 
+    result.source_positions = positions
+    if positions:
+        source_flux = noise_to_flux(
+            source_sum(frame, mask, positions[0], radius), dit, calib
+        )
+        result.measured["source_flux"] = source_flux
+        result.measured["source_snr"] = source_flux / noise
+        logging.info(
+            "%s (%s): point source at %s%s, excluded within %.1f px; source flux in "
+            "the aperture %.6g %s, S/N %.4g",
+            result.run_name,
+            noise_hdu,
+            positions[0],
+            f" (negative nod image at {positions[1]})" if len(positions) > 1 else "",
+            excl_radius,
+            source_flux,
+            cfg["flux_unit"],
+            result.measured["source_snr"],
+        )
     result.aperture_radius_px = radius
     result.aperture_sums_flux = noise_to_flux(sums, dit, calib)
     result.measured["noise_flux"] = noise
@@ -352,6 +454,12 @@ def log_test_outcome(result):
         result.measured["n_apertures"],
         result.aperture_radius_px,
     )
+    if "source_snr" in result.measured:
+        logging.info(
+            "  point source: flux %.6g, S/N %.4g (for information)",
+            result.measured["source_flux"],
+            result.measured["source_snr"],
+        )
     result.verdict_overall = result.verdicts.get(result.req_id, "NOT EVALUATED")
     result.consistent = analysis_common.compare_with_expected(
         result.req_id, result.verdict_overall, result.header

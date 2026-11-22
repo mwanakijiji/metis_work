@@ -18,50 +18,50 @@
 </g>
 <g id="clust2" class="cluster">
 <title>cluster_IMG_RAD_09_nominal_background_behavior_SIM</title>
-<polygon fill="#fae7f4" stroke="#999999" points="235,-382.75 235,-572.75 612,-572.75 612,-382.75 235,-382.75"/>
-<text xml:space="preserve" text-anchor="middle" x="423.5" y="-555.45" font-family="Helvetica,sans-Serif" font-size="14.00">IMG_RAD_09_nominal_background_behavior_SIM.py</text>
+<polygon fill="#fae7f4" stroke="#999999" points="271,-382.75 271,-572.75 648,-572.75 648,-382.75 271,-382.75"/>
+<text xml:space="preserve" text-anchor="middle" x="459.5" y="-555.45" font-family="Helvetica,sans-Serif" font-size="14.00">IMG_RAD_09_nominal_background_behavior_SIM.py</text>
 </g>
 <g id="clust3" class="cluster">
 <title>cluster_IMG_RAD_09_nominal_background_behavior_ANALYSIS</title>
-<polygon fill="#f2f2f2" stroke="#999999" points="249,-106.25 249,-183.5 747,-183.5 747,-106.25 249,-106.25"/>
-<text xml:space="preserve" text-anchor="middle" x="498" y="-166.2" font-family="Helvetica,sans-Serif" font-size="14.00">IMG_RAD_09_nominal_background_behavior_ANALYSIS.py + modules</text>
+<polygon fill="#f2f2f2" stroke="#999999" points="324,-106.25 324,-183.5 822,-183.5 822,-106.25 324,-106.25"/>
+<text xml:space="preserve" text-anchor="middle" x="573" y="-166.2" font-family="Helvetica,sans-Serif" font-size="14.00">IMG_RAD_09_nominal_background_behavior_ANALYSIS.py + modules</text>
 </g>
 <g id="clust4" class="cluster">
 <title>cluster_out</title>
-<polygon fill="#e6f4e6" stroke="#bbbbbb" points="590,-8 590,-85.25 794,-85.25 794,-8 590,-8"/>
-<text xml:space="preserve" text-anchor="middle" x="692" y="-67.95" font-family="Helvetica,sans-Serif" font-size="14.00">outputs</text>
+<polygon fill="#e6f4e6" stroke="#bbbbbb" points="643,-8 643,-85.25 847,-85.25 847,-8 643,-8"/>
+<text xml:space="preserve" text-anchor="middle" x="745" y="-67.95" font-family="Helvetica,sans-Serif" font-size="14.00">outputs</text>
 </g>
 <!-- y_config_file_IMG_RAD_09_nominal_background_observing_yaml -->
 <g id="node1" class="node">
 <title>y_config_file_IMG_RAD_09_nominal_background_observing_yaml</title>
-<polygon fill="white" stroke="black" points="888,-637.75 572,-637.75 572,-601.75 894,-601.75 894,-631.75 888,-637.75"/>
-<polyline fill="none" stroke="black" points="888,-637.75 888,-631.75"/>
-<polyline fill="none" stroke="black" points="894,-631.75 888,-631.75"/>
-<text xml:space="preserve" text-anchor="middle" x="733" y="-616.62" font-family="Helvetica,sans-Serif" font-size="10.00">config_file_IMG_RAD_09_nominal_background_observing.yaml</text>
+<polygon fill="white" stroke="black" points="638,-637.75 322,-637.75 322,-601.75 644,-601.75 644,-631.75 638,-637.75"/>
+<polyline fill="none" stroke="black" points="638,-637.75 638,-631.75"/>
+<polyline fill="none" stroke="black" points="644,-631.75 638,-631.75"/>
+<text xml:space="preserve" text-anchor="middle" x="483" y="-616.62" font-family="Helvetica,sans-Serif" font-size="10.00">config_file_IMG_RAD_09_nominal_background_observing.yaml</text>
 </g>
 <!-- IMG_RAD_09_nominal_background_behavior_SIM__main -->
 <g id="node5" class="node">
 <title>IMG_RAD_09_nominal_background_behavior_SIM__main</title>
-<path fill="white" stroke="black" stroke-width="2" d="M455,-539.5C455,-539.5 425,-539.5 425,-539.5 419,-539.5 413,-533.5 413,-527.5 413,-527.5 413,-515.5 413,-515.5 413,-509.5 419,-503.5 425,-503.5 425,-503.5 455,-503.5 455,-503.5 461,-503.5 467,-509.5 467,-515.5 467,-515.5 467,-527.5 467,-527.5 467,-533.5 461,-539.5 455,-539.5"/>
-<text xml:space="preserve" text-anchor="middle" x="440" y="-518.38" font-family="Helvetica,sans-Serif" font-size="10.00">main()</text>
+<path fill="white" stroke="black" stroke-width="2" d="M498,-539.5C498,-539.5 468,-539.5 468,-539.5 462,-539.5 456,-533.5 456,-527.5 456,-527.5 456,-515.5 456,-515.5 456,-509.5 462,-503.5 468,-503.5 468,-503.5 498,-503.5 498,-503.5 504,-503.5 510,-509.5 510,-515.5 510,-515.5 510,-527.5 510,-527.5 510,-533.5 504,-539.5 498,-539.5"/>
+<text xml:space="preserve" text-anchor="middle" x="483" y="-518.38" font-family="Helvetica,sans-Serif" font-size="10.00">main()</text>
 </g>
 <!-- y_config_file_IMG_RAD_09_nominal_background_observing_yaml&#45;&gt;IMG_RAD_09_nominal_background_behavior_SIM__main -->
-<g id="edge8" class="edge">
+<g id="edge7" class="edge">
 <title>y_config_file_IMG_RAD_09_nominal_background_observing_yaml&#45;&gt;IMG_RAD_09_nominal_background_behavior_SIM__main</title>
-<path fill="none" stroke="#b8860b" d="M679.94,-601.32C621.56,-582.14 529.2,-551.8 477.76,-534.9"/>
-<polygon fill="#b8860b" stroke="#b8860b" points="479.16,-531.68 468.56,-531.88 476.97,-538.33 479.16,-531.68"/>
+<path fill="none" stroke="#b8860b" d="M483,-601.54C483,-587.53 483,-567.46 483,-551.05"/>
+<polygon fill="#b8860b" stroke="#b8860b" points="486.5,-551.4 483,-541.4 479.5,-551.4 486.5,-551.4"/>
 </g>
 <!-- IMG_RAD_09_nominal_background_behavior_ANALYSIS__main -->
 <g id="node8" class="node">
 <title>IMG_RAD_09_nominal_background_behavior_ANALYSIS__main</title>
-<path fill="white" stroke="black" stroke-width="2" d="M707,-150.25C707,-150.25 677,-150.25 677,-150.25 671,-150.25 665,-144.25 665,-138.25 665,-138.25 665,-126.25 665,-126.25 665,-120.25 671,-114.25 677,-114.25 677,-114.25 707,-114.25 707,-114.25 713,-114.25 719,-120.25 719,-126.25 719,-126.25 719,-138.25 719,-138.25 719,-144.25 713,-150.25 707,-150.25"/>
-<text xml:space="preserve" text-anchor="middle" x="692" y="-129.12" font-family="Helvetica,sans-Serif" font-size="10.00">main()</text>
+<path fill="white" stroke="black" stroke-width="2" d="M760,-150.25C760,-150.25 730,-150.25 730,-150.25 724,-150.25 718,-144.25 718,-138.25 718,-138.25 718,-126.25 718,-126.25 718,-120.25 724,-114.25 730,-114.25 730,-114.25 760,-114.25 760,-114.25 766,-114.25 772,-120.25 772,-126.25 772,-126.25 772,-138.25 772,-138.25 772,-144.25 766,-150.25 760,-150.25"/>
+<text xml:space="preserve" text-anchor="middle" x="745" y="-129.12" font-family="Helvetica,sans-Serif" font-size="10.00">main()</text>
 </g>
 <!-- y_config_file_IMG_RAD_09_nominal_background_observing_yaml&#45;&gt;IMG_RAD_09_nominal_background_behavior_ANALYSIS__main -->
-<g id="edge9" class="edge">
+<g id="edge8" class="edge">
 <title>y_config_file_IMG_RAD_09_nominal_background_observing_yaml&#45;&gt;IMG_RAD_09_nominal_background_behavior_ANALYSIS__main</title>
-<path fill="none" stroke="#b8860b" d="M732.71,-601.36C732.42,-582.09 732,-550.07 732,-522.5 732,-522.5 732,-522.5 732,-285.25 732,-240.73 715.75,-191.22 703.97,-161.16"/>
-<polygon fill="#b8860b" stroke="#b8860b" points="707.28,-160 700.28,-152.05 700.79,-162.63 707.28,-160"/>
+<path fill="none" stroke="#b8860b" d="M563.84,-601.3C631.13,-584.37 716,-556.31 716,-522.5 716,-522.5 716,-522.5 716,-285.25 716,-241.37 727.8,-191.62 736.35,-161.34"/>
+<polygon fill="#b8860b" stroke="#b8860b" points="739.68,-162.4 739.12,-151.82 732.96,-160.45 739.68,-162.4"/>
 </g>
 <!-- y_config_file_IMG_RAD_09_nominal_background_SIM_yaml -->
 <g id="node2" class="node">
@@ -72,30 +72,30 @@
 <text xml:space="preserve" text-anchor="middle" x="162" y="-616.62" font-family="Helvetica,sans-Serif" font-size="10.00">config_file_IMG_RAD_09_nominal_background_SIM.yaml</text>
 </g>
 <!-- y_config_file_IMG_RAD_09_nominal_background_SIM_yaml&#45;&gt;IMG_RAD_09_nominal_background_behavior_SIM__main -->
-<g id="edge10" class="edge">
+<g id="edge9" class="edge">
 <title>y_config_file_IMG_RAD_09_nominal_background_SIM_yaml&#45;&gt;IMG_RAD_09_nominal_background_behavior_SIM__main</title>
-<path fill="none" stroke="#b8860b" d="M212.34,-601.32C266.92,-582.42 352.81,-552.69 402,-535.66"/>
-<polygon fill="#b8860b" stroke="#b8860b" points="403.06,-538.99 411.37,-532.41 400.77,-532.38 403.06,-538.99"/>
+<path fill="none" stroke="#b8860b" d="M220.13,-601.32C285.37,-581.76 389.35,-550.58 444.97,-533.9"/>
+<polygon fill="#b8860b" stroke="#b8860b" points="445.72,-537.33 454.3,-531.11 443.71,-530.63 445.72,-537.33"/>
 </g>
 <!-- y_config_file_common_observing_params_yaml -->
 <g id="node3" class="node">
 <title>y_config_file_common_observing_params_yaml</title>
-<polygon fill="white" stroke="black" points="552.25,-637.75 321.75,-637.75 321.75,-601.75 558.25,-601.75 558.25,-631.75 552.25,-637.75"/>
-<polyline fill="none" stroke="black" points="552.25,-637.75 552.25,-631.75"/>
-<polyline fill="none" stroke="black" points="558.25,-631.75 552.25,-631.75"/>
-<text xml:space="preserve" text-anchor="middle" x="440" y="-616.62" font-family="Helvetica,sans-Serif" font-size="10.00">config_file_common_observing_params.yaml</text>
+<polygon fill="white" stroke="black" points="888.25,-637.75 657.75,-637.75 657.75,-601.75 894.25,-601.75 894.25,-631.75 888.25,-637.75"/>
+<polyline fill="none" stroke="black" points="888.25,-637.75 888.25,-631.75"/>
+<polyline fill="none" stroke="black" points="894.25,-631.75 888.25,-631.75"/>
+<text xml:space="preserve" text-anchor="middle" x="776" y="-616.62" font-family="Helvetica,sans-Serif" font-size="10.00">config_file_common_observing_params.yaml</text>
 </g>
 <!-- y_config_file_common_observing_params_yaml&#45;&gt;IMG_RAD_09_nominal_background_behavior_SIM__main -->
-<g id="edge11" class="edge">
+<g id="edge10" class="edge">
 <title>y_config_file_common_observing_params_yaml&#45;&gt;IMG_RAD_09_nominal_background_behavior_SIM__main</title>
-<path fill="none" stroke="#b8860b" d="M440,-601.54C440,-587.53 440,-567.46 440,-551.05"/>
-<polygon fill="#b8860b" stroke="#b8860b" points="443.5,-551.4 440,-541.4 436.5,-551.4 443.5,-551.4"/>
+<path fill="none" stroke="#b8860b" d="M722.94,-601.32C664.56,-582.14 572.2,-551.8 520.76,-534.9"/>
+<polygon fill="#b8860b" stroke="#b8860b" points="522.16,-531.68 511.56,-531.88 519.97,-538.33 522.16,-531.68"/>
 </g>
 <!-- y_config_file_common_observing_params_yaml&#45;&gt;IMG_RAD_09_nominal_background_behavior_ANALYSIS__main -->
-<g id="edge12" class="edge">
+<g id="edge11" class="edge">
 <title>y_config_file_common_observing_params_yaml&#45;&gt;IMG_RAD_09_nominal_background_behavior_ANALYSIS__main</title>
-<path fill="none" stroke="#b8860b" d="M538.85,-601.29C564.55,-594.49 591.58,-585.24 615,-572.75 644.8,-556.86 672,-556.27 672,-522.5 672,-522.5 672,-522.5 672,-285.25 672,-241.78 680.14,-191.91 686.03,-161.5"/>
-<polygon fill="#b8860b" stroke="#b8860b" points="689.41,-162.45 687.94,-151.96 682.55,-161.08 689.41,-162.45"/>
+<path fill="none" stroke="#b8860b" d="M775.71,-601.36C775.42,-582.09 775,-550.07 775,-522.5 775,-522.5 775,-522.5 775,-285.25 775,-241.32 762.79,-191.58 753.95,-161.32"/>
+<polygon fill="#b8860b" stroke="#b8860b" points="757.32,-160.37 751.08,-151.81 750.62,-162.39 757.32,-160.37"/>
 </g>
 <!-- y_config_file_IMG_RAD_09_nominal_background_data_states_yaml -->
 <g id="node4" class="node">
@@ -106,108 +106,102 @@
 <text xml:space="preserve" text-anchor="middle" x="1074" y="-616.62" font-family="Helvetica,sans-Serif" font-size="10.00">config_file_IMG_RAD_09_nominal_background_data_states.yaml</text>
 </g>
 <!-- y_config_file_IMG_RAD_09_nominal_background_data_states_yaml&#45;&gt;IMG_RAD_09_nominal_background_behavior_ANALYSIS__main -->
-<g id="edge13" class="edge">
+<g id="edge12" class="edge">
 <title>y_config_file_IMG_RAD_09_nominal_background_data_states_yaml&#45;&gt;IMG_RAD_09_nominal_background_behavior_ANALYSIS__main</title>
-<path fill="none" stroke="#b8860b" d="M1016.1,-601.36C980.64,-586.73 942,-561.78 942,-522.5 942,-522.5 942,-522.5 942,-285.25 942,-187.33 800.25,-150.69 730.22,-138.57"/>
-<polygon fill="#b8860b" stroke="#b8860b" points="731.16,-135.17 720.72,-137.01 730.03,-142.08 731.16,-135.17"/>
+<path fill="none" stroke="#b8860b" d="M1029.41,-601.28C998.18,-585.8 962,-559.8 962,-522.5 962,-522.5 962,-522.5 962,-285.25 962,-199.08 845.79,-157.63 783.46,-141.59"/>
+<polygon fill="#b8860b" stroke="#b8860b" points="784.5,-138.24 773.95,-139.25 782.82,-145.04 784.5,-138.24"/>
 </g>
 <!-- IMG_RAD_09_nominal_background_behavior_SIM__simulate_sensitivity -->
 <g id="node6" class="node">
 <title>IMG_RAD_09_nominal_background_behavior_SIM__simulate_sensitivity</title>
-<path fill="white" stroke="black" d="M553.88,-462.5C553.88,-462.5 378.12,-462.5 378.12,-462.5 372.12,-462.5 366.12,-456.5 366.12,-450.5 366.12,-450.5 366.12,-402.75 366.12,-402.75 366.12,-396.75 372.12,-390.75 378.12,-390.75 378.12,-390.75 553.88,-390.75 553.88,-390.75 559.88,-390.75 565.88,-396.75 565.88,-402.75 565.88,-402.75 565.88,-450.5 565.88,-450.5 565.88,-456.5 559.88,-462.5 553.88,-462.5"/>
-<text xml:space="preserve" text-anchor="middle" x="466" y="-449" font-family="Helvetica,sans-Serif" font-size="10.00">simulate_sensitivity</text>
-<text xml:space="preserve" text-anchor="middle" x="466" y="-436.25" font-family="Helvetica,sans-Serif" font-size="10.00">Simulated data for the point&#45;</text>
-<text xml:space="preserve" text-anchor="middle" x="466" y="-423.5" font-family="Helvetica,sans-Serif" font-size="10.00">source sensitivity in a 10000 s</text>
-<text xml:space="preserve" text-anchor="middle" x="466" y="-410.75" font-family="Helvetica,sans-Serif" font-size="10.00">exposure: two independent long WCU</text>
-<text xml:space="preserve" text-anchor="middle" x="466" y="-398" font-family="Helvetica,sans-Serif" font-size="10.00">flat exposure…</text>
+<path fill="white" stroke="black" d="M581.5,-462.5C581.5,-462.5 430.5,-462.5 430.5,-462.5 424.5,-462.5 418.5,-456.5 418.5,-450.5 418.5,-450.5 418.5,-402.75 418.5,-402.75 418.5,-396.75 424.5,-390.75 430.5,-390.75 430.5,-390.75 581.5,-390.75 581.5,-390.75 587.5,-390.75 593.5,-396.75 593.5,-402.75 593.5,-402.75 593.5,-450.5 593.5,-450.5 593.5,-456.5 587.5,-462.5 581.5,-462.5"/>
+<text xml:space="preserve" text-anchor="middle" x="506" y="-449" font-family="Helvetica,sans-Serif" font-size="10.00">simulate_sensitivity</text>
+<text xml:space="preserve" text-anchor="middle" x="506" y="-436.25" font-family="Helvetica,sans-Serif" font-size="10.00">Simulated data for the point&#45;</text>
+<text xml:space="preserve" text-anchor="middle" x="506" y="-423.5" font-family="Helvetica,sans-Serif" font-size="10.00">source sensitivity in a 10000 s</text>
+<text xml:space="preserve" text-anchor="middle" x="506" y="-410.75" font-family="Helvetica,sans-Serif" font-size="10.00">exposure: one long WCU pinhole</text>
+<text xml:space="preserve" text-anchor="middle" x="506" y="-398" font-family="Helvetica,sans-Serif" font-size="10.00">readout (total_ex…</text>
 </g>
 <!-- IMG_RAD_09_nominal_background_behavior_SIM__main&#45;&gt;IMG_RAD_09_nominal_background_behavior_SIM__simulate_sensitivity -->
 <g id="edge1" class="edge">
 <title>IMG_RAD_09_nominal_background_behavior_SIM__main&#45;&gt;IMG_RAD_09_nominal_background_behavior_SIM__simulate_sensitivity</title>
-<path fill="none" stroke="#555555" stroke-dasharray="5,2" d="M444.89,-503.03C447.25,-494.61 450.2,-484.07 453.14,-473.56"/>
-<polygon fill="#555555" stroke="#555555" points="456.44,-474.74 455.77,-464.17 449.7,-472.86 456.44,-474.74"/>
+<path fill="none" stroke="#555555" stroke-dasharray="5,2" d="M487.33,-503.03C489.41,-494.61 492.02,-484.07 494.62,-473.56"/>
+<polygon fill="#555555" stroke="#555555" points="497.94,-474.73 496.95,-464.18 491.15,-473.05 497.94,-474.73"/>
 </g>
 <!-- fits -->
 <g id="node7" class="node">
 <title>fits</title>
-<polygon fill="#e8f0fb" stroke="black" points="289,-223.25 289,-349.25 647,-349.25 647,-223.25 289,-223.25"/>
-<text xml:space="preserve" text-anchor="middle" x="468" y="-335.75" font-family="Helvetica,sans-Serif" font-size="10.00">data/IMG_RAD_09_nominal_background_simmed_data</text>
-<text xml:space="preserve" text-anchor="middle" x="468" y="-323" font-family="Helvetica,sans-Serif" font-size="10.00">*.fits</text>
-<polyline fill="none" stroke="black" points="289,-315.75 647,-315.75"/>
-<text xml:space="preserve" text-anchor="middle" x="468" y="-302.25" font-family="Helvetica,sans-Serif" font-size="10.00">PRIMARY header:</text>
-<text xml:space="preserve" text-anchor="middle" x="468" y="-289.5" font-family="Helvetica,sans-Serif" font-size="10.00">TARGET EXPTIME NEXP AP_RAD N_APER FLUXCAL FLUXPLH NAT_NOIS</text>
-<text xml:space="preserve" text-anchor="middle" x="468" y="-276.75" font-family="Helvetica,sans-Serif" font-size="10.00">NOISFAC FILTER WCU_FP WCU_PP PSF_KERN ND_FILT BB_TEMP NDIT</text>
-<text xml:space="preserve" text-anchor="middle" x="468" y="-264" font-family="Helvetica,sans-Serif" font-size="10.00">DIT DIT_CFG SAT_ADU PEAKFRAC REQ_ID CASE EXPECTED REQ_PLH</text>
-<text xml:space="preserve" text-anchor="middle" x="468" y="-251.25" font-family="Helvetica,sans-Serif" font-size="10.00">SIMVER</text>
-<polyline fill="none" stroke="black" points="289,-244 647,-244"/>
-<text xml:space="preserve" text-anchor="middle" x="350.62" y="-230.5" font-family="Helvetica,sans-Serif" font-size="10.00">BCKGD_SUBTED</text>
-<polyline fill="none" stroke="black" points="412.25,-223.25 412.25,-244"/>
-<text xml:space="preserve" text-anchor="middle" x="472.12" y="-230.5" font-family="Helvetica,sans-Serif" font-size="10.00">RAW_READOUT</text>
-<polyline fill="none" stroke="black" points="532,-223.25 532,-244"/>
-<text xml:space="preserve" text-anchor="middle" x="589.12" y="-230.5" font-family="Helvetica,sans-Serif" font-size="10.00">BACKGROUND</text>
+<polygon fill="#e8f0fb" stroke="black" points="327.25,-223.25 327.25,-349.25 692.75,-349.25 692.75,-223.25 327.25,-223.25"/>
+<text xml:space="preserve" text-anchor="middle" x="510" y="-335.75" font-family="Helvetica,sans-Serif" font-size="10.00">data/IMG_RAD_09_nominal_background_simmed_data</text>
+<text xml:space="preserve" text-anchor="middle" x="510" y="-323" font-family="Helvetica,sans-Serif" font-size="10.00">*.fits</text>
+<polyline fill="none" stroke="black" points="327.25,-315.75 692.75,-315.75"/>
+<text xml:space="preserve" text-anchor="middle" x="510" y="-302.25" font-family="Helvetica,sans-Serif" font-size="10.00">PRIMARY header:</text>
+<text xml:space="preserve" text-anchor="middle" x="510" y="-289.5" font-family="Helvetica,sans-Serif" font-size="10.00">TARGET SRC_X SRC_Y EXCL_RAD SRC_FLUX SRC_SNR EXPTIME NEXP</text>
+<text xml:space="preserve" text-anchor="middle" x="510" y="-276.75" font-family="Helvetica,sans-Serif" font-size="10.00">AP_RAD N_APER FLUXCAL FLUXPLH NAT_NOIS FILTER WCU_FP WCU_PP</text>
+<text xml:space="preserve" text-anchor="middle" x="510" y="-264" font-family="Helvetica,sans-Serif" font-size="10.00">PSF_KERN ND_FILT BB_TEMP NDIT DIT DIT_CFG SAT_ADU PEAKFRAC</text>
+<text xml:space="preserve" text-anchor="middle" x="510" y="-251.25" font-family="Helvetica,sans-Serif" font-size="10.00">REQ_ID CASE REQ_PLH SIMVER</text>
+<polyline fill="none" stroke="black" points="327.25,-244 692.75,-244"/>
+<text xml:space="preserve" text-anchor="middle" x="390.38" y="-230.5" font-family="Helvetica,sans-Serif" font-size="10.00">BCKGD_SUBTED</text>
+<polyline fill="none" stroke="black" points="453.5,-223.25 453.5,-244"/>
+<text xml:space="preserve" text-anchor="middle" x="514.38" y="-230.5" font-family="Helvetica,sans-Serif" font-size="10.00">RAW_READOUT</text>
+<polyline fill="none" stroke="black" points="575.25,-223.25 575.25,-244"/>
+<text xml:space="preserve" text-anchor="middle" x="633.88" y="-230.5" font-family="Helvetica,sans-Serif" font-size="10.00">BACKGROUND</text>
 </g>
 <!-- IMG_RAD_09_nominal_background_behavior_SIM__simulate_sensitivity&#45;&gt;fits -->
 <g id="edge2" class="edge">
 <title>IMG_RAD_09_nominal_background_behavior_SIM__simulate_sensitivity&#45;&gt;fits</title>
-<path fill="none" stroke="#555555" d="M466.51,-390.35C466.64,-381.33 466.79,-371.29 466.93,-361.12"/>
-<polygon fill="#555555" stroke="#555555" points="470.43,-361.18 467.08,-351.13 463.43,-361.08 470.43,-361.18"/>
+<path fill="none" stroke="#555555" d="M507.02,-390.35C507.28,-381.33 507.57,-371.29 507.86,-361.12"/>
+<polygon fill="#555555" stroke="#555555" points="511.36,-361.23 508.15,-351.13 504.37,-361.03 511.36,-361.23"/>
 </g>
 <!-- fits&#45;&gt;IMG_RAD_09_nominal_background_behavior_ANALYSIS__main -->
 <g id="edge3" class="edge">
 <title>fits:primary&#45;&gt;IMG_RAD_09_nominal_background_behavior_ANALYSIS__main</title>
-<path fill="none" stroke="#555555" d="M648,-279.88C660.7,-279.88 652.76,-234.06 647,-222.75 640.31,-209.6 627.08,-215.96 620.5,-202.75 618.27,-198.27 618.35,-196.02 620.5,-191.5 627.93,-175.87 641.82,-163.06 655.4,-153.47"/>
-<polygon fill="#555555" stroke="#555555" points="656.99,-156.61 663.41,-148.18 653.14,-150.77 656.99,-156.61"/>
-<text xml:space="preserve" text-anchor="middle" x="640.75" y="-194.2" font-family="Helvetica,sans-Serif" font-size="9.00">SAT_ADU</text>
+<path fill="none" stroke="#555555" d="M693.75,-279.88C706.45,-279.88 698.68,-233.98 692.75,-222.75 685.56,-209.15 671.57,-216.41 664.5,-202.75 662.2,-198.31 662.23,-195.95 664.5,-191.5 673.66,-173.56 691.21,-159.87 707.6,-150.28"/>
+<polygon fill="#555555" stroke="#555555" points="709.13,-153.43 716.23,-145.56 705.78,-147.29 709.13,-153.43"/>
+<text xml:space="preserve" text-anchor="middle" x="684.75" y="-194.2" font-family="Helvetica,sans-Serif" font-size="9.00">SAT_ADU</text>
 </g>
 <!-- backbone_img_rad_09_nom__measure_noise -->
 <g id="node9" class="node">
 <title>backbone_img_rad_09_nom__measure_noise</title>
-<path fill="white" stroke="black" d="M505.12,-150.25C505.12,-150.25 438.88,-150.25 438.88,-150.25 432.88,-150.25 426.88,-144.25 426.88,-138.25 426.88,-138.25 426.88,-126.25 426.88,-126.25 426.88,-120.25 432.88,-114.25 438.88,-114.25 438.88,-114.25 505.12,-114.25 505.12,-114.25 511.12,-114.25 517.12,-120.25 517.12,-126.25 517.12,-126.25 517.12,-138.25 517.12,-138.25 517.12,-144.25 511.12,-150.25 505.12,-150.25"/>
-<text xml:space="preserve" text-anchor="middle" x="472" y="-129.12" font-family="Helvetica,sans-Serif" font-size="10.00">measure_noise</text>
+<path fill="white" stroke="black" d="M650.12,-150.25C650.12,-150.25 583.88,-150.25 583.88,-150.25 577.88,-150.25 571.88,-144.25 571.88,-138.25 571.88,-138.25 571.88,-126.25 571.88,-126.25 571.88,-120.25 577.88,-114.25 583.88,-114.25 583.88,-114.25 650.12,-114.25 650.12,-114.25 656.12,-114.25 662.12,-120.25 662.12,-126.25 662.12,-126.25 662.12,-138.25 662.12,-138.25 662.12,-144.25 656.12,-150.25 650.12,-150.25"/>
+<text xml:space="preserve" text-anchor="middle" x="617" y="-129.12" font-family="Helvetica,sans-Serif" font-size="10.00">measure_noise</text>
 </g>
 <!-- fits&#45;&gt;backbone_img_rad_09_nom__measure_noise -->
 <g id="edge4" class="edge">
 <title>fits:x_RAW_READOUT&#45;&gt;backbone_img_rad_09_nom__measure_noise</title>
-<path fill="none" stroke="#555555" d="M472.12,-222.75C472.12,-191.35 591.43,-226.47 612,-202.75 640.43,-169.97 578.72,-151.02 528.39,-141.42"/>
-<polygon fill="#555555" stroke="#555555" points="529.16,-138 518.69,-139.67 527.91,-144.89 529.16,-138"/>
+<path fill="none" stroke="#555555" d="M514.38,-222.75C514.38,-188.76 643.59,-228.31 666,-202.75 678.32,-188.7 666.48,-171.56 651.36,-157.81"/>
+<polygon fill="#555555" stroke="#555555" points="653.82,-155.3 643.91,-151.54 649.31,-160.66 653.82,-155.3"/>
 </g>
 <!-- fits&#45;&gt;backbone_img_rad_09_nom__measure_noise -->
 <g id="edge5" class="edge">
-<title>fits:x_BCKGD_SUBTED&#45;&gt;backbone_img_rad_09_nom__measure_noise</title>
-<path fill="none" stroke="#555555" d="M350.62,-222.75C350.62,-206.41 356.41,-200.58 370,-191.5 388.35,-179.24 399.23,-193.3 419,-183.5 431,-177.55 442.13,-167.95 451.05,-158.73"/>
-<polygon fill="#555555" stroke="#555555" points="453.4,-161.34 457.57,-151.6 448.24,-156.62 453.4,-161.34"/>
-</g>
-<!-- fits&#45;&gt;backbone_img_rad_09_nom__measure_noise -->
-<g id="edge6" class="edge">
 <title>fits:primary&#45;&gt;backbone_img_rad_09_nom__measure_noise</title>
-<path fill="none" stroke="#555555" d="M288,-279.88C262.61,-279.88 272.12,-241.72 289,-222.75 333.11,-173.16 382.95,-241.28 437,-202.75 450.85,-192.88 459.54,-175.9 464.8,-161.2"/>
-<polygon fill="#555555" stroke="#555555" points="468.03,-162.59 467.72,-152 461.36,-160.47 468.03,-162.59"/>
-<text xml:space="preserve" text-anchor="middle" x="495.24" y="-194.2" font-family="Helvetica,sans-Serif" font-size="9.00">FILTER, DIT, EXPTIME</text>
+<path fill="none" stroke="#555555" d="M693.75,-279.88C706.45,-279.88 701.3,-232.13 692.75,-222.75 665.49,-192.84 538.75,-232.89 511.75,-202.75 490.96,-179.54 525.8,-160.66 560.84,-148.47"/>
+<polygon fill="#555555" stroke="#555555" points="561.82,-151.83 570.23,-145.38 559.63,-145.18 561.82,-151.83"/>
+<text xml:space="preserve" text-anchor="middle" x="559.38" y="-194.2" font-family="Helvetica,sans-Serif" font-size="9.00">FILTER, DIT, EXPTIME</text>
 </g>
 <!-- backbone_img_rad_09_nom__log_summary -->
 <g id="node10" class="node">
 <title>backbone_img_rad_09_nom__log_summary</title>
-<path fill="white" stroke="black" d="M400.38,-150.25C400.38,-150.25 341.62,-150.25 341.62,-150.25 335.62,-150.25 329.62,-144.25 329.62,-138.25 329.62,-138.25 329.62,-126.25 329.62,-126.25 329.62,-120.25 335.62,-114.25 341.62,-114.25 341.62,-114.25 400.38,-114.25 400.38,-114.25 406.38,-114.25 412.38,-120.25 412.38,-126.25 412.38,-126.25 412.38,-138.25 412.38,-138.25 412.38,-144.25 406.38,-150.25 400.38,-150.25"/>
-<text xml:space="preserve" text-anchor="middle" x="371" y="-129.12" font-family="Helvetica,sans-Serif" font-size="10.00">log_summary</text>
+<path fill="white" stroke="black" d="M473.38,-150.25C473.38,-150.25 414.62,-150.25 414.62,-150.25 408.62,-150.25 402.62,-144.25 402.62,-138.25 402.62,-138.25 402.62,-126.25 402.62,-126.25 402.62,-120.25 408.62,-114.25 414.62,-114.25 414.62,-114.25 473.38,-114.25 473.38,-114.25 479.38,-114.25 485.38,-120.25 485.38,-126.25 485.38,-126.25 485.38,-138.25 485.38,-138.25 485.38,-144.25 479.38,-150.25 473.38,-150.25"/>
+<text xml:space="preserve" text-anchor="middle" x="444" y="-129.12" font-family="Helvetica,sans-Serif" font-size="10.00">log_summary</text>
 </g>
 <!-- fits&#45;&gt;backbone_img_rad_09_nom__log_summary -->
-<g id="edge7" class="edge">
+<g id="edge6" class="edge">
 <title>fits:primary&#45;&gt;backbone_img_rad_09_nom__log_summary</title>
-<path fill="none" stroke="#555555" d="M288,-279.88C232.99,-279.88 303.58,-200.76 344.93,-158.76"/>
-<polygon fill="#555555" stroke="#555555" points="347.37,-161.27 351.94,-151.72 342.41,-156.33 347.37,-161.27"/>
-<text xml:space="preserve" text-anchor="middle" x="336.2" y="-194.2" font-family="Helvetica,sans-Serif" font-size="9.00">EXPECTED</text>
+<path fill="none" stroke="#555555" d="M326.25,-279.88C300.86,-279.88 315.81,-245.42 327.25,-222.75 341.92,-193.66 370.96,-171.34 396.41,-156.26"/>
+<polygon fill="#555555" stroke="#555555" points="398.02,-159.37 404.99,-151.39 394.57,-153.28 398.02,-159.37"/>
+<text xml:space="preserve" text-anchor="middle" x="371.55" y="-194.2" font-family="Helvetica,sans-Serif" font-size="9.00">EXPECTED</text>
 </g>
 <!-- o_logs_IMG_RAD_09_nom_bkgd_logs -->
 <g id="node11" class="node">
 <title>o_logs_IMG_RAD_09_nom_bkgd_logs</title>
-<polygon fill="white" stroke="black" points="785.5,-52 782.5,-56 761.5,-56 758.5,-52 598.5,-52 598.5,-16 785.5,-16 785.5,-52"/>
-<text xml:space="preserve" text-anchor="middle" x="692" y="-30.88" font-family="Helvetica,sans-Serif" font-size="10.00">logs/IMG_RAD_09_nom_bkgd_logs/</text>
+<polygon fill="white" stroke="black" points="838.5,-52 835.5,-56 814.5,-56 811.5,-52 651.5,-52 651.5,-16 838.5,-16 838.5,-52"/>
+<text xml:space="preserve" text-anchor="middle" x="745" y="-30.88" font-family="Helvetica,sans-Serif" font-size="10.00">logs/IMG_RAD_09_nom_bkgd_logs/</text>
 </g>
 <!-- IMG_RAD_09_nominal_background_behavior_ANALYSIS__main&#45;&gt;o_logs_IMG_RAD_09_nom_bkgd_logs -->
-<g id="edge14" class="edge">
+<g id="edge13" class="edge">
 <title>IMG_RAD_09_nominal_background_behavior_ANALYSIS__main&#45;&gt;o_logs_IMG_RAD_09_nom_bkgd_logs</title>
-<path fill="none" stroke="#2ca02c" d="M692,-114.04C692,-100.03 692,-79.96 692,-63.55"/>
-<polygon fill="#2ca02c" stroke="#2ca02c" points="695.5,-63.9 692,-53.9 688.5,-63.9 695.5,-63.9"/>
+<path fill="none" stroke="#2ca02c" d="M745,-114.04C745,-100.03 745,-79.96 745,-63.55"/>
+<polygon fill="#2ca02c" stroke="#2ca02c" points="748.5,-63.9 745,-53.9 741.5,-63.9 748.5,-63.9"/>
 </g>
 </g>
 </svg>

@@ -23,10 +23,13 @@ digraph io {
     IMG_RAD_07_photometric_performance_SIM__main -> IMG_RAD_07_photometric_performance_SIM__simulate_metis_2883 [style=dashed];
     IMG_RAD_07_photometric_performance_SIM__simulate_metis_3300 [label="simulate_metis_3300\nSimulated data for METIS-3300: the\nlevel of flux of the flat field\nshall be tunable to 15 discrete\nvalues and…", shape=box, style="rounded,filled", fillcolor="white"];
     IMG_RAD_07_photometric_performance_SIM__main -> IMG_RAD_07_photometric_performance_SIM__simulate_metis_3300 [style=dashed];
+    IMG_RAD_07_photometric_performance_SIM__simulate_metis_3291 [label="simulate_metis_3291\nSimulated data for METIS-3291:\nMETIS shall allow the\ncharacterisation and correction of\nthe relative spectral…", shape=box, style="rounded,filled", fillcolor="white"];
+    IMG_RAD_07_photometric_performance_SIM__main -> IMG_RAD_07_photometric_performance_SIM__simulate_metis_3291 [style=dashed];
   }
-  fits [shape=record, style=filled, fillcolor="#e8f0fb", label="{data/IMG_RAD_07_photometric_performance_simmed_data\n*.fits|<primary> PRIMARY header:\nSTEP N_STEPS BB_APER ND_TRANS EXPOSURE NOMFLUX FLUXFAC\nPATTAMP FILTER WCU_FP WCU_PP PSF_KERN ND_FILT BB_TEMP NDIT\nDIT DIT_CFG SAT_ADU PEAKFRAC REQ_ID CASE EXPECTED REQ_PLH\nSIMVER|{<x_BCKGD_SUBTED> BCKGD_SUBTED|<x_RAW_READOUT> RAW_READOUT|<x_BACKGROUND> BACKGROUND}}"];
+  fits [shape=record, style=filled, fillcolor="#e8f0fb", label="{data/IMG_RAD_07_photometric_performance_simmed_data\n*.fits|<primary> PRIMARY header:\nSTEP N_STEPS BB_APER ND_TRANS EXPOSURE NOMFLUX FLUXFAC\nPATTAMP BBTEMP_K TRACE_ID WAVEMIN WAVEMAX EVALMIN EVALMAX\nNSLITCOL FILTFILE SRCSCALE SRCNORM ALPHAINT ALPHASCL\nMEAS_SIM REQ_ID CASE EXPECTED REQ_PLH SIMVER FILTER WCU_FP\nWCU_PP PSF_KERN ND_FILT BB_TEMP NDIT DIT DIT_CFG SAT_ADU\nPEAKFRAC|{<x_BCKGD_SUBTED> BCKGD_SUBTED|<x_RAW_READOUT> RAW_READOUT|<x_BACKGROUND> BACKGROUND}}"];
   IMG_RAD_07_photometric_performance_SIM__simulate_metis_2883 -> fits;
   IMG_RAD_07_photometric_performance_SIM__simulate_metis_3300 -> fits;
+  IMG_RAD_07_photometric_performance_SIM__simulate_metis_3291 -> fits;
   subgraph cluster_IMG_RAD_07_photometric_performance_ANALYSIS {
     label="IMG_RAD_07_photometric_performance_ANALYSIS.py + modules";
     style=filled; fillcolor="#f2f2f2"; color="#999999";

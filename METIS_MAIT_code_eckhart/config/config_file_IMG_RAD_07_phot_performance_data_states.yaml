@@ -8,6 +8,8 @@
 # - METIS-2883: IMG_RAD_07_METIS-2883_<instrument>_<case>.fits (file_name_abs)
 # - METIS-3300: IMG_RAD_07_METIS-3300_<instrument>_<case>_stepNN.fits, all steps of
 #   one case together (file_name_pattern, a glob)
+# - METIS-3291: IMG_RAD_07_METIS-3291_<L_spec|M_spec|N_spec>_<case>.fits (LSS frame
+#   with an RSRF table; characterized only)
 # METIS-2594 is not analysed (its SIM is a stub).
 
 defaults:
@@ -34,3 +36,21 @@ runs:
      file_name_pattern: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-3300_N2_pass_step*.fits}
   - {req_id: METIS-3300, instrument: N2, case: fail,
      file_name_pattern: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-3300_N2_fail_step*.fits}
+  - {req_id: METIS-3291, instrument: L_spec, case: pass,
+     file_name_abs: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-3291_L_spec_pass.fits}
+  - {req_id: METIS-3291, instrument: L_spec, case: near,
+     file_name_abs: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-3291_L_spec_near.fits}
+  - {req_id: METIS-3291, instrument: L_spec, case: fail,
+     file_name_abs: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-3291_L_spec_fail.fits}
+  - {req_id: METIS-3291, instrument: M_spec, case: pass,
+     file_name_abs: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-3291_M_spec_pass.fits}
+  - {req_id: METIS-3291, instrument: M_spec, case: near,
+     file_name_abs: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-3291_M_spec_near.fits}
+  - {req_id: METIS-3291, instrument: M_spec, case: fail,
+     file_name_abs: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-3291_M_spec_fail.fits}
+  - {req_id: METIS-3291, instrument: N_spec, case: pass,
+     file_name_abs: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-3291_N_spec_pass.fits}
+  - {req_id: METIS-3291, instrument: N_spec, case: near,
+     file_name_abs: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-3291_N_spec_near.fits}
+  - {req_id: METIS-3291, instrument: N_spec, case: fail,
+     file_name_abs: data/IMG_RAD_07_photometric_performance_simmed_data/IMG_RAD_07_METIS-3291_N_spec_fail.fits}

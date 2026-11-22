@@ -312,7 +312,7 @@ def set_fpmask_shift(metis, shift_xy_arcsec):
 
 
 def readout_frame(metis, bb_aperture, instrument):
-    """Observe with the WCU black-body aperture at bb_aperture and read out one frame."""
+    """Observe with the WCU black-body aperture at bb_aperture; read out one frame."""
     metis["wcu_source"].set_bb_aperture(value=float(bb_aperture))
     metis.observe()
     hdul = metis.readout(ndit=instrument["ndit"], dit=instrument["dit"], reset=False)[0]
@@ -367,7 +367,7 @@ def take_darks(metis, instrument):
     return dark_1, dark_2
 
 
-def limit_dit_to_saturation(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+def limit_dit_to_saturation(  # noqa: E501  # pylint: disable=too-many-arguments,too-many-positional-arguments
     metis,
     instrument,
     saturation_adu,
@@ -573,7 +573,7 @@ class SimContext:  # pylint: disable=too-many-instance-attributes
         out_dir,
         test_prefix,
         simver,
-        results_dir=None,
+        plot_dir=None,
     ):
         self.metis = metis
         self.instrument = instrument
@@ -581,9 +581,11 @@ class SimContext:  # pylint: disable=too-many-instance-attributes
         self.out_dir = out_dir
         self.test_prefix = test_prefix
         self.simver = simver
-        self.results_dir = results_dir
+        self.plot_dir = plot_dir
         self.det_key = detector_key(instrument["obs_mode"])
-        self.saturation_adu = saturation_of(observing, self.det_key)
+        self.saturation_adu = saturation_of(
+            observing, self.det_key, instrument["obs_mode"]
+        )
         self._darks = None
         self._lit = None
 
@@ -599,15 +601,17 @@ class SimContext:  # pylint: disable=too-many-instance-attributes
             self._lit = readout_frame(self.metis, 1.0, self.instrument)
         return self._lit
 
-    def write_case(self, req_key, case, suffix, raw, cards, extra_hdus=()):
+    def write_case(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self, req_key, case, suffix, raw, cards, extra_hdus=(), subdir=""
+    ):
         """
         write_case_file with dark_2 as BACKGROUND, the lit frame's header and the
-        saturation check.
+        saturation check, into out_dir (or its subdirectory subdir, if given).
         """
         _, dark_2 = self.darks()
         _, header = self.lit_frame()
         return write_case_file(
-            self.out_dir,
+            os.path.join(self.out_dir, subdir),
             self.test_prefix,
             req_key,
             self.instrument,
@@ -648,8 +652,16 @@ def write_reference_frame(ctx, req_key, req_cfg):
     ]
 
 
-def saturation_of(observing, det_key):
-    """Saturation level (ADU per DIT) of a detector from the observing config, or None."""
+def saturation_of(observing, det_key, obs_mode=None):
+    """
+    Saturation level (ADU per DIT) from the observing config, or None: that of
+    obs_mode in saturation_adu_by_obs_mode (modes whose detector readout mode differs
+    from the imaging default, e.g. the LSS modes), else that of the detector in
+    saturation_adu.
+    """
+    by_mode = (observing or {}).get("saturation_adu_by_obs_mode") or {}
+    if obs_mode in by_mode:
+        return float(by_mode[obs_mode])
     try:
         return float(observing["saturation_adu"][det_key])
     except (KeyError, TypeError):
@@ -660,9 +672,25 @@ def scenario_instruments(scenario):
     """name -> instrument config, from 'instruments:' or a single 'instrument:'."""
     if "instruments" in scenario:
         return {
-            filter: {**cfg, "filter": filter} for filter, cfg in scenario["instruments"].items()
+            filter: {**cfg, "filter": filter}
+            for filter, cfg in scenario["instruments"].items()
         }
     return {None: dict(scenario["instrument"])}
+
+
+def sim_plot_dir(stem, sim_script):
+    """
+    Directory for a SIM script's FYI plots: <stem>sim_plots/<script name>/.
+
+    INPUTS:
+    - stem (str): project root (project_root())
+    - sim_script (str): path of the SIM script (its __file__)
+
+    OUTPUTS:
+    - str: the directory, ending in '/'
+    """
+    name = os.path.splitext(os.path.basename(sim_script))[0]
+    return os.path.join(stem, "sim_plots", name, "")
 
 
 def requirement_applies(req_cfg, filter, instrument):
@@ -676,8 +704,8 @@ def requirement_applies(req_cfg, filter, instrument):
     return True
 
 
-def run_scenario(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
-    scenario, simulators, observing, out_dir, test_prefix, results_dir=None
+def run_scenario(  # noqa: E501  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    scenario, simulators, observing, out_dir, test_prefix, plot_dir=None
 ):
     """
     Run the requirement simulators of a scenario config: for each instrument, one
@@ -693,7 +721,8 @@ def run_scenario(  # pylint: disable=too-many-arguments,too-many-positional-argu
     - observing (dict): merged observing config (common + test-specific)
     - out_dir (str): directory to write to
     - test_prefix (str): file name prefix, e.g. 'IMG_OPT_04'
-    - results_dir (str or None): directory for FYI plots (ctx.results_dir), if any
+    - plot_dir (str or None): directory for FYI plots (ctx.plot_dir), if any; see
+      sim_plot_dir
 
     OUTPUTS:
     - dict: (requirement key, instrument name) -> list of written files
@@ -738,7 +767,11 @@ def run_scenario(  # pylint: disable=too-many-arguments,too-many-positional-argu
         metis = build_optical_train(instrument_setup)
 
         # check saturation
-        saturation = saturation_of(observing, detector_key(instrument_setup["obs_mode"]))
+        saturation = saturation_of(
+            observing,
+            detector_key(instrument_setup["obs_mode"]),
+            instrument_setup["obs_mode"],
+        )
         if saturation is None:
             logging.warning(
                 "Instrument %s: no saturation_adu in the observing config; DIT not "
@@ -769,7 +802,7 @@ def run_scenario(  # pylint: disable=too-many-arguments,too-many-positional-argu
             out_dir,
             test_prefix,
             simver,
-            results_dir=results_dir,
+            plot_dir=plot_dir,
         )
         # Execute simulations for each requirement (if simulate: true, and listed
         # for it by 'instruments' / 'detectors'): look up its function in the SIM
@@ -782,7 +815,6 @@ def run_scenario(  # pylint: disable=too-many-arguments,too-many-positional-argu
             logging.info("%s (%s): %s", req_key, filter, req_cfg["description"])
             # resolve_for_detector: merge requirements
             # simulators: dict containing the simulator functions for each requirement
-            import ipdb; ipdb.set_trace()
             # req_cfg: configuration for this requirement
             # ctx.det_key: the detector
             # written: dict collecting the written files per (requirement, set-up)

@@ -78,14 +78,18 @@ digraph pipeline {
     stray_light_segmentation_combined;
   }
 
-  subgraph cluster_img_opt_05_optomechanical_stability_stub {
-    label="IMG-OPT-05 Optomechanical stability (stub)";
+  subgraph cluster_img_opt_05_optomechanical_stability {
+    label="IMG-OPT-05 Optomechanical stability";
     labeljust=l;
     style="dashed";
     color="#bcbd22";
-    simulate_metis_5422_flux_calibration;
-    simulate_metis_5422_vpm_stability;
+    simulate_metis_1230_flux_calibration;
+    simulate_metis_5422_stability;
     generate_optomechanical_stability_sim;
+    img_opt_05_measure_pupil_positions;
+    img_opt_05_metis_5422_check;
+    img_opt_05_fyi_plots;
+    img_opt_05_log_test_outcome;
   }
 
   subgraph cluster_img_opt_04_stray_light {
@@ -125,6 +129,7 @@ digraph pipeline {
     img_rad_07_metis_2594_check;
     img_rad_07_metis_2883_check;
     img_rad_07_metis_3300_check;
+    img_rad_07_metis_3291_characterize;
     img_rad_07_fyi_plots;
     img_rad_07_log_test_outcome;
   }
@@ -168,9 +173,9 @@ digraph pipeline {
   sim_img_04_metis_1189_1429 [label="SIM METIS-1189/-1429:\nstray light vs. PSF peak"];
   sim_img_04_metis_9522 [label="SIM METIS-9522:\nartefacts vs. 3-sigma\nbackground"];
   generate_stray_light_sim [label="Generate stray-light\nsims"];
-  simulate_metis_5422_flux_calibration [label="SIM METIS-5422: flux\ncalibration interval\n(stub)", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
-  simulate_metis_5422_vpm_stability [label="SIM METIS-5422: VPM\nposition stability\n(stub: no VPM in\nScopeSim)", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
-  generate_optomechanical_stability_sim [label="Generate optomechanical-\nstability sims", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
+  simulate_metis_1230_flux_calibration [label="SIM METIS-1230: flux\ncalibration interval\n(stub)", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
+  simulate_metis_5422_stability [label="SIM METIS-5422: pupil-\nimage position stability\nper timescale"];
+  generate_optomechanical_stability_sim [label="Generate optomechanical-\nstability sims"];
   sim_img_06_metis_5838 [label="SIM METIS-5838: out-of-\nfield attenuation"];
   generate_out_of_field_sim [label="Generate out-of-field\nsims"];
   simulate_img_07_pupil_imaging [label="SIM pupil images (stub:\nmasks TBD)", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
@@ -182,7 +187,7 @@ digraph pipeline {
   generate_phot_performance_sim [label="Generate photometric-\nperformance sims"];
   simulate_rad_08_point_vs_extended [label="SIM point vs extended\nslope (stub: reqs TBD)", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
   generate_point_vs_extended_sim [label="Generate point-vs-\nextended sims", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
-  simulate_rad_09_sensitivity [label="SIM 10000 s WCU flat:\npoint-source noise"];
+  simulate_rad_09_sensitivity [label="SIM 10000 s WCU pinhole\nreadout: point-source\nnoise"];
   generate_nominal_background_sim [label="Generate nominal\nbackground sims"];
   simulate_rad_11_chopper_background [label="SIM chopped background\n(stub: reqs TBD)", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
   generate_background_systematics_sim [label="Generate chopper\nbackground sims", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
@@ -208,12 +213,17 @@ digraph pipeline {
   img_04_metis_1189_1429_check [label="METIS-1189/-1429: stray\nlight vs. 0.04% of PSF\npeak"];
   img_04_metis_9522_check [label="METIS-9522: artefacts\nvs. 3-sigma background"];
   img_04_test_outcome [label="IMG-OPT-04 pass/fail"];
+  img_opt_05_measure_pupil_positions [label="Pupil-image centre per\nframe"];
+  img_opt_05_metis_5422_check [label="METIS-5422: RMS motion\nper timescale"];
+  img_opt_05_fyi_plots [label="FYI plots", style="rounded,dashed,filled"];
+  img_opt_05_log_test_outcome [label="IMG-OPT-05 pass/fail"];
   metis_5838_attenuation [label="METIS-5838: out-of-field\nattenuation"];
   metis_9522_check [label="METIS-9522: artefacts\nvs. 3-sigma background"];
   img_06_test_outcome [label="IMG-OPT-06 pass/fail"];
   img_rad_07_metis_2594_check [label="METIS-2594: calibration\nflux range (stub)", style="rounded,dashed,filled", fillcolor="#f0f0f0", fontcolor="#666666"];
   img_rad_07_metis_2883_check [label="METIS-2883: flat\nhomogeneity"];
   img_rad_07_metis_3300_check [label="METIS-3300: 15 flux\nsteps, flux and pattern"];
+  img_rad_07_metis_3291_characterize [label="METIS-3291: RSRF\ncharacterization"];
   img_rad_07_fyi_plots [label="FYI plots", style="rounded,dashed,filled"];
   img_rad_07_log_test_outcome [label="IMG-RAD-07 pass/fail"];
   img_rad_09_sens_10000s_check [label="Point-source sensitivity\nin 10000 s: noise vs.\nlimit"];
@@ -228,13 +238,13 @@ digraph pipeline {
   img_04_fyi_plots [label="FYI plots", style="rounded,dashed,filled"];
   img_06_fyi_plots [label="FYI plots", style="rounded,dashed,filled"];
 
-  { rank=same; sim_img_01_metis_1095; sim_img_02_grid_frames; sim_img_03_strehl_cases; sim_img_06_metis_5838; simulate_metis_5422_flux_calibration; simulate_metis_5422_vpm_stability; sim_img_04_metis_1189_1429; sim_img_04_metis_9522; simulate_img_07_pupil_imaging; simulate_metis_2594; simulate_metis_2883; simulate_metis_3291; simulate_metis_3300; simulate_rad_08_point_vs_extended; simulate_rad_09_sensitivity; simulate_rad_11_chopper_background; }
+  { rank=same; sim_img_01_metis_1095; sim_img_02_grid_frames; sim_img_03_strehl_cases; sim_img_06_metis_5838; simulate_metis_1230_flux_calibration; simulate_metis_5422_stability; sim_img_04_metis_1189_1429; sim_img_04_metis_9522; simulate_img_07_pupil_imaging; simulate_metis_2594; simulate_metis_2883; simulate_metis_3291; simulate_metis_3300; simulate_rad_08_point_vs_extended; simulate_rad_09_sensitivity; simulate_rad_11_chopper_background; }
   sim_img_01_metis_1095 -> sim_img_02_grid_frames [style=invis];
   sim_img_02_grid_frames -> sim_img_03_strehl_cases [style=invis];
   sim_img_03_strehl_cases -> sim_img_06_metis_5838 [style=invis];
-  sim_img_06_metis_5838 -> simulate_metis_5422_flux_calibration [style=invis];
-  simulate_metis_5422_flux_calibration -> simulate_metis_5422_vpm_stability [style=invis];
-  simulate_metis_5422_vpm_stability -> sim_img_04_metis_1189_1429 [style=invis];
+  sim_img_06_metis_5838 -> simulate_metis_1230_flux_calibration [style=invis];
+  simulate_metis_1230_flux_calibration -> simulate_metis_5422_stability [style=invis];
+  simulate_metis_5422_stability -> sim_img_04_metis_1189_1429 [style=invis];
   sim_img_04_metis_1189_1429 -> sim_img_04_metis_9522 [style=invis];
   sim_img_04_metis_9522 -> simulate_img_07_pupil_imaging [style=invis];
   simulate_img_07_pupil_imaging -> simulate_metis_2594 [style=invis];
@@ -255,15 +265,17 @@ digraph pipeline {
   generate_phot_performance_sim -> generate_point_vs_extended_sim [style=invis];
   generate_point_vs_extended_sim -> generate_nominal_background_sim [style=invis];
   generate_nominal_background_sim -> generate_background_systematics_sim [style=invis];
-  { rank=same; fov_calc; image_distortion; prepare_psf_grid; populate_result_obj_info; img_rad_07_metis_2594_check; img_rad_07_metis_2883_check; img_rad_07_metis_3300_check; img_rad_09_sens_10000s_check; }
+  { rank=same; fov_calc; image_distortion; prepare_psf_grid; populate_result_obj_info; img_opt_05_measure_pupil_positions; img_rad_07_metis_2594_check; img_rad_07_metis_2883_check; img_rad_07_metis_3291_characterize; img_rad_07_metis_3300_check; img_rad_09_sens_10000s_check; }
   fov_calc -> image_distortion [style=invis];
   image_distortion -> prepare_psf_grid [style=invis];
   prepare_psf_grid -> populate_result_obj_info [style=invis];
-  populate_result_obj_info -> img_rad_07_metis_2594_check [style=invis];
+  populate_result_obj_info -> img_opt_05_measure_pupil_positions [style=invis];
+  img_opt_05_measure_pupil_positions -> img_rad_07_metis_2594_check [style=invis];
   img_rad_07_metis_2594_check -> img_rad_07_metis_2883_check [style=invis];
-  img_rad_07_metis_2883_check -> img_rad_07_metis_3300_check [style=invis];
+  img_rad_07_metis_2883_check -> img_rad_07_metis_3291_characterize [style=invis];
+  img_rad_07_metis_3291_characterize -> img_rad_07_metis_3300_check [style=invis];
   img_rad_07_metis_3300_check -> img_rad_09_sens_10000s_check [style=invis];
-  { rank=same; img_01_fyi_plots; metis_1095_fov_check; img_02_fyi_plots; metis_1097_pixel_scale; metis_3502_residual_distortion; metis_8222_detector_offset; metis_9920_scale_stability; process_one_psf; centroid_2passes_oversample; img_rad_07_fyi_plots; img_rad_07_log_test_outcome; img_rad_09_fyi_plots; img_rad_09_test_outcome; }
+  { rank=same; img_01_fyi_plots; metis_1095_fov_check; img_02_fyi_plots; metis_1097_pixel_scale; metis_3502_residual_distortion; metis_8222_detector_offset; metis_9920_scale_stability; process_one_psf; centroid_2passes_oversample; img_opt_05_metis_5422_check; img_rad_07_fyi_plots; img_rad_07_log_test_outcome; img_rad_09_fyi_plots; img_rad_09_test_outcome; }
   img_01_fyi_plots -> metis_1095_fov_check [style=invis];
   metis_1095_fov_check -> img_02_fyi_plots [style=invis];
   img_02_fyi_plots -> metis_1097_pixel_scale [style=invis];
@@ -272,14 +284,17 @@ digraph pipeline {
   metis_8222_detector_offset -> metis_9920_scale_stability [style=invis];
   metis_9920_scale_stability -> process_one_psf [style=invis];
   process_one_psf -> centroid_2passes_oversample [style=invis];
-  centroid_2passes_oversample -> img_rad_07_fyi_plots [style=invis];
+  centroid_2passes_oversample -> img_opt_05_metis_5422_check [style=invis];
+  img_opt_05_metis_5422_check -> img_rad_07_fyi_plots [style=invis];
   img_rad_07_fyi_plots -> img_rad_07_log_test_outcome [style=invis];
   img_rad_07_log_test_outcome -> img_rad_09_fyi_plots [style=invis];
   img_rad_09_fyi_plots -> img_rad_09_test_outcome [style=invis];
-  { rank=same; img_01_test_outcome; img_02_test_outcome; collect_strehls; stray_light_mask_real; }
+  { rank=same; img_01_test_outcome; img_02_test_outcome; collect_strehls; stray_light_mask_real; img_opt_05_fyi_plots; img_opt_05_log_test_outcome; }
   img_01_test_outcome -> img_02_test_outcome [style=invis];
   img_02_test_outcome -> collect_strehls [style=invis];
   collect_strehls -> stray_light_mask_real [style=invis];
+  stray_light_mask_real -> img_opt_05_fyi_plots [style=invis];
+  img_opt_05_fyi_plots -> img_opt_05_log_test_outcome [style=invis];
   { rank=same; img_03_metis_1408_1409_check; img_03_metis_2864_check; img_03_metis_3503_check; plot_strehl_fov; metis_5838_attenuation; stray_light_segmentation; stray_light_segmentation_combined; }
   img_03_metis_1408_1409_check -> img_03_metis_2864_check [style=invis];
   img_03_metis_2864_check -> img_03_metis_3503_check [style=invis];
@@ -302,13 +317,14 @@ digraph pipeline {
   sim_img_03_strehl_cases -> generate_psf_quality_sim [weight=10];
   sim_img_04_metis_1189_1429 -> generate_stray_light_sim [weight=10];
   sim_img_04_metis_9522 -> generate_stray_light_sim [weight=10];
-  simulate_metis_5422_flux_calibration -> generate_optomechanical_stability_sim [weight=10];
-  simulate_metis_5422_vpm_stability -> generate_optomechanical_stability_sim [weight=10];
+  simulate_metis_1230_flux_calibration -> generate_optomechanical_stability_sim [weight=10];
+  simulate_metis_5422_stability -> generate_optomechanical_stability_sim [weight=10];
   sim_img_06_metis_5838 -> generate_out_of_field_sim [weight=10];
   simulate_img_07_pupil_imaging -> generate_pupil_imaging_sim [weight=10];
   simulate_metis_2594 -> generate_phot_performance_sim [weight=10];
   simulate_metis_2883 -> generate_phot_performance_sim [weight=10];
   simulate_metis_3300 -> generate_phot_performance_sim [weight=10];
+  simulate_metis_3291 -> generate_phot_performance_sim [weight=10];
   simulate_rad_08_point_vs_extended -> generate_point_vs_extended_sim [weight=10];
   simulate_rad_09_sensitivity -> generate_nominal_background_sim [weight=10];
   simulate_rad_11_chopper_background -> generate_background_systematics_sim [weight=10];
@@ -341,6 +357,10 @@ digraph pipeline {
   stray_light_brightness_spectrum -> img_04_metis_9522_check [weight=10];
   img_04_metis_1189_1429_check -> img_04_test_outcome [weight=10];
   img_04_metis_9522_check -> img_04_test_outcome [weight=10];
+  generate_optomechanical_stability_sim -> img_opt_05_measure_pupil_positions [weight=10];
+  img_opt_05_measure_pupil_positions -> img_opt_05_metis_5422_check [weight=10];
+  img_opt_05_metis_5422_check -> img_opt_05_fyi_plots [weight=10];
+  img_opt_05_metis_5422_check -> img_opt_05_log_test_outcome [weight=10];
   stray_light_mask_real -> metis_5838_attenuation [color="#999999", constraint=false];
   stray_light_segmentation -> metis_9522_check [color="#999999", constraint=false];
   stray_light_segmentation_combined -> metis_9522_check [color="#999999", constraint=false];
@@ -349,10 +369,13 @@ digraph pipeline {
   generate_phot_performance_sim -> img_rad_07_metis_2594_check [weight=10];
   generate_phot_performance_sim -> img_rad_07_metis_2883_check [weight=10];
   generate_phot_performance_sim -> img_rad_07_metis_3300_check [weight=10];
+  generate_phot_performance_sim -> img_rad_07_metis_3291_characterize [weight=10];
   img_rad_07_metis_2883_check -> img_rad_07_fyi_plots [weight=10];
+  img_rad_07_metis_3291_characterize -> img_rad_07_fyi_plots [weight=10];
   img_rad_07_metis_3300_check -> img_rad_07_fyi_plots [weight=10];
   img_rad_07_metis_2594_check -> img_rad_07_log_test_outcome [weight=10];
   img_rad_07_metis_2883_check -> img_rad_07_log_test_outcome [weight=10];
+  img_rad_07_metis_3291_characterize -> img_rad_07_log_test_outcome [weight=10];
   img_rad_07_metis_3300_check -> img_rad_07_log_test_outcome [weight=10];
   generate_nominal_background_sim -> img_rad_09_sens_10000s_check [weight=10];
   img_rad_09_sens_10000s_check -> img_rad_09_fyi_plots [weight=10];

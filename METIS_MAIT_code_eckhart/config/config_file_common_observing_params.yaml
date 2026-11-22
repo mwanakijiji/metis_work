@@ -53,6 +53,7 @@ monochromatic_observing_filters_n:
   PAH_8.6: 8.614e-6
   S_IV: 10.549e-6
   Ne_II: 12.739e-6
+  N_spec: 10.518e-6
 
 polychromatic_observing_filters_n_leaf_name:
   N1: 'METIS/filters/TC_filter_N1.dat'
@@ -61,6 +62,7 @@ polychromatic_observing_filters_n_leaf_name:
   PAH_8.6: 'METIS/filters/TC_filter_PAH_8.6.dat'
   S_IV: 'METIS/filters/TC_filter_S_IV.dat'
   Ne_II: 'METIS/filters/TC_filter_Ne_II.dat'
+  N_spec: 'METIS/filters/TC_filter_N_spec.dat'
 
 # side length [native pixels] of the PSF cutout; lambda/D is ~2.5x larger in pixels in N
 cutout_edge_native:
@@ -77,6 +79,13 @@ pixel_scales:
 saturation_adu:
   img_lm: 25000   # H2RG, fast mode (wcu_img_lm default): 1.e+5 e / 4.0 e/ADU
   img_n: 13930    # GeoSnap, high_capacity mode (wcu_img_n default): 2.8e+6 e / 201 e/ADU
+
+# modes whose detector readout mode differs from the imaging default (IRDB
+# METIS_DET_IMG_*.yaml full_well / gain); sim_common.saturation_of checks these first
+saturation_adu_by_obs_mode:
+  wcu_lss_l: 40000  # H2RG, slow mode: 1.e+5 e / 2.5 e/ADU
+  wcu_lss_m: 40000  # H2RG, slow mode: 1.e+5 e / 2.5 e/ADU
+  wcu_lss_n: 12857  # GeoSnap, low_capacity mode: 1.8e+5 e / 14 e/ADU
 
 # WCU FP2.1 pinhole physical diameters [um]
 # Choose lm vs n from the focal-plane mask name (e.g. grid_lm, pinhole_n).

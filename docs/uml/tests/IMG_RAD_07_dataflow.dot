@@ -12,8 +12,8 @@ digraph dataflow {
   ctor_PhotRunResult_backbone_img_rad_07_phot_populate_run [label="PhotRunResult(...)\n(in populate_run)"];
   IMG_RAD_07_photometric_performance_ANALYSIS_main [label="main", tooltip="Run the IMG-RAD-07 analysis for each data state (requirement, instrument,\ncase)."];
   backbone_img_rad_07_phot_reduce_flats [label="reduce_flats", tooltip="Reduce the run's flats (BCKGD_SUBTED) one at a time: the field mask from the\nbrightest (last) file, then per file the mean flux in the mask and its standard\nerror, and the block mean / standard error maps.\n\nOUTPUTS:\n- PhotRunResult, with exposure, flux, flux_sigma, block_means, block_sigmas"];
-  backbone_img_rad_07_phot_plot_run [label="plot_run", tooltip="FYI plots in result.results_dir: METIS-2883 the B/mean - 1 block map; METIS-3300\nthe flux error per step (with the limit band) and the pattern-change map of the\nworst step.\n\nOUTPUTS:\n- list[str]: written plot files"];
-  backbone_img_rad_07_phot_log_test_outcome [label="log_test_outcome", tooltip="Log the outcome of the run's requirement (as decided by metis_2883_check or\nmetis_3300_check) and compare it with the injected truth (EXPECTED).\n\nOUTPUTS:\n- PhotRunResult, with verdict_overall and consistent set"];
+  backbone_img_rad_07_phot_plot_run [label="plot_run", tooltip="FYI plots in result.results_dir: METIS-2883 the B/mean - 1 block map; METIS-3300\nthe flux error per step (with the limit band) and the pattern-change map of the\nworst step; METIS-3291 S_empirical vs. S_perfect * alpha_fcn and the RSRF.\n\nOUTPUTS:\n- list[str]: written plot files"];
+  backbone_img_rad_07_phot_log_test_outcome [label="log_test_outcome", tooltip="Log the outcome of the run's requirement (as decided by metis_2883_check or\nmetis_3300_check) and compare it with the injected truth (EXPECTED); a NOT\nEVALUATED verdict (METIS-2594, METIS-3291) is not compared.\n\nOUTPUTS:\n- PhotRunResult, with verdict_overall and consistent set"];
   backbone_img_rad_07_phot_log_summary [label="log_summary", tooltip="Log a table of all runs (requirement, instrument, case, verdict, expected,\nconsistency with the injected truth); METIS-2594 is NOT EVALUATED (no SIM data).\n\nOUTPUTS:\n- int: number of runs inconsistent with the injected truth"];
   subgraph cluster_PhotRunResult {
     label="PhotRunResult (backbone_img_rad_07_phot)";
@@ -35,6 +35,7 @@ digraph dataflow {
     f_measured [label="measured", shape=note, style=filled, fillcolor="white", penwidth=1];
     f_sigma [label="sigma", shape=note, style=filled, fillcolor="white", penwidth=1];
     f_verdicts [label="verdicts", shape=note, style=filled, fillcolor="white", penwidth=1];
+    f_rsrf [label="rsrf", shape=note, style=filled, fillcolor="white", penwidth=1];
     f_verdict_overall [label="verdict_overall", shape=note, style=filled, fillcolor="white", penwidth=1];
     f_consistent [label="consistent", shape=note, style=filled, fillcolor="white", penwidth=1];
   }
@@ -67,6 +68,7 @@ digraph dataflow {
   f_measured -> backbone_img_rad_07_phot_plot_run [color="#888888", style=dashed];
   f_limits -> backbone_img_rad_07_phot_plot_run [color="#888888", style=dashed];
   f_flux -> backbone_img_rad_07_phot_plot_run [color="#888888", style=dashed];
+  f_rsrf -> backbone_img_rad_07_phot_plot_run [color="#888888", style=dashed];
   backbone_img_rad_07_phot_log_test_outcome -> f_verdict_overall [color="#1f77b4"];
   backbone_img_rad_07_phot_log_test_outcome -> f_consistent [color="#1f77b4"];
   f_run_name -> backbone_img_rad_07_phot_log_test_outcome [color="#888888", style=dashed];

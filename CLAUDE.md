@@ -71,8 +71,10 @@ requirement texts are quoted in the script docstrings) has a pair of scripts in
   header-only primary, then `BCKGD_SUBTED`, `RAW_READOUT`, `BACKGROUND` (+ extras such
   as `BACKGROUND_2`, `TRUTH_LABELS`); read extensions by EXTNAME (`load_fits_data(...,
   hdu_index="BCKGD_SUBTED")`). Shared SIM machinery: `modules/sim_common.py`. A SIM can
-  write FYI plots of what it simulated to `ctx.results_dir` (pass `results_dir` to
-  `run_scenario`; e.g. IMG-OPT-01's `fyi_sim_*.png`). All SIMs use the WCU modes (no
+  write FYI plots of what it simulated to `ctx.plot_dir` (pass
+  `plot_dir=sim_common.sim_plot_dir(stem, __file__)` to `run_scenario`, i.e.
+  `sim_plots/<SIM script name>/`, not `results/`; e.g. IMG-OPT-01's `fyi_sim_*.png`).
+  All SIMs use the WCU modes (no
   on-sky modes). Scenario entries without a limit or cases (unmodified frames, e.g.
   IMG-OPT-02's `GRID-FRAMES`, IMG-OPT-03's `TABLE-4-1`) use
   `sim_common.write_reference_frame` (`..._<instrument>_reference.fits`); stub SIMs

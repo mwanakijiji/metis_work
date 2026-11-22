@@ -11,7 +11,7 @@ digraph dataflow {
   node [shape=box, style="rounded,filled", fillcolor="white", penwidth=1.5];
   ctor_NoiseRunResult_backbone_img_rad_09_nom_populate_run [label="NoiseRunResult(...)\n(in populate_run)"];
   IMG_RAD_09_nominal_background_behavior_ANALYSIS_main [label="main", tooltip="Run the IMG-RAD-09 analysis for each data state (requirement, instrument,\ncase)."];
-  backbone_img_rad_09_nom_measure_noise [label="measure_noise", tooltip="Measure the 1-sigma point-source noise of the background-subtracted frame\n(BCKGD_SUBTED) in absolute flux units: aperture sums (radius\naperture_radius_lambda_over_d x lambda/D, on a grid in the field mask of the raw\nframe), robust spread, / DIT x counts-to-flux calibration; and its uncertainty\nMAD_SIGMA_REL_ERR / sqrt(N apertures).\n\nOUTPUTS:\n- NoiseRunResult, with measured/sigma['noise_flux'] and the aperture sums (flux)"];
+  backbone_img_rad_09_nom_measure_noise [label="measure_noise", tooltip="Measure the 1-sigma point-source noise of the frame in extension noise_hdu\n(RAW_READOUT: the readout itself, nothing subtracted; default BCKGD_SUBTED) in\nabsolute flux units: aperture sums (radius aperture_radius_lambda_over_d x\nlambda/D, on a grid in the field mask of the raw frame, away from the point\nsource: noise_mask), robust spread about their median, / DIT x counts-to-flux\ncalibration; and its uncertainty MAD_SIGMA_REL_ERR / sqrt(N apertures). If the\nsource is excluded, also its flux above the background in an aperture of the same\nradius (source_sum) and its S/N (for information).\n\nOUTPUTS:\n- NoiseRunResult, with measured/sigma['noise_flux'] (and 'source_flux',\n  'source_snr'), the aperture sums (flux) and the source positions"];
   backbone_img_rad_09_nom_plot_run [label="plot_run", tooltip="FYI plot in result.results_dir: histogram of the aperture sums (flux units) with\nthe Gaussian of the measured noise and +/- the limit.\n\nOUTPUTS:\n- str: written plot file"];
   backbone_img_rad_09_nom_log_test_outcome [label="log_test_outcome", tooltip="Log the outcome of the run's requirement and compare it with the injected truth\n(EXPECTED).\n\nOUTPUTS:\n- NoiseRunResult, with verdict_overall and consistent set"];
   backbone_img_rad_09_nom_log_summary [label="log_summary", tooltip="Log a table of all runs (requirement, instrument, case, noise, verdict, expected,\nconsistency with the injected truth).\n\nOUTPUTS:\n- int: number of runs inconsistent with the injected truth"];
@@ -30,6 +30,7 @@ digraph dataflow {
     f_analysis_cfg [label="analysis_cfg", shape=note, style=filled, fillcolor="white", penwidth=1];
     f_aperture_radius_px [label="aperture_radius_px", shape=note, style=filled, fillcolor="white", penwidth=1];
     f_aperture_sums_flux [label="aperture_sums_flux", shape=note, style=filled, fillcolor="white", penwidth=1];
+    f_source_positions [label="source_positions", shape=note, style=filled, fillcolor="white", penwidth=1];
     f_measured [label="measured", shape=note, style=filled, fillcolor="white", penwidth=1];
     f_sigma [label="sigma", shape=note, style=filled, fillcolor="white", penwidth=1];
     f_verdicts [label="verdicts", shape=note, style=filled, fillcolor="white", penwidth=1];
@@ -49,6 +50,7 @@ digraph dataflow {
   f_file_name -> IMG_RAD_09_nominal_background_behavior_ANALYSIS_main [color="#888888", style=dashed];
   f_header -> IMG_RAD_09_nominal_background_behavior_ANALYSIS_main [color="#888888", style=dashed];
   f_req_id -> IMG_RAD_09_nominal_background_behavior_ANALYSIS_main [color="#888888", style=dashed];
+  backbone_img_rad_09_nom_measure_noise -> f_source_positions [color="#1f77b4"];
   backbone_img_rad_09_nom_measure_noise -> f_aperture_radius_px [color="#1f77b4"];
   backbone_img_rad_09_nom_measure_noise -> f_aperture_sums_flux [color="#1f77b4"];
   f_analysis_cfg -> backbone_img_rad_09_nom_measure_noise [color="#888888", style=dashed];
@@ -56,8 +58,8 @@ digraph dataflow {
   f_header -> backbone_img_rad_09_nom_measure_noise [color="#888888", style=dashed];
   f_det_key -> backbone_img_rad_09_nom_measure_noise [color="#888888", style=dashed];
   f_measured -> backbone_img_rad_09_nom_measure_noise [color="#888888", style=dashed];
-  f_sigma -> backbone_img_rad_09_nom_measure_noise [color="#888888", style=dashed];
   f_run_name -> backbone_img_rad_09_nom_measure_noise [color="#888888", style=dashed];
+  f_sigma -> backbone_img_rad_09_nom_measure_noise [color="#888888", style=dashed];
   f_results_dir -> backbone_img_rad_09_nom_plot_run [color="#888888", style=dashed];
   f_aperture_sums_flux -> backbone_img_rad_09_nom_plot_run [color="#888888", style=dashed];
   f_measured -> backbone_img_rad_09_nom_plot_run [color="#888888", style=dashed];

@@ -19,10 +19,10 @@ digraph io {
     label="IMG_RAD_09_nominal_background_behavior_SIM.py";
     style=filled; fillcolor="#fae7f4"; color="#999999";
     IMG_RAD_09_nominal_background_behavior_SIM__main [label="main()", shape=box, style="rounded,filled,bold", fillcolor="white"];
-    IMG_RAD_09_nominal_background_behavior_SIM__simulate_sensitivity [label="simulate_sensitivity\nSimulated data for the point-\nsource sensitivity in a 10000 s\nexposure: two independent long WCU\nflat exposure…", shape=box, style="rounded,filled", fillcolor="white"];
+    IMG_RAD_09_nominal_background_behavior_SIM__simulate_sensitivity [label="simulate_sensitivity\nSimulated data for the point-\nsource sensitivity in a 10000 s\nexposure: one long WCU pinhole\nreadout (total_ex…", shape=box, style="rounded,filled", fillcolor="white"];
     IMG_RAD_09_nominal_background_behavior_SIM__main -> IMG_RAD_09_nominal_background_behavior_SIM__simulate_sensitivity [style=dashed];
   }
-  fits [shape=record, style=filled, fillcolor="#e8f0fb", label="{data/IMG_RAD_09_nominal_background_simmed_data\n*.fits|<primary> PRIMARY header:\nTARGET EXPTIME NEXP AP_RAD N_APER FLUXCAL FLUXPLH NAT_NOIS\nNOISFAC FILTER WCU_FP WCU_PP PSF_KERN ND_FILT BB_TEMP NDIT\nDIT DIT_CFG SAT_ADU PEAKFRAC REQ_ID CASE EXPECTED REQ_PLH\nSIMVER|{<x_BCKGD_SUBTED> BCKGD_SUBTED|<x_RAW_READOUT> RAW_READOUT|<x_BACKGROUND> BACKGROUND}}"];
+  fits [shape=record, style=filled, fillcolor="#e8f0fb", label="{data/IMG_RAD_09_nominal_background_simmed_data\n*.fits|<primary> PRIMARY header:\nTARGET SRC_X SRC_Y EXCL_RAD SRC_FLUX SRC_SNR EXPTIME NEXP\nAP_RAD N_APER FLUXCAL FLUXPLH NAT_NOIS FILTER WCU_FP WCU_PP\nPSF_KERN ND_FILT BB_TEMP NDIT DIT DIT_CFG SAT_ADU PEAKFRAC\nREQ_ID CASE REQ_PLH SIMVER|{<x_BCKGD_SUBTED> BCKGD_SUBTED|<x_RAW_READOUT> RAW_READOUT|<x_BACKGROUND> BACKGROUND}}"];
   IMG_RAD_09_nominal_background_behavior_SIM__simulate_sensitivity -> fits;
   subgraph cluster_IMG_RAD_09_nominal_background_behavior_ANALYSIS {
     label="IMG_RAD_09_nominal_background_behavior_ANALYSIS.py + modules";
@@ -33,7 +33,6 @@ digraph io {
   }
   fits:primary -> IMG_RAD_09_nominal_background_behavior_ANALYSIS__main [label="SAT_ADU"];
   fits:x_RAW_READOUT -> backbone_img_rad_09_nom__measure_noise;
-  fits:x_BCKGD_SUBTED -> backbone_img_rad_09_nom__measure_noise;
   fits:primary -> backbone_img_rad_09_nom__measure_noise [label="FILTER, DIT, EXPTIME"];
   fits:primary -> backbone_img_rad_09_nom__log_summary [label="EXPECTED"];
   y_config_file_IMG_RAD_09_nominal_background_observing_yaml -> IMG_RAD_09_nominal_background_behavior_SIM__main [color="#b8860b"];

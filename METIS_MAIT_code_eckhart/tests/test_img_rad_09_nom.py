@@ -109,3 +109,41 @@ def test_noise_uncertainty_scales_with_apertures(tmp_path):
     assert result.sigma["noise_flux"] == pytest.approx(
         result.measured["noise_flux"] * nom.MAD_SIGMA_REL_ERR / np.sqrt(n_ap)
     )
+
+
+def test_source_mask_and_noise_mask_nod_pair():
+    rng = np.random.default_rng(3)
+    shape = (300, 300)
+    yy, xx = np.indices(shape)
+    psf = lambda x0, y0: 5000.0 * np.exp(-((xx - x0) ** 2 + (yy - y0) ** 2) / 8.0)
+    frame = psf(100, 150) - psf(220, 150) + rng.normal(0.0, 1.0, shape)
+    near, positions = nom.source_mask(frame, 20.0)
+    assert positions == [(100, 150), (220, 150)]
+    assert near[150, 100] and near[150, 220] and not near[20, 20]
+    raw = np.full(shape, 1000.0) + frame
+    cfg = {
+        **OBSERVING["img_rad_09"],
+        "source_exclusion_lambda_over_d": 10,
+        "mask_erosion_px": 0,
+    }
+    mask, pos, excl = nom.noise_mask(frame, raw, cfg, 2.0)
+    assert pos == positions and excl == pytest.approx(20.0)
+    assert not mask[150, 100] and not mask[150, 220] and mask[20, 20]
+    # without source_exclusion_lambda_over_d: only the field mask
+    plain, pos0, excl0 = nom.noise_mask(
+        frame, raw, {**cfg, "source_exclusion_lambda_over_d": None}, 2.0
+    )
+    assert pos0 == [] and excl0 == 0.0 and plain[150, 100]
+    assert nom.aperture_sum_at(frame, (100, 150), 8) == pytest.approx(
+        2 * np.pi * 4 * 5000.0, rel=0.02
+    )
+
+
+def test_source_sum_removes_background_level():
+    shape = (200, 200)
+    yy, xx = np.indices(shape)
+    psf = 1000.0 * np.exp(-((xx - 100) ** 2 + (yy - 100) ** 2) / 8.0)
+    frame = 500.0 + psf
+    mask = (xx - 100) ** 2 + (yy - 100) ** 2 > 40**2
+    total = nom.source_sum(frame, mask, (100, 100), 8)
+    assert total == pytest.approx(2 * np.pi * 4 * 1000.0, rel=0.02)

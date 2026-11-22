@@ -14,8 +14,14 @@ of the flat field shall be tunable to 15 discrete values and shall be known at e
 to 0.3%. The resulting spatial illumination pattern shall remain constant across the
 field within 0.5% (0.3% as goal) after tuning.
 
-Not analysed: METIS-2594 (SIM is a stub), METIS-2595 (twice), METIS-3291 and METIS-3301
-(not simulated).
+3. METIS-3291: METIS shall allow the characterisation and correction of the relative
+spectral response function (RSRF) with 3% precision over the wavelength range specified
+in METIS-1090. Characterized only (backbone_img_rad_07_phot.metis_3291_characterize:
+the RSRF of the LSS frame, with the SIM's extraction); the 3% precision is NOT
+EVALUATED yet. Long-slit set-ups L_spec, M_spec (LM detector) and N_spec (N detector).
+
+Not analysed: METIS-2594 (SIM is a stub), METIS-2595 (twice) and METIS-3301 (not
+simulated).
 
 Pass/fail of each requirement is decided in one function per requirement
 (backbone_img_rad_07_phot.metis_2883_check, .metis_3300_check), and logged per run
@@ -35,6 +41,7 @@ from modules.paths import project_root
 CHECKS = {
     "METIS-2594": phot.metis_2594_check,  # stub (no SIM data yet)
     "METIS-2883": phot.metis_2883_check,
+    "METIS-3291": phot.metis_3291_characterize,  # RSRF characterized only
     "METIS-3300": phot.metis_3300_check,
 }
 
@@ -80,8 +87,10 @@ def main():
                 file_name, float(header["SAT_ADU"]), frac=saturation_frac
             )
 
-        # fluxes and block maps in the field, then the requirement's check
-        result = phot.reduce_flats(result)
+        # fluxes and block maps in the field (flats only; METIS-3291 is an LSS
+        # frame), then the requirement's check
+        if result.req_id != "METIS-3291":
+            result = phot.reduce_flats(result)
         result = CHECKS[result.req_id](result)
         phot.plot_run(result)
 

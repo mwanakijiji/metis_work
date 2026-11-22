@@ -21,9 +21,9 @@ either side of the FoV range.
 The FoV is injected through the dither offsets (see simulate_metis_1095). Each dither is
 a ScopeSim readout; BACKGROUND is an independent dark.
 
-FYI plots (results/IMG_OPT_01_fov_analysis_results/fyi_sim_*.png): per case, the four
-dithers co-added with the measured pinhole positions, cutouts around each pinhole, and
-the FoV the ANALYSIS would measure from those positions vs. the injected one; per
+FYI plots (sim_plots/IMG_OPT_01_METIS_AIT_img_cal_fov_SIM/fyi_sim_*.png): per case, the
+four dithers co-added with the measured pinhole positions, cutouts around each pinhole,
+and the FoV the ANALYSIS would measure from those positions vs. the injected one; per
 instrument, the dither geometry of all cases. The measured pinhole positions are also
 logged as guesses for config_file_IMG_OPT_01_METIS_AIT_img_cal_fov_ANALYSIS.yaml.
 """
@@ -34,7 +34,6 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-import scopesim as sim
 from matplotlib.colors import LogNorm
 from scipy.ndimage import gaussian_filter
 from skimage.measure import block_reduce
@@ -91,11 +90,11 @@ def cutout(image, center_yx, size):
     half = size // 2
     padded = np.pad(np.asarray(image, dtype=float), half, mode="constant")
     y, x = int(center_yx[0]) + half, int(center_yx[1]) + half
-    return padded[y - half : y + half + 1, x - half : x + half + 1]
+    return padded[y - half : y + half + 1, x - half : x + half + 1]  # noqa: E203
 
 
 def fyi_plot_case(  # pylint: disable=too-many-arguments,too-many-locals
-    results_dir,
+    plot_dir,
     label,
     case_info,
     coadded_binned,
@@ -108,10 +107,10 @@ def fyi_plot_case(  # pylint: disable=too-many-arguments,too-many-locals
     stamped with the TBD distortion warning.
 
     INPUTS:
-    - results_dir (str): where to write fyi_sim_<label>.png
+    - plot_dir (str): where to write fyi_sim_<label>.png
     - label (str): e.g. 'METIS-1095_Br_alpha_pass'
-    - case_info (dict): fov_injected, fov_measured, expected, positions (arcsec, (4, 2)),
-      peaks_yx (pix, (4, 2)), shape (full-frame (ny, nx))
+    - case_info (dict): fov_injected, fov_measured, expected,
+      positions (arcsec, (4, 2)), peaks_yx (pix, (4, 2)), shape (full-frame (ny, nx))
     - coadded_binned (ndarray): sum of the binned background-subtracted dithers
     - cutouts (list[ndarray]): one cutout per dither, centred on its pinhole
     - illuminated_pixels (int): side of the illuminated area (pixels)
@@ -190,8 +189,8 @@ def fyi_plot_case(  # pylint: disable=too-many-arguments,too-many-locals
     # leave room at the top for the warning banner
     fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.92))
     add_tbd_banner(fig)
-    os.makedirs(results_dir, exist_ok=True)
-    file_name = os.path.join(results_dir, f"fyi_sim_{label}.png")
+    os.makedirs(plot_dir, exist_ok=True)
+    file_name = os.path.join(plot_dir, f"fyi_sim_{label}.png")
     fig.savefig(file_name)
     plt.close(fig)
     logging.info("Saved FYI plot %s", file_name)
@@ -199,14 +198,14 @@ def fyi_plot_case(  # pylint: disable=too-many-arguments,too-many-locals
 
 
 def fyi_plot_dither_geometry(
-    results_dir, label, dither_offset_arcsec, cases_info, limit_spec
+    plot_dir, label, dither_offset_arcsec, cases_info, limit_spec
 ):
     """
     FYI plot of the dither positions (arcsec) of every case of one instrument, with the
     nominal square the ANALYSIS assumes; stamped with the TBD distortion warning.
 
     INPUTS:
-    - results_dir (str): where to write fyi_sim_<label>_dither_geometry.png
+    - plot_dir (str): where to write fyi_sim_<label>_dither_geometry.png
     - label (str): e.g. 'METIS-1095_Br_alpha'
     - dither_offset_arcsec (float): nominal dither offset
     - cases_info (dict): case -> {positions, fov_injected, fov_measured, expected}
@@ -248,8 +247,8 @@ def fyi_plot_dither_geometry(
     # leave room at the top for the warning banner
     fig.subplots_adjust(top=0.88)
     add_tbd_banner(fig)
-    os.makedirs(results_dir, exist_ok=True)
-    file_name = os.path.join(results_dir, f"fyi_sim_{label}_dither_geometry.png")
+    os.makedirs(plot_dir, exist_ok=True)
+    file_name = os.path.join(plot_dir, f"fyi_sim_{label}_dither_geometry.png")
     fig.savefig(file_name)
     plt.close(fig)
     logging.info("Saved FYI plot %s", file_name)
@@ -272,7 +271,7 @@ def simulate_metis_1095(ctx, req_key, req_cfg):  # pylint: disable=too-many-loca
     takes to be 2 * dither_offset_arcsec apart, and the FoV as that pixel scale times
     the number of illuminated pixels. Per case, the dithers are scaled by FoV_true /
     FoV_injected (FoV_true = pixel scale * illuminated pixels), so the FoV it measures
-    is the injected one. If ctx.results_dir is set, also writes FYI plots there.
+    is the injected one. If ctx.plot_dir is set, also writes FYI plots there.
 
     OUTPUTS:
     - list[str]: written files
@@ -361,9 +360,9 @@ def simulate_metis_1095(ctx, req_key, req_cfg):  # pylint: disable=too-many-loca
             "expected": expected[case],
             "shape": dark_2.shape,
         }
-        if ctx.results_dir:
+        if ctx.plot_dir:
             fyi_plot_case(
-                ctx.results_dir,
+                ctx.plot_dir,
                 f"{req_key}_{tag}_{case}",
                 cases_info[case],
                 coadded,
@@ -371,9 +370,9 @@ def simulate_metis_1095(ctx, req_key, req_cfg):  # pylint: disable=too-many-loca
                 illuminated_pixels,
             )
 
-    if ctx.results_dir:
+    if ctx.plot_dir:
         fyi_plot_dither_geometry(
-            ctx.results_dir,
+            ctx.plot_dir,
             f"{req_key}_{tag}",
             offset,
             cases_info,
@@ -404,8 +403,7 @@ def main():
     """
     stem = project_root()
     out_dir = stem + "data/IMG_OPT_01_fov_simmed_data/"
-    # FYI plots of the simulated data go with the test's results
-    results_dir = stem + "results/IMG_OPT_01_fov_analysis_results/"
+    plot_dir = sim_common.sim_plot_dir(stem, __file__)
 
     now = datetime.datetime.now()
     sim_common.start_sim_logging(
@@ -413,7 +411,7 @@ def main():
     )
     log_tbd_distortion("IMG-OPT-01 SIM")
     logging.info("Simmed file output directory: %s", out_dir)
-    logging.info("FYI plot directory: %s", results_dir)
+    logging.info("FYI plot directory: %s", plot_dir)
     # uncomment to (re-)download the IRDB packages (overwrites them in the IRDB)
     # sim.download_packages(
     #   ["METIS", "ELT", "Armazones"], save_dir=sim_common.IRDB_DIR
@@ -432,7 +430,7 @@ def main():
         observing,
         out_dir,
         TEST_PREFIX,
-        results_dir=results_dir,
+        plot_dir=plot_dir,
     )
     log_tbd_distortion("IMG-OPT-01 SIM")
 

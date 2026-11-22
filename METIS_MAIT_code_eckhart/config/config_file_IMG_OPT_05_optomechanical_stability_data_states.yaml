@@ -1,0 +1,44 @@
+# IMG-OPT-05 optomechanical stability: analysis runs (data states)
+# Paths are relative to the project stem (METIS_MAIT_code_eckhart/), or absolute.
+# Each run inherits defaults; override only what differs.
+#
+# One run = one sequence of frames (one timescale, instrument and case), as written by
+# IMG_OPT_05_optomechanical_stability_SIM.py
+# (config/config_file_IMG_OPT_05_optomechanical_stability_SIM.yaml) into
+#   data/IMG_OPT_05_optomechanical_stability_simmed_data/<timescale>s_<instrument>/
+#     IMG_OPT_05_METIS-5422_<instrument>_<case>_<timescale>s_frameNN.fits
+# with the injected truth (REQ_ID, EXPECTED, INJ_VAL, SHIFT_X/Y, ...) and the frame
+# times (DATE-OBS) in the primary headers. file_name_pattern is a glob over the frames
+# of the sequence; timescale_s is the timescale it tests (s). Add runs here when
+# timescales_s in the SIM config is extended.
+# METIS-1230 is not analysed (its SIM is a stub).
+
+defaults:
+  req_id: METIS-5422
+  results_write_dir: results/IMG_OPT_05_optomechanical_stability_analysis_results/
+
+runs:
+  - {instrument: Lp, timescale_s: 10, case: pass,
+     file_name_pattern: data/IMG_OPT_05_optomechanical_stability_simmed_data/10s_Lp/IMG_OPT_05_METIS-5422_Lp_pass_10s_frame*.fits}
+  - {instrument: Lp, timescale_s: 10, case: fail,
+     file_name_pattern: data/IMG_OPT_05_optomechanical_stability_simmed_data/10s_Lp/IMG_OPT_05_METIS-5422_Lp_fail_10s_frame*.fits}
+  - {instrument: Lp, timescale_s: 3600, case: pass,
+     file_name_pattern: data/IMG_OPT_05_optomechanical_stability_simmed_data/3600s_Lp/IMG_OPT_05_METIS-5422_Lp_pass_3600s_frame*.fits}
+  - {instrument: Lp, timescale_s: 3600, case: fail,
+     file_name_pattern: data/IMG_OPT_05_optomechanical_stability_simmed_data/3600s_Lp/IMG_OPT_05_METIS-5422_Lp_fail_3600s_frame*.fits}
+  - {instrument: Mp, timescale_s: 10, case: pass,
+     file_name_pattern: data/IMG_OPT_05_optomechanical_stability_simmed_data/10s_Mp/IMG_OPT_05_METIS-5422_Mp_pass_10s_frame*.fits}
+  - {instrument: Mp, timescale_s: 10, case: fail,
+     file_name_pattern: data/IMG_OPT_05_optomechanical_stability_simmed_data/10s_Mp/IMG_OPT_05_METIS-5422_Mp_fail_10s_frame*.fits}
+  - {instrument: Mp, timescale_s: 3600, case: pass,
+     file_name_pattern: data/IMG_OPT_05_optomechanical_stability_simmed_data/3600s_Mp/IMG_OPT_05_METIS-5422_Mp_pass_3600s_frame*.fits}
+  - {instrument: Mp, timescale_s: 3600, case: fail,
+     file_name_pattern: data/IMG_OPT_05_optomechanical_stability_simmed_data/3600s_Mp/IMG_OPT_05_METIS-5422_Mp_fail_3600s_frame*.fits}
+  - {instrument: N2, timescale_s: 10, case: pass,
+     file_name_pattern: data/IMG_OPT_05_optomechanical_stability_simmed_data/10s_N2/IMG_OPT_05_METIS-5422_N2_pass_10s_frame*.fits}
+  - {instrument: N2, timescale_s: 10, case: fail,
+     file_name_pattern: data/IMG_OPT_05_optomechanical_stability_simmed_data/10s_N2/IMG_OPT_05_METIS-5422_N2_fail_10s_frame*.fits}
+  - {instrument: N2, timescale_s: 3600, case: pass,
+     file_name_pattern: data/IMG_OPT_05_optomechanical_stability_simmed_data/3600s_N2/IMG_OPT_05_METIS-5422_N2_pass_3600s_frame*.fits}
+  - {instrument: N2, timescale_s: 3600, case: fail,
+     file_name_pattern: data/IMG_OPT_05_optomechanical_stability_simmed_data/3600s_N2/IMG_OPT_05_METIS-5422_N2_fail_3600s_frame*.fits}

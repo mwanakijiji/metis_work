@@ -17,6 +17,9 @@ img_rad_07:
   n_sigma: 3
   # raw readout max must be <= saturation_frac x saturation (as the SIM's MAX_RAW_FRAC)
   saturation_frac: 0.8
+  # METIS-3291 RSRF: slit columns = median over rows > slit_frac x max (as the SIM's)
+  rsrf:
+    slit_frac: 0.5
   limits:
     METIS-2883:
       half_ptv: 0.03 # +/- 3% PtV: max |B / mean - 1| over the FOV
@@ -25,3 +28,5 @@ img_rad_07:
       flux_error: 0.003 # max |flux / nominal - 1| over the steps
       pattern_change: 0.005 # max |normalised flat / step-averaged one - 1|
       pattern_change_goal: 0.003
+    METIS-3291:
+      rsrf_error: 0.03 # max |RSRF / reference - 1|; not evaluated yet (characterized)
